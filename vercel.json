@@ -1,19 +1,27 @@
 {
   "version": 2,
+  "name": "mercadolibre-stock-monitor",
   "builds": [
     {
       "src": "src/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "10mb"
+      }
     }
   ],
   "routes": [
     {
+      "src": "/health",
+      "dest": "src/index.js"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "/api/$1.js"
+      "dest": "src/index.js"
+    },
+    {
+      "src": "/auth/(.*)",
+      "dest": "src/index.js"
     },
     {
       "src": "/(.*)",
@@ -22,5 +30,14 @@
   ],
   "env": {
     "NODE_ENV": "production"
+  },
+  "functions": {
+    "src/index.js": {
+      "maxDuration": 10
+    }
+  },
+  "regions": ["cle1"],
+  "github": {
+    "silent": true
   }
 }
