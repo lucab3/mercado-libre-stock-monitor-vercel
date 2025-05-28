@@ -1,10 +1,14 @@
 {
   "version": 2,
-  "functions": {
-    "src/index.js": {
-      "maxDuration": 10
+  "builds": [
+    {
+      "src": "src/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "10mb"
+      }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/health",
