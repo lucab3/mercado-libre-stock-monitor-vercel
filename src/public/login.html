@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Monitor de Stock ML</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .login-container {
+            max-width: 450px;
+            padding: 3rem;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        .logo {
+            margin-bottom: 2rem;
+        }
+        .logo h2 {
+            color: #2c3e50;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .logo p {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+        .auth-btn {
+            background: linear-gradient(45deg, #FFF159, #FFE01B);
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(255, 225, 27, 0.3);
+        }
+        .auth-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 225, 27, 0.4);
+            color: #2c3e50;
+        }
+        .info-card {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+        }
+        .feature:last-child {
+            margin-bottom: 0;
+        }
+        .feature i {
+            font-size: 1.2rem;
+            color: #3498db;
+            margin-right: 1rem;
+            width: 24px;
+        }
+        .feature span {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        .mock-notice {
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+            color: #27ae60;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .mock-notice i {
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-container">
+            <div class="logo">
+                <h2><i class="bi bi-graph-up-arrow"></i> Monitor de Stock</h2>
+                <p>Mercado Libre</p>
+            </div>
+            
+            <div class="mock-notice">
+                <i class="bi bi-info-circle-fill"></i>
+                <strong>Modo Demo:</strong> La aplicación funciona con datos de prueba. No necesitas credenciales reales.
+            </div>
+            
+            <div class="info-card">
+                <div class="feature">
+                    <i class="bi bi-shield-check"></i>
+                    <span>Monitoreo automático de stock</span>
+                </div>
+                <div class="feature">
+                    <i class="bi bi-bell"></i>
+                    <span>Alertas cuando el stock es bajo</span>
+                </div>
+                <div class="feature">
+                    <i class="bi bi-graph-down"></i>
+                    <span>Dashboard en tiempo real</span>
+                </div>
+                <div class="feature">
+                    <i class="bi bi-laptop"></i>
+                    <span>Acceso desde cualquier dispositivo</span>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <a href="/auth/login" class="btn auth-btn btn-lg">
+                    <i class="bi bi-box-arrow-in-right"></i>
+                    Iniciar sesión con Mercado Libre
+                </a>
+            </div>
+            
+            <div class="mt-3">
+                <small class="text-muted">
+                    Necesitas una cuenta de vendedor en Mercado Libre para usar esta aplicación.
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

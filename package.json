@@ -1,0 +1,39 @@
+{
+  "name": "mercadolibre-stock-monitor",
+  "version": "1.0.0",
+  "description": "Aplicación para monitorear el stock de productos en Mercado Libre y enviar alertas",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "dev:mock": "nodemon src/index.js",
+    "dev:prod": "cross-env NODE_ENV=production nodemon src/index.js",
+    "test": "jest",
+    "test:local": "node scripts/test-local.js",
+    "test:watch": "jest --watch",
+    "lint": "eslint .",
+    "encrypt": "node scripts/encrypt-env.js",
+    "generate-secrets": "node scripts/generate-secrets.js",
+    "setup:local": "node scripts/setup-local.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.7",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.3"
+  }
+}

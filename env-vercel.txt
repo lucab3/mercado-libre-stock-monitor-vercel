@@ -1,0 +1,33 @@
+# Credenciales de API Mercado Libre
+# Para Vercel, configura estas variables en la UI de Vercel usando valores cifrados
+ML_CLIENT_ID=tu_client_id_cifrado
+ML_CLIENT_SECRET=tu_client_secret_cifrado
+# Usa la URL proporcionada por Vercel
+ML_REDIRECT_URI=https://tu-aplicacion.vercel.app/auth/callback
+
+# Variables de entorno sensibles
+SECRET_KEY=valor_secreto_generado_aleatoriamente
+SECRET_IV=valor_iv_generado_aleatoriamente
+
+# Configuración de aplicación
+NODE_ENV=production
+LOG_LEVEL=info
+
+# Configuración de notificaciones
+NOTIFICATION_METHOD=console
+EMAIL_SERVICE=gmail
+EMAIL_USER=tu_email@gmail.com
+# Usa un valor cifrado
+EMAIL_PASSWORD=tu_password_app_cifrado
+# Usa un valor cifrado
+TELEGRAM_BOT_TOKEN=tu_token_de_bot_cifrado
+TELEGRAM_CHAT_ID=tu_chat_id
+
+# Configuración de monitoreo
+STOCK_CHECK_INTERVAL=900000
+STOCK_THRESHOLD=5
+
+# Tokens de OAuth (opcional, para persistencia entre reinicios)
+ML_ACCESS_TOKEN=token_de_acceso_obtenido_en_proceso_de_auth
+ML_REFRESH_TOKEN=refresh_token_obtenido_en_proceso_de_auth
+ML_TOKEN_EXPIRES_AT=timestamp_de_expiracion

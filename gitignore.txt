@@ -1,0 +1,34 @@
+# Dependencias
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Variables de entorno y claves de cifrado (solo para desarrollo local)
+.env
+.secret_key
+.secret_iv
+.tokens.json
+
+# Logs
+logs
+*.log
+
+# Directorios de caché
+.npm
+.eslintcache
+
+# Directorios de cobertura
+coverage/
+
+# Directorios de build
+dist/
+build/
+
+# Otros
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
