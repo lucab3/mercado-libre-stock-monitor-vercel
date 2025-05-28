@@ -4,7 +4,7 @@ const path = require('path');
 
 /**
  * Clase para el manejo de cifrado y descifrado de datos sensibles
- * Sin dependencias circulares
+ * ARREGLADO PARA VERCEL - No intenta crear archivos en filesystem de solo lectura
  */
 class CryptoHelper {
   constructor() {
@@ -25,28 +25,34 @@ class CryptoHelper {
 
   /**
    * Obtiene o crea la clave de cifrado
+   * ARREGLADO: No intenta escribir archivos en Vercel
    * @returns {Buffer} Clave de cifrado
    */
   getOrCreateKey() {
     try {
-      // Primero intentar obtener de variables de entorno
+      // 1. PRIMERO intentar obtener de variables de entorno (VERCEL)
       if (process.env.SECRET_KEY) {
         return Buffer.from(process.env.SECRET_KEY, 'hex');
       }
       
-      // Verificar si ya existe la clave en archivo
-      if (fs.existsSync(this.keyPath)) {
+      // 2. Si no estamos en Vercel, intentar archivos
+      if (!process.env.VERCEL && fs.existsSync(this.keyPath)) {
         return Buffer.from(fs.readFileSync(this.keyPath, 'utf8'), 'hex');
-      } else {
-        // Crear una nueva clave
-        const key = crypto.randomBytes(32); // 256 bits
+      }
+      
+      // 3. Crear una nueva clave
+      const key = crypto.randomBytes(32); // 256 bits
+      
+      // 4. ARREGLO VERCEL: Solo intentar guardar si NO estamos en Vercel
+      if (!process.env.VERCEL) {
         try {
           fs.writeFileSync(this.keyPath, key.toString('hex'));
         } catch (writeError) {
           console.warn('No se pudo guardar la clave de cifrado:', writeError.message);
         }
-        return key;
       }
+      
+      return key;
     } catch (error) {
       console.error(`Error al obtener/crear clave de cifrado: ${error.message}`);
       throw error;
@@ -55,28 +61,34 @@ class CryptoHelper {
 
   /**
    * Obtiene o crea el vector de inicialización
+   * ARREGLADO: No intenta escribir archivos en Vercel
    * @returns {Buffer} Vector de inicialización
    */
   getOrCreateIV() {
     try {
-      // Primero intentar obtener de variables de entorno
+      // 1. PRIMERO intentar obtener de variables de entorno (VERCEL)
       if (process.env.SECRET_IV) {
         return Buffer.from(process.env.SECRET_IV, 'hex');
       }
       
-      // Verificar si ya existe el IV en archivo
-      if (fs.existsSync(this.ivPath)) {
+      // 2. Si no estamos en Vercel, intentar archivos
+      if (!process.env.VERCEL && fs.existsSync(this.ivPath)) {
         return Buffer.from(fs.readFileSync(this.ivPath, 'utf8'), 'hex');
-      } else {
-        // Crear un nuevo IV
-        const iv = crypto.randomBytes(16); // 128 bits
+      }
+      
+      // 3. Crear un nuevo IV
+      const iv = crypto.randomBytes(16); // 128 bits
+      
+      // 4. ARREGLO VERCEL: Solo intentar guardar si NO estamos en Vercel
+      if (!process.env.VERCEL) {
         try {
           fs.writeFileSync(this.ivPath, iv.toString('hex'));
         } catch (writeError) {
           console.warn('No se pudo guardar el IV:', writeError.message);
         }
-        return iv;
       }
+      
+      return iv;
     } catch (error) {
       console.error(`Error al obtener/crear vector de inicialización: ${error.message}`);
       throw error;
