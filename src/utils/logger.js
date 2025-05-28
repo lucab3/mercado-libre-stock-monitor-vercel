@@ -6,10 +6,14 @@ const fs = require('fs');
 const logLevel = process.env.LOG_LEVEL || 'info';
 const environment = process.env.NODE_ENV || 'development';
 
-// Crear directorio de logs si no existe
+// ARREGLO PARA VERCEL: Solo crear directorio de logs si no estamos en Vercel
 const logsDir = path.join(__dirname, '../../logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+if (!process.env.VERCEL && !fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+  } catch (error) {
+    console.warn('No se pudo crear directorio de logs:', error.message);
+  }
 }
 
 const logger = winston.createLogger({
@@ -23,25 +27,30 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   defaultMeta: { service: 'mercadolibre-stock-monitor' },
-  transports: [
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'error.log'), 
-      level: 'error' 
-    }),
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'combined.log') 
-    })
-  ]
+  transports: []
 });
 
-// Si no estamos en producción, también logueamos a la consola
-if (environment !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
+// ARREGLO PARA VERCEL: Solo agregar file transports si NO estamos en Vercel
+if (!process.env.VERCEL) {
+  try {
+    logger.add(new winston.transports.File({ 
+      filename: path.join(logsDir, 'error.log'), 
+      level: 'error' 
+    }));
+    logger.add(new winston.transports.File({ 
+      filename: path.join(logsDir, 'combined.log') 
+    }));
+  } catch (error) {
+    console.warn('No se pudieron configurar logs de archivo:', error.message);
+  }
 }
+
+// Siempre agregar console transport
+logger.add(new winston.transports.Console({
+  format: winston.format.combine(
+    winston.format.colorize(),
+    winston.format.simple()
+  )
+}));
 
 module.exports = logger;
