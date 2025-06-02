@@ -655,9 +655,9 @@ logger.error(`❌ Error fatal al iniciar servidor: ${error.message}`);
 process.exit(1);
 }
 } else {
-  // AGREGAR ESTO: En Vercel, solo logear que está ejecutando
+// AGREGAR ESTO: En Vercel, solo logear que está ejecutando
 logger.info('🔧 Ejecutando en modo Vercel serverless');
-  logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
 }
 
 // Exportar la aplicación para Vercel
@@ -666,17 +666,17 @@ module.exports = app;
 // Manejo de errores no capturados
 process.on('uncaughtException', (error) => {
 logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
-  process.exit(1);
-  if (!process.env.VERCEL) {
-    process.exit(1);
-  }
+process.exit(1);
+if (!process.env.VERCEL) {
+process.exit(1);
+}
 });
 
 process.on('unhandledRejection', (reason, promise) => {
 logger.error('❌ Rechazo de promesa no manejado', { reason });
-  process.exit(1);
+process.exit(1);
 });
-  if (!process.env.VERCEL) {
-    process.exit(1);
-  }
+if (!process.env.VERCEL) {
+process.exit(1);
+}
 });
