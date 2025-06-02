@@ -659,27 +659,6 @@ process.exit(1);
 logger.info('🔧 Ejecutando en modo Vercel serverless');
   logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
 }
-
-// Exportar la aplicación para Vercel
-module.exports = app;
-
-// Manejo de errores no capturados
-process.on('uncaughtException', (error) => {
-logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
-  process.exit(1);
-  if (!process.env.VERCEL) {
-    process.exit(1);
-  }
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-logger.error('❌ Rechazo de promesa no manejado', { reason });
-  process.exit(1);
-});
-  if (!process.env.VERCEL) {
-    process.exit(1);
-  }
-});
 // Debug de configuración ML
 app.get('/debug/ml-config', (req, res) => {
   const config = {
@@ -710,4 +689,25 @@ app.get('/webhook/status', (req, res) => {
     url: `${req.protocol}://${req.get('host')}/webhook/notifications`,
     timestamp: new Date().toISOString()
   });
+});
+
+// Exportar la aplicación para Vercel
+module.exports = app;
+
+// Manejo de errores no capturados
+process.on('uncaughtException', (error) => {
+logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
+  process.exit(1);
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+logger.error('❌ Rechazo de promesa no manejado', { reason });
+  process.exit(1);
+});
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 });
