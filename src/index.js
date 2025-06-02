@@ -660,36 +660,6 @@ logger.info('🔧 Ejecutando en modo Vercel serverless');
   logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
 }
 // Debug de configuración ML
-app.get('/debug/ml-config', (req, res) => {
-  const config = {
-    mockMode: process.env.MOCK_ML_API === 'true',
-    clientId: process.env.ML_CLIENT_ID ? '***' + process.env.ML_CLIENT_ID.slice(-4) : 'NO_CONFIGURADO',
-    clientSecret: process.env.ML_CLIENT_SECRET ? '***' + process.env.ML_CLIENT_SECRET.slice(-4) : 'NO_CONFIGURADO',
-    redirectUri: process.env.ML_REDIRECT_URI,
-    country: process.env.ML_COUNTRY || 'AR'
-  };
-  
-  res.json({
-    message: 'Configuración actual de ML',
-    config,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Webhook endpoint básico (para ML)
-app.post('/webhook/notifications', express.raw({ type: 'application/json' }), (req, res) => {
-  console.log('🔔 Webhook recibido de ML');
-  res.status(200).json({ status: 'received' });
-});
-
-// Estado del webhook
-app.get('/webhook/status', (req, res) => {
-  res.json({
-    message: 'Webhook endpoint funcionando',
-    url: `${req.protocol}://${req.get('host')}/webhook/notifications`,
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Exportar la aplicación para Vercel
 module.exports = app;
