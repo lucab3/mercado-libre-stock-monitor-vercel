@@ -1,662 +1,662 @@
-/**
- * Aplicación principal - Monitor de Stock de Mercado Libre
- * Versión completa con soporte para webhooks
- */
-
-const express = require('express');
+// Cargar variables de entorno ANTES que cualquier otra cosa
 const path = require('path');
+
+// Cargar .env.local si existe, sino usar .env
+const envPath = path.join(__dirname, '../.env.local');
 const fs = require('fs');
 
-// Configurar variables de entorno
-const envPath = path.join(__dirname, '../.env.local');
 if (fs.existsSync(envPath)) {
-  require('dotenv').config({ path: envPath });
+require('dotenv').config({ path: envPath });
 } else {
-  require('dotenv').config();
+require('dotenv').config();
 }
 
+const express = require('express');
+const config = require('../config/config');
 const logger = require('./utils/logger');
 const auth = require('./api/auth');
 const stockMonitor = require('./services/stockMonitor');
 
+// Inicialización de la aplicación Express
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || config.app.port;
 
-// Middleware para parsing JSON (con raw para webhooks)
-app.use('/webhook', express.raw({ type: 'application/json' }));
+logger.info('🚀 Iniciando aplicación Monitor de Stock ML...');
+logger.info(`📊 Puerto configurado: ${port}`);
+logger.info(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+logger.info(`🎭 Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+
+// Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Servir archivos estáticos
-app.use(express.static(path.join(__dirname, '../public')));
-
-// ==============================================
-// RUTAS PRINCIPALES
-// ==============================================
-
-// Página principal
-app.get('/', (req, res) => {
-  try {
-    // Si está autenticado, mostrar dashboard
-    if (auth.isAuthenticated()) {
-      res.sendFile(path.join(__dirname, '../public/dashboard.html'));
-    } else {
-      // Si no está autenticado, mostrar página de login
-      res.sendFile(path.join(__dirname, '../public/index.html'));
-    }
-  } catch (error) {
-    logger.error('Error en ruta principal:', error.message);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
+// Middleware para verificación automática en cada request (solo para usuarios autenticados)
+app.use(async (req, res, next) => {
+// Solo hacer auto-check si el usuario está autenticado y no es una llamada de API
+if (auth.isAuthenticated() && !req.path.startsWith('/api/') && req.method === 'GET') {
+try {
+// Verificar si es necesario hacer una nueva verificación automática
+await stockMonitor.autoCheckIfNeeded();
+} catch (error) {
+logger.error(`Error en auto-verificación: ${error.message}`);
+// No interrumpir la request principal por este error
+}
+}
+next();
 });
 
-// Ruta de health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'Monitor de Stock ML funcionando correctamente',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    mode: process.env.MOCK_ML_API === 'true' ? 'Mock' : 'Production'
-  });
+// Ruta principal
+app.get('/', async (req, res) => {
+try {
+if (auth.isAuthenticated()) {
+// Si está autenticado, asegurar que el monitoreo esté activo
+if (!stockMonitor.monitoringActive) {
+try {
+await stockMonitor.start();
+} catch (error) {
+logger.error(`Error al iniciar monitoreo automático: ${error.message}`);
+}
+}
+res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+} else {
+res.sendFile(path.join(__dirname, 'public', 'login.html'));
+}
+} catch (error) {
+logger.error(`Error en ruta principal: ${error.message}`);
+res.status(500).send('Error interno del servidor');
+}
 });
 
-// ==============================================
-// RUTAS DE AUTENTICACIÓN
-// ==============================================
-
-// Iniciar proceso de autenticación
+// Ruta para iniciar el proceso de autenticación
 app.get('/auth/login', (req, res) => {
-  try {
-    const authUrl = auth.getAuthUrl();
-    logger.info('🔐 Redirigiendo a URL de autorización');
-    res.redirect(authUrl);
-  } catch (error) {
-    logger.error('Error al generar URL de autorización:', error.message);
-    res.status(500).json({ 
-      error: 'Error al iniciar autenticación',
-      message: error.message 
-    });
-  }
+try {
+const authUrl = auth.getAuthUrl();
+
+// Si estamos en modo mock y la URL es relativa, redirigir directamente
+if (authUrl.startsWith('/')) {
+res.redirect(authUrl);
+} else {
+res.redirect(authUrl);
+}
+} catch (error) {
+logger.error(`Error al obtener URL de autenticación: ${error.message}`);
+res.status(500).send('Error al iniciar proceso de autenticación: ' + error.message);
+}
 });
 
 // Callback de autenticación
 app.get('/auth/callback', async (req, res) => {
-  try {
-    const { code, error } = req.query;
-    
-    if (error) {
-      logger.error('Error en callback de autenticación:', error);
-      return res.redirect('/?error=auth_denied');
-    }
-    
-    if (!code) {
-      logger.error('No se recibió código de autorización');
-      return res.redirect('/?error=no_code');
-    }
-    
-    logger.info('✅ Código de autorización recibido, intercambiando por tokens...');
-    
-    // Intercambiar código por tokens
-    const tokens = await auth.exchangeCodeForTokens(code);
-    
-    logger.info('🎉 Autenticación completada exitosamente');
-    
-    // Iniciar monitoreo automático
-    if (process.env.MOCK_ML_API !== 'true') {
-      try {
-        await stockMonitor.start();
-        logger.info('🔄 Monitoreo de stock iniciado automáticamente');
-      } catch (monitorError) {
-        logger.error('Error al iniciar monitoreo:', monitorError.message);
-      }
-    }
-    
-    // Redirigir al dashboard
-    res.redirect('/');
-    
-  } catch (error) {
-    logger.error('❌ Error durante la autenticación:', error.message);
-    res.redirect('/?error=auth_failed');
-  }
-});
+const { code } = req.query;
 
-// Estado de autenticación
-app.get('/api/auth/status', (req, res) => {
-  try {
-    const isAuthenticated = auth.isAuthenticated();
-    
-    res.json({
-      authenticated: isAuthenticated,
-      user: isAuthenticated ? 'Usuario autenticado' : null,
-      timestamp: new Date().toISOString(),
-      mode: process.env.MOCK_ML_API === 'true' ? 'Mock' : 'Production'
-    });
-  } catch (error) {
-    logger.error('Error al verificar estado de autenticación:', error.message);
-    res.status(500).json({ error: 'Error al verificar autenticación' });
-  }
-});
-
-// Cerrar sesión
-app.post('/api/auth/logout', (req, res) => {
-  try {
-    auth.logout();
-    stockMonitor.stop();
-    logger.info('👋 Usuario deslogueado y monitoreo detenido');
-    res.json({ success: true, message: 'Sesión cerrada correctamente' });
-  } catch (error) {
-    logger.error('Error al cerrar sesión:', error.message);
-    res.status(500).json({ error: 'Error al cerrar sesión' });
-  }
-});
-
-// ==============================================
-// RUTAS DE API - STOCK MONITOR
-// ==============================================
-
-// Obtener estado del stock
-app.get('/api/stock', async (req, res) => {
-  try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-    
-    const products = await stockMonitor.getCurrentStock();
-    const statistics = stockMonitor.getStatistics();
-    
-    res.json({
-      products,
-      statistics,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error al obtener stock:', error.message);
-    res.status(500).json({ error: 'Error al obtener información de stock' });
-  }
-});
-
-// Verificar stock manualmente
-app.post('/api/stock/check', async (req, res) => {
-  try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-    
-    logger.info('🔍 Verificación manual de stock solicitada');
-    await stockMonitor.checkStock();
-    
-    const products = await stockMonitor.getCurrentStock();
-    const statistics = stockMonitor.getStatistics();
-    
-    res.json({
-      success: true,
-      message: 'Stock verificado correctamente',
-      products,
-      statistics,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error en verificación manual:', error.message);
-    res.status(500).json({ error: 'Error al verificar stock' });
-  }
-});
-
-// Forzar cambios en stock (solo modo mock)
-app.post('/api/stock/force-changes', async (req, res) => {
-  try {
-    if (process.env.MOCK_ML_API !== 'true') {
-      return res.status(403).json({ 
-        error: 'Función no disponible en modo producción',
-        message: 'Esta función solo está disponible en modo de prueba'
-      });
-    }
-    
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-    
-    logger.info('🎭 Forzando cambios de stock en modo mock');
-    const mockAPI = require('./api/mock-ml-api');
-    await mockAPI.forceStockChanges();
-    
-    // Verificar stock después de los cambios
-    await stockMonitor.checkStock();
-    const products = await stockMonitor.getCurrentStock();
-    
-    res.json({
-      success: true,
-      message: 'Cambios de stock simulados correctamente',
-      products,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error al forzar cambios:', error.message);
-    res.status(500).json({ error: 'Error al simular cambios de stock' });
-  }
-});
-
-// Verificar producto específico
-app.post('/api/stock/check/:itemId', async (req, res) => {
-  try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-    
-    const { itemId } = req.params;
-    logger.info(`🔍 Verificación manual solicitada para producto: ${itemId}`);
-    
-    await stockMonitor.checkSpecificItem(itemId);
-    const products = await stockMonitor.getCurrentStock();
-    
-    res.json({
-      success: true,
-      message: `Producto ${itemId} verificado correctamente`,
-      products,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error al verificar producto específico:', error.message);
-    res.status(500).json({ error: 'Error al verificar producto' });
-  }
-});
-
-// Estadísticas del monitoreo
-app.get('/api/stock/statistics', (req, res) => {
-  try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-    
-    const statistics = stockMonitor.getStatistics();
-    
-    res.json({
-      statistics,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error al obtener estadísticas:', error.message);
-    res.status(500).json({ error: 'Error al obtener estadísticas' });
-  }
-});
-
-// ==============================================
-// WEBHOOKS DE MERCADO LIBRE
-// ==============================================
-
-// Webhook endpoint para recibir notificaciones de Mercado Libre
-app.post('/webhook/notifications', async (req, res) => {
-  try {
-    logger.info('🔔 Webhook recibido de Mercado Libre');
-    
-    // Parsear el body
-    let notification;
-    try {
-      notification = JSON.parse(req.body);
-    } catch (parseError) {
-      logger.error('❌ Error al parsear webhook:', parseError.message);
-      return res.status(400).json({ error: 'Invalid JSON' });
-    }
-
-    logger.info('📦 Notificación recibida:', {
-      topic: notification.topic,
-      resource: notification.resource,
-      user_id: notification.user_id,
-      application_id: notification.application_id
-    });
-
-    // Procesar según el tipo de notificación
-    await processWebhookNotification(notification);
-    
-    // Responder inmediatamente a ML
-    res.status(200).json({ status: 'received' });
-    
-  } catch (error) {
-    logger.error('❌ Error procesando webhook:', error.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Función para procesar notificaciones webhook
-async function processWebhookNotification(notification) {
-  try {
-    const { topic, resource, user_id } = notification;
-    
-    logger.info(`🔄 Procesando notificación: ${topic} - ${resource}`);
-    
-    switch (topic) {
-      case 'items':
-        await handleItemNotification(resource);
-        break;
-        
-      case 'orders_v2':
-        await handleOrderNotification(resource);
-        break;
-        
-      case 'questions':
-        await handleQuestionNotification(resource);
-        break;
-        
-      case 'stock_locations':
-        await handleStockLocationNotification(resource);
-        break;
-        
-      case 'items_prices':
-        await handleItemPriceNotification(resource);
-        break;
-        
-      case 'fbm_stock_operations':
-        await handleFbmStockNotification(resource);
-        break;
-        
-      default:
-        logger.info(`ℹ️ Tópico no manejado: ${topic}`);
-    }
-    
-  } catch (error) {
-    logger.error('❌ Error procesando notificación webhook:', error.message);
-  }
+if (!code) {
+return res.status(400).send('Error: No se recibió el código de autorización');
 }
 
-// Manejar notificaciones de items (productos)
-async function handleItemNotification(resource) {
-  try {
-    logger.info('📦 Procesando notificación de item:', resource);
-    
-    // Extraer item ID del resource
-    const itemId = resource.split('/').pop();
-    
-    // Si estamos en modo mock, simular
-    if (process.env.MOCK_ML_API === 'true') {
-      logger.info('🎭 Modo mock: simulando procesamiento de item');
-      return;
-    }
-    
-    // Verificar si es uno de nuestros productos monitoreados
-    const isMonitored = await stockMonitor.isItemMonitored(itemId);
-    
-    if (isMonitored) {
-      logger.info(`✅ Item ${itemId} está siendo monitoreado, verificando cambios...`);
-      
-      // Forzar verificación inmediata de este producto específico
-      await stockMonitor.checkSpecificItem(itemId);
-      
-      logger.info(`🔍 Verificación completada para item ${itemId}`);
-    } else {
-      logger.info(`ℹ️ Item ${itemId} no está en la lista de monitoreo`);
-    }
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de item:', error.message);
-  }
+try {
+await auth.getTokensFromCode(code);
+
+// Iniciar el monitoreo automáticamente después de la autenticación
+try {
+await stockMonitor.start();
+logger.info('✅ Monitoreo iniciado después de autenticación exitosa');
+} catch (monitorError) {
+logger.error(`❌ Error al iniciar monitoreo: ${monitorError.message}`);
 }
 
-// Manejar notificaciones de órdenes (ventas)
-async function handleOrderNotification(resource) {
-  try {
-    logger.info('🛒 Procesando notificación de orden:', resource);
-    
-    if (process.env.MOCK_ML_API === 'true') {
-      logger.info('🎭 Modo mock: simulando procesamiento de orden');
-      return;
-    }
-    
-    // Obtener detalles de la orden para ver qué productos fueron vendidos
-    const accessToken = await auth.getAccessToken();
-    
-    const axios = require('axios');
-    const response = await axios.get(`https://api.mercadolibre.com${resource}`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
-    });
-    
-    const order = response.data;
-    
-    // Verificar stock de items vendidos
-    if (order.order_items && order.order_items.length > 0) {
-      logger.info(`📦 Orden contiene ${order.order_items.length} items`);
-      
-      for (const item of order.order_items) {
-        const itemId = item.item.id;
-        const isMonitored = await stockMonitor.isItemMonitored(itemId);
-        
-        if (isMonitored) {
-          logger.info(`🔍 Verificando stock post-venta para item ${itemId}`);
-          await stockMonitor.checkSpecificItem(itemId);
-        }
-      }
-    }
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de orden:', error.message);
-  }
+res.redirect('/');
+} catch (error) {
+logger.error(`❌ Error en el callback de autenticación: ${error.message}`);
+res.status(500).send('Error durante la autenticación: ' + error.message);
 }
-
-// Manejar notificaciones de preguntas
-async function handleQuestionNotification(resource) {
-  try {
-    logger.info('❓ Nueva pregunta recibida:', resource);
-    
-    // Log para debugging - en el futuro podrías responder automáticamente
-    logger.info('💡 Funcionalidad futura: respuesta automática a preguntas');
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de pregunta:', error.message);
-  }
-}
-
-// Manejar notificaciones de stock locations
-async function handleStockLocationNotification(resource) {
-  try {
-    logger.info('📍 Procesando notificación de stock location:', resource);
-    
-    if (process.env.MOCK_ML_API === 'true') {
-      logger.info('🎭 Modo mock: simulando procesamiento de stock location');
-      return;
-    }
-    
-    // Forzar verificación completa ya que cambió el stock
-    logger.info('🔄 Cambio en stock detectado, verificando todos los productos...');
-    await stockMonitor.checkAllStock();
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de stock location:', error.message);
-  }
-}
-
-// Manejar notificaciones de precios
-async function handleItemPriceNotification(resource) {
-  try {
-    logger.info('💰 Procesando notificación de cambio de precio:', resource);
-    
-    const itemId = resource.split('/').pop();
-    logger.info(`💡 Precio cambiado para item ${itemId}`);
-    
-    // En el futuro podrías agregar lógica de alertas de precios
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de precio:', error.message);
-  }
-}
-
-// Manejar notificaciones de FBM stock operations
-async function handleFbmStockNotification(resource) {
-  try {
-    logger.info('📦 Procesando notificación de FBM stock:', resource);
-    
-    if (process.env.MOCK_ML_API === 'true') {
-      logger.info('🎭 Modo mock: simulando procesamiento de FBM stock');
-      return;
-    }
-    
-    // Verificar todos los productos ya que hubo operación de stock
-    await stockMonitor.checkAllStock();
-    
-  } catch (error) {
-    logger.error('❌ Error manejando notificación de FBM stock:', error.message);
-  }
-}
-
-// Endpoint para verificar estado del webhook (útil para debugging)
-app.get('/webhook/status', (req, res) => {
-  res.json({
-    message: 'Webhook endpoint funcionando',
-    url: `${req.protocol}://${req.get('host')}/webhook/notifications`,
-    timestamp: new Date().toISOString(),
-    supported_topics: [
-      'items',
-      'orders_v2', 
-      'questions',
-      'stock_locations',
-      'items_prices',
-      'fbm_stock_operations'
-    ]
-  });
 });
 
-// ==============================================
-// RUTAS DE DEBUG (para troubleshooting)
-// ==============================================
-
-// Debug de configuración ML
-app.get('/debug/ml-config', (req, res) => {
-  const config = {
-    mockMode: process.env.MOCK_ML_API === 'true',
-    clientId: process.env.ML_CLIENT_ID ? '***' + process.env.ML_CLIENT_ID.slice(-4) : 'NO_CONFIGURADO',
-    clientSecret: process.env.ML_CLIENT_SECRET ? '***' + process.env.ML_CLIENT_SECRET.slice(-4) : 'NO_CONFIGURADO',
-    redirectUri: process.env.ML_REDIRECT_URI,
-    country: process.env.ML_COUNTRY || 'AR',
-    apiBaseUrl: process.env.ML_API_BASE_URL || 'https://api.mercadolibre.com',
-    authBaseUrl: process.env.ML_AUTH_BASE_URL || 'https://auth.mercadolibre.com.ar'
-  };
-  
-  res.json({
-    message: 'Configuración actual de ML',
-    config,
-    timestamp: new Date().toISOString()
-  });
+// Ruta para cerrar sesión
+app.get('/auth/logout', (req, res) => {
+try {
+auth.logout();
+stockMonitor.stop();
+logger.info('🚪 Sesión cerrada correctamente');
+res.redirect('/');
+} catch (error) {
+logger.error(`Error al cerrar sesión: ${error.message}`);
+res.status(500).send('Error al cerrar sesión: ' + error.message);
+}
 });
 
-// Debug de autenticación
-app.get('/debug/auth-status', (req, res) => {
-  try {
-    const isAuth = auth.isAuthenticated();
-    const tokens = auth.tokens ? {
-      hasAccessToken: !!auth.tokens.access_token,
-      hasRefreshToken: !!auth.tokens.refresh_token,
-      expiresAt: auth.tokens.expires_at,
-      timeToExpiry: auth.tokens.expires_at ? auth.tokens.expires_at - Date.now() : null
-    } : null;
-    
-    res.json({
-      message: 'Estado de autenticación',
-      authenticated: isAuth,
-      tokens,
-      mockMode: process.env.MOCK_ML_API === 'true',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Error al verificar autenticación',
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+// API para verificar el estado de autenticación y monitoreo
+// MEJORADO: Incluye datos sincronizados en tiempo real
+app.get('/api/auth/status', async (req, res) => {
+try {
+const monitorStatus = stockMonitor.getStatus();
+
+// NUEVO: Si hay actividad reciente, incluir debug info
+if (process.env.NODE_ENV === 'development') {
+stockMonitor.debugCurrentState();
+}
+
+res.json({ 
+authenticated: auth.isAuthenticated(),
+monitoring: {
+...monitorStatus,
+// Incluir timestamp de respuesta para debug
+responseTime: Date.now()
+},
+mockMode: process.env.MOCK_ML_API === 'true',
+lastSyncTime: new Date().toISOString()
+});
+} catch (error) {
+logger.error(`Error en /api/auth/status: ${error.message}`);
+res.status(500).json({ 
+error: 'Error al obtener estado',
+authenticated: auth.isAuthenticated(),
+monitoring: { active: false, error: error.message }
+});
+}
 });
 
-// ==============================================
-// ERROR HANDLERS
-// ==============================================
+// API para iniciar el monitoreo manualmente
+app.post('/api/monitor/start', async (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
 
-// Error handler
-app.use((error, req, res, next) => {
-  logger.error('Error no manejado:', error);
-  res.status(500).json({
-    error: 'Error interno del servidor',
-    message: error.message,
-    timestamp: new Date().toISOString()
-  });
+try {
+await stockMonitor.start();
+res.json({ 
+success: true, 
+message: 'Monitoreo iniciado',
+timestamp: Date.now()
+});
+} catch (error) {
+logger.error(`Error al iniciar monitoreo: ${error.message}`);
+res.status(500).json({ error: 'Error al iniciar monitoreo' });
+}
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Ruta no encontrada',
-    path: req.path,
-    timestamp: new Date().toISOString()
-  });
+// API para detener el monitoreo
+app.post('/api/monitor/stop', (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+try {
+stockMonitor.stop();
+res.json({ 
+success: true, 
+message: 'Monitoreo detenido',
+timestamp: Date.now()
+});
+} catch (error) {
+logger.error(`Error al detener monitoreo: ${error.message}`);
+res.status(500).json({ error: 'Error al detener monitoreo' });
+}
 });
 
-// ==============================================
-// INICIALIZACIÓN DEL SERVIDOR
-// ==============================================
+// API para forzar verificación de stock
+// MEJORADO: Respuesta más detallada
+app.post('/api/monitor/check-now', async (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
 
-// Solo iniciar el servidor si no estamos en Vercel
-if (!process.env.VERCEL) {
-  try {
-    const server = app.listen(port, () => {
-      const baseUrl = `http://localhost:${port}`;
-      logger.info(`🚀 Servidor iniciado en ${baseUrl}`);
-      logger.info(`🔗 URL para redirección OAuth: ${baseUrl}/auth/callback`);
-      logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
-      
-      if (process.env.MOCK_ML_API === 'true') {
-        logger.info(`✨ Modo Demo: Puedes iniciar sesión directamente sin credenciales reales`);
-        logger.info(`🔄 Stock cambia automáticamente cada 30 segundos`);
-      }
-      
-      // En desarrollo local, iniciar monitoreo si ya estamos autenticados
-      if (auth.isAuthenticated()) {
-        stockMonitor.start()
-          .then(() => {
-            logger.info('✅ Monitoreo iniciado automáticamente');
-          })
-          .catch(error => {
-            logger.error(`❌ Error al iniciar monitoreo automático: ${error.message}`);
-          });
-      } else {
-        logger.info('⏳ Esperando autenticación para iniciar monitoreo');
-      }
-    });
-    
-    // Manejar errores del servidor
-    server.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        logger.error(`❌ Puerto ${port} ya está en uso. Intenta con otro puerto.`);
-        process.exit(1);
-      } else {
-        logger.error(`❌ Error del servidor: ${error.message}`);
-        process.exit(1);
-      }
-    });
-    
-    // Manejo de cierre limpio
-    process.on('SIGTERM', () => {
-      logger.info('⏹️  Cerrando servidor...');
-      stockMonitor.stop();
-      server.close(() => {
-        logger.info('✅ Servidor cerrado correctamente');
-        process.exit(0);
-      });
-    });
-    
-    process.on('SIGINT', () => {
-      logger.info('⏹️  Cerrando servidor...');
-      stockMonitor.stop();
-      server.close(() => {
-        logger.info('✅ Servidor cerrado correctamente');
-        process.exit(0);
-      });
-    });
-    
-  } catch (error) {
-    logger.error(`❌ Error fatal al iniciar servidor: ${error.message}`);
-    process.exit(1);
-  }
+try {
+logger.info('🔍 Verificación manual iniciada desde API');
+const result = await stockMonitor.checkStock();
+
+res.json({ 
+success: true, 
+message: 'Verificación completada',
+result: {
+...result,
+checkTime: new Date().toISOString()
+}
+});
+} catch (error) {
+logger.error(`Error al verificar stock: ${error.message}`);
+res.status(500).json({ error: 'Error al verificar stock: ' + error.message });
+}
+});
+
+// API para verificar stock de un producto específico
+// COMPLETAMENTE RENOVADO: Datos consistentes y sincronizados
+app.get('/api/products/:id/stock', async (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+try {
+const productId = req.params.id;
+logger.info(`🔍 API: Verificación individual de producto ${productId}`);
+
+// Usar el método del monitor para mantener consistencia
+const product = await stockMonitor.checkProductStock(productId);
+
+const responseData = {
+id: product.id,
+title: product.title,
+available_quantity: product.available_quantity, // Stock actual en tiempo real
+has_low_stock: product.hasLowStock(config.monitoring.stockThreshold),
+is_out_of_stock: product.isOutOfStock(),
+threshold: config.monitoring.stockThreshold,
+last_updated: Date.now(),
+last_updated_iso: new Date().toISOString()
+};
+
+logger.info(`📊 API: Respuesta para ${productId}: ${product.available_quantity} unidades`);
+
+res.json(responseData);
+} catch (error) {
+logger.error(`Error al verificar stock de producto ${req.params.id}: ${error.message}`);
+res.status(500).json({ 
+error: 'Error al verificar stock',
+productId: req.params.id,
+message: error.message
+});
+}
+});
+
+// NUEVO: API para debug (solo en desarrollo)
+app.get('/api/debug/stock-state', (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+if (process.env.NODE_ENV !== 'development') {
+return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+}
+
+try {
+const monitorStatus = stockMonitor.getStatus();
+const trackedProducts = Array.from(stockMonitor.trackedProducts.values()).map(p => ({
+id: p.id,
+title: p.title,
+stock: p.available_quantity,
+hasLowStock: p.hasLowStock(config.monitoring.stockThreshold)
+}));
+
+// Si estamos en modo mock, incluir estado del Mock API
+let mockState = null;
+if (process.env.MOCK_ML_API === 'true') {
+try {
+const mockAPI = require('./api/mock-ml-api');
+mockState = {
+...mockAPI.getCurrentStockStatus(),
+stats: mockAPI.getStockChangeStats()
+};
+} catch (mockError) {
+logger.error(`Error obteniendo estado mock: ${mockError.message}`);
+mockState = { error: mockError.message };
+}
+}
+
+res.json({
+monitorStatus,
+trackedProducts,
+mockState,
+timestamp: Date.now()
+});
+} catch (error) {
+res.status(500).json({ error: error.message });
+}
+});
+
+// NUEVO: API para controlar cambios automáticos de stock (solo desarrollo)
+app.post('/api/debug/trigger-stock-changes', (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+if (process.env.NODE_ENV !== 'development') {
+return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+}
+
+try {
+if (process.env.MOCK_ML_API === 'true') {
+const mockAPI = require('./api/mock-ml-api');
+const changesCount = mockAPI.triggerStockChanges();
+
+res.json({
+success: true,
+message: `${changesCount} productos cambiaron stock`,
+changesCount,
+timestamp: Date.now()
+});
 } else {
-  // En Vercel, solo logear que está ejecutando
-  logger.info('🔧 Ejecutando en modo Vercel serverless');
+res.json({
+success: false,
+message: 'Solo disponible en modo mock'
+});
+}
+} catch (error) {
+logger.error(`Error forzando cambios de stock: ${error.message}`);
+res.status(500).json({ error: error.message });
+}
+});
+
+// NUEVO: API para configurar frecuencia de cambios (solo desarrollo)
+app.post('/api/debug/set-change-frequency', (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+if (process.env.NODE_ENV !== 'development') {
+return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+}
+
+try {
+const { seconds } = req.body;
+
+if (!seconds || seconds < 5 || seconds > 300) {
+return res.status(400).json({ 
+error: 'La frecuencia debe estar entre 5 y 300 segundos' 
+});
+}
+
+if (process.env.MOCK_ML_API === 'true') {
+const mockAPI = require('./api/mock-ml-api');
+mockAPI.setStockChangeFrequency(seconds);
+
+res.json({
+success: true,
+message: `Frecuencia actualizada a ${seconds} segundos`,
+frequency: seconds,
+timestamp: Date.now()
+});
+} else {
+res.json({
+success: false,
+message: 'Solo disponible en modo mock'
+});
+}
+} catch (error) {
+logger.error(`Error configurando frecuencia: ${error.message}`);
+res.status(500).json({ error: error.message });
+}
+});
+
+// Mostrar información de la aplicación
+app.get('/api/app-info', (req, res) => {
+res.json({
+name: 'Mercado Libre Stock Monitor',
+version: '1.0.1',
+environment: process.env.NODE_ENV || 'production',
+vercel: !!process.env.VERCEL,
+mockMode: process.env.MOCK_ML_API === 'true',
+plan: 'free',
+features: {
+autoMonitoring: 'on-access',
+cronJobs: false,
+manualCheck: true,
+realTimeSync: true,
+dynamicStock: true
+}
+});
+});
+
+// Ruta de verificación de estado para Vercel
+app.get('/health', (req, res) => {
+try {
+const status = stockMonitor.getStatus();
+res.status(200).json({
+status: 'OK',
+message: 'El servicio está funcionando correctamente',
+timestamp: new Date().toISOString(),
+authenticated: auth.isAuthenticated(),
+monitoring: {
+active: status.active,
+totalProducts: status.totalProducts,
+lowStockProducts: status.lowStockProducts.length
+},
+mockMode: process.env.MOCK_ML_API === 'true'
+});
+} catch (error) {
+logger.error(`Error en health check: ${error.message}`);
+res.status(500).json({
+status: 'ERROR',
+message: 'Error interno del servidor',
+error: error.message,
+timestamp: new Date().toISOString()
+});
+}
+});
+// ========== ENDPOINTS DE RATE LIMITING ==========
+// Agregar estos endpoints a tu src/index.js
+
+// API para obtener estadísticas de rate limiting
+app.get('/api/rate-limit/stats', (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+try {
+const productsService = require('./api/products');
+const stats = productsService.getRateLimitStats();
+
+res.json({
+success: true,
+rateLimitStats: stats,
+timestamp: new Date().toISOString(),
+recommendations: generateRateLimitRecommendations(stats)
+});
+} catch (error) {
+logger.error(`Error obteniendo stats de rate limit: ${error.message}`);
+res.status(500).json({ error: error.message });
+}
+});
+
+// API para optimizar rate limiting
+app.post('/api/rate-limit/optimize', async (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+try {
+const productsService = require('./api/products');
+const optimization = await productsService.optimizeRateLimit();
+
+res.json({
+success: true,
+optimization,
+timestamp: new Date().toISOString()
+});
+} catch (error) {
+logger.error(`Error optimizando rate limit: ${error.message}`);
+res.status(500).json({ error: error.message });
+}
+});
+
+// API para hacer pausa inteligente
+app.post('/api/rate-limit/smart-pause', async (req, res) => {
+if (!auth.isAuthenticated()) {
+return res.status(401).json({ error: 'No autenticado' });
+}
+
+try {
+const productsService = require('./api/products');
+await productsService.smartPause();
+
+res.json({
+success: true,
+message: 'Pausa inteligente aplicada',
+timestamp: new Date().toISOString()
+});
+} catch (error) {
+logger.error(`Error en pausa inteligente: ${error.message}`);
+res.status(500).json({ error: error.message });
+}
+});
+
+// Health check con información de rate limiting
+app.get('/api/health/detailed', async (req, res) => {
+try {
+const productsService = require('./api/products');
+const healthCheck = await productsService.healthCheck();
+const rateLimitStats = productsService.getRateLimitStats();
+
+res.json({
+status: healthCheck.status,
+services: {
+api: healthCheck,
+rateLimit: {
+status: rateLimitStats.utilizationPercent > 90 ? 'WARNING' : 'OK',
+stats: rateLimitStats
+}
+},
+timestamp: new Date().toISOString()
+});
+} catch (error) {
+res.status(500).json({
+status: 'ERROR',
+error: error.message,
+timestamp: new Date().toISOString()
+});
+}
+});
+
+// ========== FUNCIONES AUXILIARES ==========
+
+function generateRateLimitRecommendations(stats) {
+const recommendations = [];
+
+if (stats.utilizationPercent > 80) {
+recommendations.push({
+type: 'warning',
+message: 'Alto uso del rate limit',
+action: 'Considera reducir la frecuencia de verificaciones'
+});
+}
+
+if (stats.queueLength > 5) {
+recommendations.push({
+type: 'info',
+message: 'Cola de requests larga',
+action: 'Las verificaciones pueden tardar más de lo normal'
+});
+}
+
+if (stats.rejectedRequests > 0) {
+recommendations.push({
+type: 'error',
+message: 'Requests rechazadas por rate limit',
+action: 'El sistema está ajustando automáticamente los límites'
+});
+}
+
+if (stats.averageWaitTime > 5000) {
+recommendations.push({
+type: 'warning',
+message: 'Tiempo de espera elevado',
+action: 'Considera usar verificaciones en lote'
+});
+}
+
+return recommendations;
+}
+
+// ========== MIDDLEWARE DE RATE LIMITING ==========
+// Agregar este middleware ANTES de tus rutas de API
+
+app.use('/api/', (req, res, next) => {
+// Solo aplicar a rutas que hacen llamadas a ML API
+const mlApiRoutes = ['/api/monitor/', '/api/products/'];
+const isMLApiRoute = mlApiRoutes.some(route => req.path.startsWith(route));
+
+if (isMLApiRoute && auth.isAuthenticated()) {
+const productsService = require('./api/products');
+const stats = productsService.getRateLimitStats();
+
+// Agregar headers informativos
+res.set({
+'X-RateLimit-Limit': stats.maxRequests,
+'X-RateLimit-Remaining': Math.max(0, stats.maxRequests - stats.currentRequests),
+'X-RateLimit-Reset': Date.now() + 60000,
+'X-RateLimit-Window': '60'
+});
+
+// Si está muy saturado, responder con 429
+if (stats.utilizationPercent > 95) {
+return res.status(429).json({
+error: 'Rate limit interno alcanzado',
+message: 'Demasiadas requests en un corto período',
+retryAfter: 60,
+stats: {
+current: stats.currentRequests,
+max: stats.maxRequests,
+utilization: stats.utilizationPercent
+}
+});
+}
+}
+
+next();
+});
+// Solo iniciar el servidor si no estamos en Vercel
+// En Vercel, la aplicación se ejecuta como una función serverless
+if (!process.env.VERCEL) {
+try {
+const server = app.listen(port, () => {
+const baseUrl = `http://localhost:${port}`;
+logger.info(`🚀 Servidor iniciado en ${baseUrl}`);
+logger.info(`🔗 URL para redirección OAuth: ${baseUrl}/auth/callback`);
+logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+
+if (process.env.MOCK_ML_API === 'true') {
+logger.info(`✨ Modo Demo: Puedes iniciar sesión directamente sin credenciales reales`);
+logger.info(`🔄 Stock cambia automáticamente cada 30 segundos`);
+}
+
+// En desarrollo local, iniciar monitoreo si ya estamos autenticados
+if (auth.isAuthenticated()) {
+stockMonitor.start()
+.then(() => {
+logger.info('✅ Monitoreo iniciado automáticamente');
+})
+.catch(error => {
+logger.error(`❌ Error al iniciar monitoreo automático: ${error.message}`);
+});
+} else {
+logger.info('⏳ Esperando autenticación para iniciar monitoreo');
+}
+});
+
+// Manejar errores del servidor
+server.on('error', (error) => {
+if (error.code === 'EADDRINUSE') {
+logger.error(`❌ Puerto ${port} ya está en uso. Intenta con otro puerto.`);
+process.exit(1);
+} else {
+logger.error(`❌ Error del servidor: ${error.message}`);
+process.exit(1);
+}
+});
+
+// Manejo de cierre limpio
+process.on('SIGTERM', () => {
+logger.info('⏹️  Cerrando servidor...');
+stockMonitor.stop();
+server.close(() => {
+logger.info('✅ Servidor cerrado correctamente');
+process.exit(0);
+});
+});
+
+process.on('SIGINT', () => {
+logger.info('⏹️  Cerrando servidor...');
+stockMonitor.stop();
+server.close(() => {
+logger.info('✅ Servidor cerrado correctamente');
+process.exit(0);
+});
+});
+
+} catch (error) {
+logger.error(`❌ Error fatal al iniciar servidor: ${error.message}`);
+process.exit(1);
+}
+} else {
+  // AGREGAR ESTO: En Vercel, solo logear que está ejecutando
+logger.info('🔧 Ejecutando en modo Vercel serverless');
   logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
 }
 
@@ -665,14 +665,17 @@ module.exports = app;
 
 // Manejo de errores no capturados
 process.on('uncaughtException', (error) => {
-  logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
+logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
+  process.exit(1);
   if (!process.env.VERCEL) {
     process.exit(1);
   }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('❌ Rechazo de promesa no manejado', { reason });
+logger.error('❌ Rechazo de promesa no manejado', { reason });
+  process.exit(1);
+});
   if (!process.env.VERCEL) {
     process.exit(1);
   }
