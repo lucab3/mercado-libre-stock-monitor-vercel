@@ -1,5 +1,6 @@
 /**
  * Servicio de productos con Rate Limiting integrado
+ * VERSIÓN CORREGIDA - Arregla auth.getTokens() error
  */
 
 const mlApiClient = require('./ml-api-client');
@@ -15,6 +16,8 @@ class ProductsService {
     if (this.mockMode) {
       this.mockAPI = require('./mock-ml-api');
       logger.info('🎭 Products Service en modo MOCK con rate limiting simulado');
+    } else {
+      logger.info('🔐 Products Service en modo REAL con Mercado Libre API');
     }
   }
 
@@ -28,22 +31,59 @@ class ProductsService {
   }
 
   /**
-   * Obtiene todos los productos del usuario con rate limiting inteligente
+   * NUEVO: Método auxiliar para verificar y configurar autenticación
    */
-  async getAllProducts() {
+  async ensureAuthentication() {
     if (this.mockMode) {
-      return this.mockAPI.getUserProducts('mock_user').then(response => response.results);
+      return true; // En modo mock siempre está "autenticado"
+    }
+
+    // Verificar que estamos autenticados
+    if (!auth.isAuthenticated()) {
+      throw new Error('No autenticado - necesitas iniciar sesión primero con Mercado Libre');
     }
 
     try {
-      // Configurar token automáticamente
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
+      // CORREGIDO: Usar auth.tokens en lugar de auth.getTokens()
+      if (auth.tokens && auth.tokens.access_token) {
+        logger.debug('🔑 Configurando access token desde auth.tokens');
+        this.setAccessToken(auth.tokens.access_token);
+        return true;
+      } else {
+        // Intentar obtener token válido
+        logger.debug('🔄 Obteniendo access token válido...');
+        const accessToken = await auth.getAccessToken();
+        this.setAccessToken(accessToken);
+        return true;
       }
+    } catch (error) {
+      logger.error(`❌ Error configurando autenticación: ${error.message}`);
+      throw new Error(`Error de autenticación: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtiene todos los productos del usuario con rate limiting inteligente
+   * CORREGIDO: Manejo correcto de tokens
+   */
+  async getAllProducts() {
+    if (this.mockMode) {
+      logger.info('🎭 Obteniendo productos en modo MOCK');
+      try {
+        const response = await this.mockAPI.getUserProducts('mock_user');
+        return response.results || [];
+      } catch (error) {
+        logger.error(`❌ Error en modo mock: ${error.message}`);
+        return [];
+      }
+    }
+
+    try {
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       const user = await mlApiClient.getUser();
-      logger.info(`👤 Obteniendo productos para usuario: ${user.nickname}`);
+      logger.info(`👤 Obteniendo productos para usuario: ${user.nickname} (${user.id})`);
       
       const allProducts = [];
       let offset = 0;
@@ -62,6 +102,7 @@ class ProductsService {
         });
         
         if (!response.results || response.results.length === 0) {
+          logger.info('📦 No hay más productos para obtener');
           break;
         }
         
@@ -93,17 +134,22 @@ class ProductsService {
 
   /**
    * Obtiene un producto específico con rate limiting
+   * CORREGIDO: Manejo correcto de tokens
    */
   async getProduct(productId) {
     if (this.mockMode) {
-      return this.mockAPI.getProduct(productId);
+      logger.debug(`🎭 Obteniendo producto ${productId} en modo MOCK`);
+      try {
+        return await this.mockAPI.getProduct(productId);
+      } catch (error) {
+        logger.error(`❌ Error obteniendo producto mock ${productId}: ${error.message}`);
+        throw error;
+      }
     }
 
     try {
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
-      }
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       logger.debug(`🔍 Obteniendo producto ${productId} con rate limiting`);
       return await mlApiClient.getProduct(productId);
@@ -116,9 +162,11 @@ class ProductsService {
 
   /**
    * Obtiene múltiples productos de forma eficiente con rate limiting
+   * CORREGIDO: Manejo correcto de tokens
    */
   async getMultipleProducts(productIds, includeFullDetails = false) {
     if (this.mockMode) {
+      logger.info(`🎭 Obteniendo ${productIds.length} productos en modo MOCK`);
       const results = [];
       for (const id of productIds) {
         try {
@@ -136,10 +184,8 @@ class ProductsService {
     }
 
     try {
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
-      }
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       // Definir atributos para optimizar la respuesta
       const attributes = includeFullDetails 
@@ -164,17 +210,22 @@ class ProductsService {
 
   /**
    * Actualiza el stock de un producto con rate limiting
+   * CORREGIDO: Manejo correcto de tokens
    */
   async updateProductStock(productId, quantity) {
     if (this.mockMode) {
-      return this.mockAPI.updateProductStock(productId, quantity);
+      logger.info(`🎭 Actualizando stock de ${productId} a ${quantity} unidades (MOCK)`);
+      try {
+        return await this.mockAPI.updateProductStock(productId, quantity);
+      } catch (error) {
+        logger.error(`❌ Error actualizando stock mock ${productId}: ${error.message}`);
+        throw error;
+      }
     }
 
     try {
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
-      }
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       logger.info(`📝 Actualizando stock de ${productId} a ${quantity} unidades`);
       return await mlApiClient.updateProductStock(productId, quantity);
@@ -187,9 +238,11 @@ class ProductsService {
 
   /**
    * Procesa productos en lotes con control de rate limiting
+   * CORREGIDO: Manejo correcto de tokens
    */
   async processProductsBatch(productIds, processor, options = {}) {
     if (this.mockMode) {
+      logger.info(`🎭 Procesando ${productIds.length} productos en lote (MOCK)`);
       // Simular rate limiting en modo mock
       const results = [];
       for (const id of productIds) {
@@ -208,10 +261,8 @@ class ProductsService {
     const { batchSize = 10, pauseBetweenBatches = 1000 } = options;
 
     try {
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
-      }
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       return await mlApiClient.processBatch(
         productIds,
@@ -242,7 +293,10 @@ class ProductsService {
         message: 'Rate limiting simulado en modo mock',
         currentRequests: Math.floor(Math.random() * 100),
         maxRequests: 1400,
-        utilizationPercent: Math.floor(Math.random() * 50)
+        utilizationPercent: Math.floor(Math.random() * 50),
+        isNearLimit: Math.random() > 0.8,
+        queueLength: 0,
+        averageWaitTime: 0
       };
     }
 
@@ -262,6 +316,7 @@ class ProductsService {
 
   /**
    * Health check del servicio
+   * CORREGIDO: Manejo correcto de tokens
    */
   async healthCheck() {
     if (this.mockMode) {
@@ -275,10 +330,8 @@ class ProductsService {
     }
 
     try {
-      const tokens = auth.getTokens();
-      if (tokens) {
-        this.setAccessToken(tokens.access_token);
-      }
+      // CORREGIDO: Verificar y configurar autenticación
+      await this.ensureAuthentication();
 
       return await mlApiClient.healthCheck();
     } catch (error) {
@@ -292,6 +345,7 @@ class ProductsService {
 
   /**
    * Verifica y optimiza el uso del rate limit
+   * CORREGIDO: Manejo correcto de tokens
    */
   async optimizeRateLimit() {
     const stats = this.getRateLimitStats();
@@ -323,6 +377,7 @@ class ProductsService {
 
   /**
    * Estrategia inteligente para monitoreo masivo
+   * CORREGIDO: Manejo correcto de tokens
    */
   async smartBulkMonitoring(productIds, options = {}) {
     const { 
@@ -332,6 +387,11 @@ class ProductsService {
     } = options;
 
     logger.info(`🧠 Iniciando monitoreo inteligente de ${productIds.length} productos`);
+    
+    // CORREGIDO: Verificar autenticación antes de procesar
+    if (!this.mockMode) {
+      await this.ensureAuthentication();
+    }
     
     // Separar productos por prioridad
     const priority = productIds.filter(id => priorityProducts.includes(id));
@@ -383,6 +443,20 @@ class ProductsService {
       await new Promise(resolve => setTimeout(resolve, pauseTime * 1000));
     }
     // Si está por debajo del 70%, no pausar
+  }
+
+  /**
+   * NUEVO: Método para verificar el estado de autenticación
+   */
+  getAuthenticationStatus() {
+    return {
+      mockMode: this.mockMode,
+      isAuthenticated: this.mockMode ? true : auth.isAuthenticated(),
+      hasTokens: this.mockMode ? true : !!(auth.tokens && auth.tokens.access_token),
+      tokenPreview: this.mockMode ? 'MOCK_TOKEN' : 
+        (auth.tokens && auth.tokens.access_token ? 
+          auth.tokens.access_token.substring(0, 20) + '...' : 'NO_TOKEN')
+    };
   }
 }
 
