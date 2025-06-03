@@ -1,5 +1,4 @@
 const axios = require('axios');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
@@ -13,12 +12,8 @@ class MercadoLibreAuth {
     this.redirectUri = process.env.ML_REDIRECT_URI;
     this.country = process.env.ML_COUNTRY || 'AR';
     
-    // URLs base separadas para API y Auth según país
+    // NUEVO: URLs base separadas para API y Auth según país
     this.baseUrls = this.getBaseUrlsByCountry(this.country);
-    
-    // NUEVO: PKCE support
-    this.codeVerifier = null;
-    this.codeChallenge = null;
     
     this.tokens = this.loadTokens();
     
@@ -40,7 +35,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Obtener URLs base según país
+   * NUEVO: Obtener URLs base según país
    * @param {string} country - Código del país
    * @returns {Object} URLs base para API y Auth
    */
@@ -70,27 +65,30 @@ class MercadoLibreAuth {
         api: 'https://api.mercadolibre.com',
         auth: 'https://auth.mercadolibre.cl',
         site: 'MLC'
+      },
+      'UY': { // Uruguay
+        api: 'https://api.mercadolibre.com',
+        auth: 'https://auth.mercadolibre.com.uy',
+        site: 'MLU'
+      },
+      'PE': { // Perú
+        api: 'https://api.mercadolibre.com',
+        auth: 'https://auth.mercadolibre.com.pe',
+        site: 'MPE'
+      },
+      'VE': { // Venezuela
+        api: 'https://api.mercadolibre.com',
+        auth: 'https://auth.mercadolibre.com.ve',
+        site: 'MLV'
+      },
+      'EC': { // Ecuador
+        api: 'https://api.mercadolibre.com',
+        auth: 'https://auth.mercadolibre.com.ec',
+        site: 'MEC'
       }
     };
 
     return countryConfig[country] || countryConfig['AR']; // Argentina por defecto
-  }
-
-  /**
-   * NUEVO: Generar PKCE code verifier y challenge
-   */
-  generatePKCE() {
-    // Generar code_verifier (string aleatorio de 43-128 caracteres)
-    this.codeVerifier = crypto.randomBytes(32).toString('base64url');
-    
-    // Generar code_challenge (SHA256 hash del verifier en base64url)
-    this.codeChallenge = crypto
-      .createHash('sha256')
-      .update(this.codeVerifier)
-      .digest('base64url');
-    
-    logger.info('🔒 PKCE generado correctamente');
-    logger.info(`🔑 Code challenge: ${this.codeChallenge.substring(0, 10)}...`);
   }
 
   /**
@@ -122,7 +120,7 @@ class MercadoLibreAuth {
 
   /**
    * Obtiene la URL de autorización para iniciar el flujo OAuth
-   * CORREGIDO: Con soporte PKCE
+   * CORREGIDO: Usa URL de auth correcta según país
    * @returns {string} URL de autorización
    */
   getAuthUrl() {
@@ -136,21 +134,10 @@ class MercadoLibreAuth {
       throw new Error('Client ID y Redirect URI son requeridos para generar URL de autorización');
     }
 
-    // NUEVO: Generar PKCE antes de crear la URL
-    this.generatePKCE();
-
-    // CORREGIDO: URL con PKCE
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      code_challenge: this.codeChallenge,
-      code_challenge_method: 'S256'
-    });
-
-    const authUrl = `${this.baseUrls.auth}/authorization?${params.toString()}`;
+    // CORREGIDO: Usar URL de auth correcta según país
+    const authUrl = `${this.baseUrls.auth}/authorization?response_type=code&client_id=${this.clientId}&redirect_uri=${encodeURIComponent(this.redirectUri)}`;
     
-    logger.info('🔐 URL de autorización generada con PKCE');
+    logger.info('🔐 URL de autorización generada');
     logger.info(`🌍 País: ${this.country}`);
     logger.info(`🔗 Auth URL: ${this.baseUrls.auth}/authorization`);
     
@@ -159,7 +146,6 @@ class MercadoLibreAuth {
 
   /**
    * Obtiene tokens a partir del código de autorización
-   * CORREGIDO: Con soporte PKCE
    * @param {string} code - Código de autorización
    * @returns {Promise<Object>} Objeto con los tokens
    */
@@ -173,30 +159,23 @@ class MercadoLibreAuth {
         return tokens;
       }
 
-      logger.info('🔄 Intercambiando código por tokens con PKCE...');
-
-      if (!this.codeVerifier) {
-        throw new Error('Code verifier no disponible. Debes generar la URL de autorización primero.');
-      }
-
-      // CORREGIDO: Incluir code_verifier en la petición
-      const params = new URLSearchParams({
+      logger.info('🔄 Intercambiando código por tokens...');
+      
+      // CORREGIDO: Usar URL de API (no auth) para token exchange
+      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, {
         grant_type: 'authorization_code',
         client_id: this.clientId,
         client_secret: this.clientSecret,
-        code: code,
-        redirect_uri: this.redirectUri,
-        code_verifier: this.codeVerifier  // ← NUEVO: PKCE
-      });
-
-      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, params.toString(), {
+        code,
+        redirect_uri: this.redirectUri
+      }, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         timeout: 10000
       });
 
-      logger.info('✅ Tokens obtenidos exitosamente con PKCE');
+      logger.info('✅ Tokens obtenidos exitosamente');
 
       const tokens = {
         access_token: response.data.access_token,
@@ -206,11 +185,6 @@ class MercadoLibreAuth {
 
       this.tokens = tokens;
       this.saveTokens(tokens);
-      
-      // Limpiar PKCE después del uso
-      this.codeVerifier = null;
-      this.codeChallenge = null;
-      
       return tokens;
     } catch (error) {
       logger.error(`❌ Error al obtener tokens: ${error.message}`);
@@ -244,14 +218,13 @@ class MercadoLibreAuth {
 
       logger.info('🔄 Refrescando token de acceso...');
 
-      const params = new URLSearchParams({
+      // CORREGIDO: Usar URL de API para refresh token
+      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, {
         grant_type: 'refresh_token',
         client_id: this.clientId,
         client_secret: this.clientSecret,
         refresh_token: this.tokens.refresh_token
-      });
-
-      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, params.toString(), {
+      }, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
@@ -353,9 +326,6 @@ class MercadoLibreAuth {
    */
   logout() {
     this.tokens = null;
-    this.codeVerifier = null;
-    this.codeChallenge = null;
-    
     try {
       storage.clearTokens();
       if (this.mockMode && this.mockAPI && typeof this.mockAPI.reset === 'function') {
