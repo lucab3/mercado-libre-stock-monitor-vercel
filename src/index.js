@@ -45,7 +45,43 @@ logger.error(`Error en auto-verificación: ${error.message}`);
 }
 next();
 });
+// Debug básico - AGREGAR DESPUÉS DE LOS MIDDLEWARE
+app.get('/debug/simple', (req, res) => {
+  res.json({
+    message: 'Debug endpoint funcionando',
+    timestamp: new Date().toISOString(),
+    env: {
+      NODE_ENV: process.env.NODE_ENV || 'undefined',
+      VERCEL: process.env.VERCEL || 'undefined', 
+      MOCK_ML_API: process.env.MOCK_ML_API || 'undefined'
+    }
+  });
+});
 
+// Debug de variables ML
+app.get('/debug/ml-config', (req, res) => {
+  try {
+    const config = {
+      mockMode: process.env.MOCK_ML_API === 'true',
+      clientId: process.env.ML_CLIENT_ID ? '***' + process.env.ML_CLIENT_ID.slice(-4) : 'NO_CONFIGURADO',
+      clientSecret: process.env.ML_CLIENT_SECRET ? '***' + process.env.ML_CLIENT_SECRET.slice(-4) : 'NO_CONFIGURADO',
+      redirectUri: process.env.ML_REDIRECT_URI || 'NO_CONFIGURADO',
+      country: process.env.ML_COUNTRY || 'AR',
+      allEnvVars: Object.keys(process.env).filter(key => key.startsWith('ML_'))
+    };
+    
+    res.json({
+      message: 'Configuración actual de ML',
+      config,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Error al obtener configuración',
+      message: error.message
+    });
+  }
+});
 // Ruta principal
 app.get('/', async (req, res) => {
 try {
