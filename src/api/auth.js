@@ -12,7 +12,7 @@ class MercadoLibreAuth {
     this.redirectUri = process.env.ML_REDIRECT_URI;
     this.country = process.env.ML_COUNTRY || 'AR';
     
-    // NUEVO: URLs base separadas para API y Auth según país
+    // URLs base separadas para API y Auth según país
     this.baseUrls = this.getBaseUrlsByCountry(this.country);
     
     this.tokens = this.loadTokens();
@@ -35,7 +35,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * NUEVO: Obtener URLs base según país
+   * Obtener URLs base según país
    * @param {string} country - Código del país
    * @returns {Object} URLs base para API y Auth
    */
@@ -65,26 +65,6 @@ class MercadoLibreAuth {
         api: 'https://api.mercadolibre.com',
         auth: 'https://auth.mercadolibre.cl',
         site: 'MLC'
-      },
-      'UY': { // Uruguay
-        api: 'https://api.mercadolibre.com',
-        auth: 'https://auth.mercadolibre.com.uy',
-        site: 'MLU'
-      },
-      'PE': { // Perú
-        api: 'https://api.mercadolibre.com',
-        auth: 'https://auth.mercadolibre.com.pe',
-        site: 'MPE'
-      },
-      'VE': { // Venezuela
-        api: 'https://api.mercadolibre.com',
-        auth: 'https://auth.mercadolibre.com.ve',
-        site: 'MLV'
-      },
-      'EC': { // Ecuador
-        api: 'https://api.mercadolibre.com',
-        auth: 'https://auth.mercadolibre.com.ec',
-        site: 'MEC'
       }
     };
 
@@ -120,7 +100,6 @@ class MercadoLibreAuth {
 
   /**
    * Obtiene la URL de autorización para iniciar el flujo OAuth
-   * CORREGIDO: Usa URL de auth correcta según país
    * @returns {string} URL de autorización
    */
   getAuthUrl() {
@@ -134,7 +113,7 @@ class MercadoLibreAuth {
       throw new Error('Client ID y Redirect URI son requeridos para generar URL de autorización');
     }
 
-    // CORREGIDO: Usar URL de auth correcta según país
+    // URL de autorización sin PKCE
     const authUrl = `${this.baseUrls.auth}/authorization?response_type=code&client_id=${this.clientId}&redirect_uri=${encodeURIComponent(this.redirectUri)}`;
     
     logger.info('🔐 URL de autorización generada');
@@ -146,6 +125,7 @@ class MercadoLibreAuth {
 
   /**
    * Obtiene tokens a partir del código de autorización
+   * CORREGIDO: Formato correcto de datos para ML
    * @param {string} code - Código de autorización
    * @returns {Promise<Object>} Objeto con los tokens
    */
@@ -161,14 +141,16 @@ class MercadoLibreAuth {
 
       logger.info('🔄 Intercambiando código por tokens...');
       
-      // CORREGIDO: Usar URL de API (no auth) para token exchange
-      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, {
+      // CORREGIDO: Crear datos como URLSearchParams (form data)
+      const params = new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: this.clientId,
         client_secret: this.clientSecret,
-        code,
+        code: code,
         redirect_uri: this.redirectUri
-      }, {
+      });
+
+      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, params.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
@@ -200,6 +182,7 @@ class MercadoLibreAuth {
 
   /**
    * Refresca el token de acceso usando el refresh token
+   * CORREGIDO: Formato correcto de datos para ML
    * @returns {Promise<Object>} Objeto con los nuevos tokens
    */
   async refreshAccessToken() {
@@ -218,13 +201,15 @@ class MercadoLibreAuth {
 
       logger.info('🔄 Refrescando token de acceso...');
 
-      // CORREGIDO: Usar URL de API para refresh token
-      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, {
+      // CORREGIDO: Crear datos como URLSearchParams (form data)
+      const params = new URLSearchParams({
         grant_type: 'refresh_token',
         client_id: this.clientId,
         client_secret: this.clientSecret,
         refresh_token: this.tokens.refresh_token
-      }, {
+      });
+
+      const response = await axios.post(`${this.baseUrls.api}/oauth/token`, params.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
