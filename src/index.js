@@ -82,6 +82,40 @@ app.get('/debug/ml-config', (req, res) => {
     });
   }
 });
+
+app.get('/debug/oauth-flow', (req, res) => {
+  try {
+    const auth = require('./api/auth');
+    
+    res.json({
+      message: 'Debug del flujo OAuth',
+      env_variables: {
+        ML_CLIENT_ID: process.env.ML_CLIENT_ID,
+        ML_CLIENT_SECRET: process.env.ML_CLIENT_SECRET ? '***' + process.env.ML_CLIENT_SECRET.slice(-4) : 'MISSING',
+        ML_REDIRECT_URI: process.env.ML_REDIRECT_URI,
+        ML_COUNTRY: process.env.ML_COUNTRY,
+        MOCK_ML_API: process.env.MOCK_ML_API
+      },
+      auth_state: {
+        isAuthenticated: auth.isAuthenticated(),
+        mockMode: auth.mockMode,
+        baseUrls: auth.baseUrls || 'not available',
+        clientId: auth.clientId,
+        redirectUri: auth.redirectUri
+      },
+      oauth_url: {
+        would_generate: auth.getAuthUrl(),
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Error en debug OAuth',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
 // Ruta principal
 app.get('/', async (req, res) => {
 try {
