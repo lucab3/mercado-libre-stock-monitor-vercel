@@ -100,7 +100,7 @@ class StockMonitor {
 
   /**
    * Actualiza la lista de productos monitoreados
-   * MEJORADO: Mantiene consistencia de datos
+   * MEJORADO: Mantiene consistencia de datos CON PERMALINKS
    */
   async refreshProductList() {
     try {
@@ -135,14 +135,15 @@ class StockMonitor {
         // Mantener el producto actual
         this.trackedProducts.set(product.id, product);
         
-        // NUEVO: Actualizar estado conocido para consistencia
+        // NUEVO: Actualizar estado conocido para consistencia CON PERMALINK
         this.lastKnownStockState.set(product.id, {
           stock: product.available_quantity,
           timestamp: Date.now(),
-          title: product.title
+          title: product.title,
+          permalink: product.permalink // NUEVO: Incluir enlace
         });
         
-        logger.info(`🔄 Producto ${product.id}: ${product.available_quantity} unidades (${product.title})`);
+        logger.info(`🔄 Producto ${product.id}: ${product.available_quantity} unidades (${product.title}) - ${product.permalink}`);
       });
       
       logger.info(`Lista de productos actualizada. Monitoreando ${this.trackedProducts.size} productos`);
@@ -156,7 +157,7 @@ class StockMonitor {
 
   /**
    * Verifica el stock de todos los productos monitoreados
-   * MEJORADO: Datos consistentes y sincronizados
+   * MEJORADO: Datos consistentes y sincronizados CON PERMALINKS
    */
   async checkStock() {
     try {
@@ -183,6 +184,7 @@ class StockMonitor {
             id: product.id,
             title: product.title,
             stock: product.available_quantity, // Dato DIRECTO de la API
+            permalink: product.permalink, // NUEVO: Incluir enlace
             hasLowStock: true,
             timestamp: Date.now()
           };
@@ -204,7 +206,7 @@ class StockMonitor {
       // Debug: Mostrar estado actual
       logger.info(`📊 Estado actual de stock:`);
       this.lowStockProducts.forEach(p => {
-        logger.info(`   - ${p.title}: ${p.stock} unidades`);
+        logger.info(`   - ${p.title}: ${p.stock} unidades - ${p.permalink}`);
       });
       
       // Enviar alertas en paralelo
@@ -227,6 +229,7 @@ class StockMonitor {
           id: p.id,
           title: p.title,
           stock: p.available_quantity,
+          permalink: p.permalink, // NUEVO: Incluir enlace
           hasLowStock: p.hasLowStock(this.stockThreshold)
         }))
       };
@@ -242,7 +245,7 @@ class StockMonitor {
 
   /**
    * Verifica el stock de un producto específico
-   * MEJORADO: Sincronización inmediata con estado global
+   * MEJORADO: Sincronización inmediata con estado global CON PERMALINKS
    */
   async checkProductStock(productId) {
     try {
@@ -259,7 +262,8 @@ class StockMonitor {
       this.lastKnownStockState.set(product.id, {
         stock: product.available_quantity,
         timestamp: Date.now(),
-        title: product.title
+        title: product.title,
+        permalink: product.permalink // NUEVO: Incluir enlace
       });
       
       // Actualizar lista de productos con stock bajo
@@ -270,6 +274,7 @@ class StockMonitor {
           id: product.id,
           title: product.title,
           stock: product.available_quantity, // Dato FRESCO
+          permalink: product.permalink, // NUEVO: Incluir enlace
           hasLowStock: true,
           timestamp: Date.now()
         };
@@ -289,13 +294,13 @@ class StockMonitor {
           logger.info(`📧 Alerta enviada para ${productId}: ${product.available_quantity} unidades`);
         }
         
-        logger.info(`⚠️ ${product.title}: ${product.available_quantity} unidades (STOCK BAJO)`);
+        logger.info(`⚠️ ${product.title}: ${product.available_quantity} unidades (STOCK BAJO) - ${product.permalink}`);
       } else {
         // Remover de lista de stock bajo si ya no aplica
         if (existingIndex >= 0) {
           this.lowStockProducts.splice(existingIndex, 1);
         }
-        logger.info(`✅ ${product.title}: ${product.available_quantity} unidades (STOCK SUFICIENTE)`);
+        logger.info(`✅ ${product.title}: ${product.available_quantity} unidades (STOCK SUFICIENTE) - ${product.permalink}`);
       }
       
       return product;
@@ -307,7 +312,7 @@ class StockMonitor {
 
   /**
    * Obtiene el estado actual del monitoreo
-   * MEJORADO: Datos sincronizados en tiempo real
+   * MEJORADO: Datos sincronizados en tiempo real CON PERMALINKS
    */
   getStatus() {
     // Asegurar que lowStockProducts tiene datos actualizados
@@ -318,13 +323,15 @@ class StockMonitor {
         return {
           id: trackedProduct.id,
           title: trackedProduct.title,
-          stock: trackedProduct.available_quantity // Dato sincronizado
+          stock: trackedProduct.available_quantity, // Dato sincronizado
+          permalink: trackedProduct.permalink // NUEVO: Enlace sincronizado
         };
       }
       return {
         id: p.id,
         title: p.title,
-        stock: p.stock
+        stock: p.stock,
+        permalink: p.permalink // NUEVO: Incluir enlace
       };
     });
     
@@ -340,7 +347,7 @@ class StockMonitor {
   }
 
   /**
-   * NUEVO: Método para debugging - mostrar estado interno
+   * NUEVO: Método para debugging - mostrar estado interno CON PERMALINKS
    */
   debugCurrentState() {
     logger.info('🐛 DEBUG - Estado interno del monitor:');
@@ -350,13 +357,13 @@ class StockMonitor {
     // Mostrar cada producto
     this.trackedProducts.forEach((product, id) => {
       const inLowStock = this.lowStockProducts.find(p => p.id === id);
-      logger.info(`   - ${product.title}: ${product.available_quantity} unidades ${inLowStock ? '(EN LISTA STOCK BAJO)' : ''}`);
+      logger.info(`   - ${product.title}: ${product.available_quantity} unidades ${inLowStock ? '(EN LISTA STOCK BAJO)' : ''} - ${product.permalink}`);
     });
     
     // Mostrar lista de stock bajo
     logger.info('📋 Lista actual de stock bajo:');
     this.lowStockProducts.forEach(p => {
-      logger.info(`   - ${p.title}: ${p.stock} unidades`);
+      logger.info(`   - ${p.title}: ${p.stock} unidades - ${p.permalink}`);
     });
   }
 }

@@ -733,7 +733,7 @@ app.post('/api/monitor/check-now', async (req, res) => {
   }
 });
 
-// API para verificar stock de un producto específico
+// API para verificar stock de un producto específico - MODIFICADO para incluir permalink
 app.get('/api/products/:id/stock', async (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -753,11 +753,13 @@ app.get('/api/products/:id/stock', async (req, res) => {
       has_low_stock: product.hasLowStock(config.monitoring.stockThreshold),
       is_out_of_stock: product.isOutOfStock(),
       threshold: config.monitoring.stockThreshold,
+      permalink: product.permalink, // NUEVO: Incluir enlace a ML
       last_updated: Date.now(),
       last_updated_iso: new Date().toISOString()
     };
 
     logger.info(`📊 API: Respuesta para ${productId}: ${product.available_quantity} unidades`);
+    logger.info(`🔗 Enlace ML: ${product.permalink}`);
 
     res.json(responseData);
   } catch (error) {
@@ -904,7 +906,8 @@ app.get('/api/app-info', (req, res) => {
       manualCheck: true,
       realTimeSync: true,
       dynamicStock: true,
-      secureSessions: true // NUEVO
+      secureSessions: true, // NUEVO
+      mercadoLibreLinks: true // NUEVO
     }
   });
 });
