@@ -6,12 +6,13 @@ const envPath = path.join(__dirname, '../.env.local');
 const fs = require('fs');
 
 if (fs.existsSync(envPath)) {
-require('dotenv').config({ path: envPath });
+  require('dotenv').config({ path: envPath });
 } else {
-require('dotenv').config();
+  require('dotenv').config();
 }
 
 const express = require('express');
+const cookieParser = require('cookie-parser'); // NUEVO
 const config = require('../config/config');
 const logger = require('./utils/logger');
 const auth = require('./api/auth');
@@ -26,11 +27,31 @@ logger.info('🚀 Iniciando aplicación Monitor de Stock ML...');
 logger.info(`📊 Puerto configurado: ${port}`);
 logger.info(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
 logger.info(`🎭 Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+logger.info(`🔐 Sistema de sesiones con cookies: ACTIVADO`); // NUEVO
 
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(cookieParser()); // NUEVO
+
+// NUEVO: Middleware para manejar cookies de sesión
+app.use((req, res, next) => {
+  // Obtener cookie de sesión
+  let sessionCookie = req.cookies['ml-session'];
+  
+  // Establecer el cookieId en auth para este request
+  if (sessionCookie) {
+    auth.setCurrentCookieId(sessionCookie);
+  } else {
+    auth.setCurrentCookieId(null);
+  }
+  
+  // Hacer disponible para otros middlewares
+  req.sessionCookie = sessionCookie;
+  
+  next();
+});
 
 // NUEVO: Middleware de seguridad para validar sesiones
 app.use('/api/', async (req, res, next) => {
@@ -46,6 +67,15 @@ app.use('/api/', async (req, res, next) => {
       if (!isValidSession) {
         logger.error('🚨 SEGURIDAD: Sesión inválida detectada - forzando logout');
         auth.logout();
+        
+        // Limpiar cookie del navegador
+        res.clearCookie('ml-session', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+        
         return res.status(401).json({ 
           error: 'Sesión inválida',
           message: 'Tu sesión no es válida. Por favor, inicia sesión nuevamente.',
@@ -55,6 +85,15 @@ app.use('/api/', async (req, res, next) => {
     } catch (error) {
       logger.error(`Error en validación de sesión: ${error.message}`);
       auth.logout();
+      
+      // Limpiar cookie del navegador
+      res.clearCookie('ml-session', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      });
+      
       return res.status(401).json({ 
         error: 'Error de validación',
         message: 'Error validando tu sesión. Por favor, inicia sesión nuevamente.',
@@ -68,17 +107,17 @@ app.use('/api/', async (req, res, next) => {
 
 // Middleware para verificación automática en cada request (solo para usuarios autenticados)
 app.use(async (req, res, next) => {
-// Solo hacer auto-check si el usuario está autenticado y no es una llamada de API
-if (auth.isAuthenticated() && !req.path.startsWith('/api/') && req.method === 'GET') {
-try {
-// Verificar si es necesario hacer una nueva verificación automática
-await stockMonitor.autoCheckIfNeeded();
-} catch (error) {
-logger.error(`Error en auto-verificación: ${error.message}`);
-// No interrumpir la request principal por este error
-}
-}
-next();
+  // Solo hacer auto-check si el usuario está autenticado y no es una llamada de API
+  if (auth.isAuthenticated() && !req.path.startsWith('/api/') && req.method === 'GET') {
+    try {
+      // Verificar si es necesario hacer una nueva verificación automática
+      await stockMonitor.autoCheckIfNeeded();
+    } catch (error) {
+      logger.error(`Error en auto-verificación: ${error.message}`);
+      // No interrumpir la request principal por este error
+    }
+  }
+  next();
 });
 
 // Debug básico - AGREGAR DESPUÉS DE LOS MIDDLEWARE
@@ -153,6 +192,30 @@ app.get('/debug/oauth-flow', (req, res) => {
   }
 });
 
+// NUEVO: Debug de cookies y sesiones
+app.get('/debug/cookie-sessions', (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+  }
+
+  try {
+    const stats = sessionManager.getStats();
+    
+    res.json({
+      message: 'Estado de sesiones con cookies',
+      cookieFromBrowser: req.cookies['ml-session'] ? 
+        req.cookies['ml-session'].substring(0, 8) + '...' : 'NO_COOKIE',
+      currentCookieId: auth.currentCookieId ? 
+        auth.currentCookieId.substring(0, 8) + '...' : null,
+      sessionStats: stats,
+      isAuthenticated: auth.isAuthenticated(),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // NUEVO: Debug de sesiones (solo desarrollo)
 app.get('/debug/sessions', (req, res) => {
   if (process.env.NODE_ENV !== 'development') {
@@ -179,8 +242,6 @@ app.get('/debug/sessions', (req, res) => {
 // Debug del estado de autenticación
 app.get('/debug/auth-state', (req, res) => {
   try {
-    const auth = require('./api/auth');
-    
     res.json({
       message: 'Estado completo de autenticación',
       timestamp: new Date().toISOString(),
@@ -188,8 +249,8 @@ app.get('/debug/auth-state', (req, res) => {
         isAuthenticated: auth.isAuthenticated(),
         mockMode: auth.mockMode,
         hasTokens: !!auth.tokens,
-        currentSessionId: auth.currentSessionId ? 
-          auth.currentSessionId.substring(0, 8) + '...' : null,
+        currentCookieId: auth.currentCookieId ? 
+          auth.currentCookieId.substring(0, 8) + '...' : null,
         sessionInfo: auth.getCurrentSessionInfo(),
         tokens: auth.tokens ? {
           has_access_token: !!auth.tokens.access_token,
@@ -368,44 +429,44 @@ app.get('/debug/test-ml-connection', async (req, res) => {
 
 // Ruta principal
 app.get('/', async (req, res) => {
-try {
-if (auth.isAuthenticated()) {
-// Si está autenticado, asegurar que el monitoreo esté activo
-if (!stockMonitor.monitoringActive) {
-try {
-await stockMonitor.start();
-} catch (error) {
-logger.error(`Error al iniciar monitoreo automático: ${error.message}`);
-}
-}
-res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-} else {
-res.sendFile(path.join(__dirname, 'public', 'login.html'));
-}
-} catch (error) {
-logger.error(`Error en ruta principal: ${error.message}`);
-res.status(500).send('Error interno del servidor');
-}
+  try {
+    if (auth.isAuthenticated()) {
+      // Si está autenticado, asegurar que el monitoreo esté activo
+      if (!stockMonitor.monitoringActive) {
+        try {
+          await stockMonitor.start();
+        } catch (error) {
+          logger.error(`Error al iniciar monitoreo automático: ${error.message}`);
+        }
+      }
+      res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+    } else {
+      res.sendFile(path.join(__dirname, 'public', 'login.html'));
+    }
+  } catch (error) {
+    logger.error(`Error en ruta principal: ${error.message}`);
+    res.status(500).send('Error interno del servidor');
+  }
 });
 
 // Ruta para iniciar el proceso de autenticación
 app.get('/auth/login', (req, res) => {
-try {
-const authUrl = auth.getAuthUrl();
+  try {
+    const authUrl = auth.getAuthUrl();
 
-// Si estamos en modo mock y la URL es relativa, redirigir directamente
-if (authUrl.startsWith('/')) {
-res.redirect(authUrl);
-} else {
-res.redirect(authUrl);
-}
-} catch (error) {
-logger.error(`Error al obtener URL de autenticación: ${error.message}`);
-res.status(500).send('Error al iniciar proceso de autenticación: ' + error.message);
-}
+    // Si estamos en modo mock y la URL es relativa, redirigir directamente
+    if (authUrl.startsWith('/')) {
+      res.redirect(authUrl);
+    } else {
+      res.redirect(authUrl);
+    }
+  } catch (error) {
+    logger.error(`Error al obtener URL de autenticación: ${error.message}`);
+    res.status(500).send('Error al iniciar proceso de autenticación: ' + error.message);
+  }
 });
 
-// Callback de autenticación - MEJORADO con seguridad de sesiones
+// MODIFICADO: Callback de autenticación para establecer cookie
 app.get('/auth/callback', async (req, res) => {
   const { code, error, error_description } = req.query;
 
@@ -432,15 +493,31 @@ app.get('/auth/callback', async (req, res) => {
       logger.info(`🔗 Redirect URI: ${process.env.ML_REDIRECT_URI}`);
     }
 
-    // Intercambiar código por tokens Y crear sesión segura
-    const tokens = await auth.getTokensFromCode(code);
+    // Obtener o generar cookieId para este navegador
+    let cookieId = req.cookies['ml-session'];
+    if (!cookieId) {
+      // Generar nuevo cookieId para este navegador
+      cookieId = sessionManager.generateCookieId();
+    }
+
+    // Intercambiar código por tokens Y crear sesión con cookie
+    const result = await auth.getTokensFromCode(code, cookieId);
     
-    if (!tokens || !tokens.access_token) {
+    if (!result.tokens || !result.tokens.access_token) {
       throw new Error('No se obtuvieron tokens válidos del intercambio');
     }
 
-    logger.info('✅ Tokens obtenidos y sesión creada exitosamente');
-    logger.info(`🔑 Access token obtenido: ${tokens.access_token.substring(0, 20)}...`);
+    // CRÍTICO: Establecer cookie segura en el navegador
+    res.cookie('ml-session', result.cookieId, {
+      httpOnly: true,           // No accesible desde JavaScript
+      secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+      sameSite: 'lax',         // Protección CSRF
+      maxAge: 6 * 60 * 60 * 1000, // 6 horas
+      path: '/'                // Disponible en toda la app
+    });
+
+    logger.info('✅ Tokens obtenidos y cookie de sesión establecida');
+    logger.info(`🍪 Cookie establecida: ${result.cookieId.substring(0, 8)}...`);
     
     // Mostrar información de la sesión creada
     const sessionInfo = auth.getCurrentSessionInfo();
@@ -482,26 +559,34 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// Ruta para cerrar sesión - MODIFICADO para invalidar sesión
+// MODIFICADO: Logout para limpiar cookie
 app.get('/auth/logout', (req, res) => {
-try {
-const currentUserId = auth.currentSessionId;
-if (currentUserId) {
-logger.info(`🚪 Cerrando sesión para usuario: ${currentUserId}`);
-}
+  try {
+    const currentUserId = auth.currentSessionId;
+    if (currentUserId) {
+      logger.info(`🚪 Cerrando sesión para usuario: ${currentUserId}`);
+    }
 
-auth.logout(); // Esto ahora invalida la sesión automáticamente
-stockMonitor.stop();
-logger.info('🚪 Sesión cerrada correctamente');
-res.redirect('/');
-} catch (error) {
-logger.error(`Error al cerrar sesión: ${error.message}`);
-res.status(500).send('Error al cerrar sesión: ' + error.message);
-}
+    auth.logout(); // Esto ahora invalida la sesión automáticamente
+    stockMonitor.stop();
+
+    // CRÍTICO: Limpiar cookie del navegador
+    res.clearCookie('ml-session', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/'
+    });
+
+    logger.info('🚪 Sesión cerrada y cookie eliminada');
+    res.redirect('/');
+  } catch (error) {
+    logger.error(`Error al cerrar sesión: ${error.message}`);
+    res.status(500).send('Error al cerrar sesión: ' + error.message);
+  }
 });
 
-// API para verificar el estado de autenticación y monitoreo
-// MODIFICADO: Incluye información de sesión y validación de seguridad
+// MODIFICADO: API para verificar el estado de autenticación y monitoreo con validación de cookies
 app.get('/api/auth/status', async (req, res) => {
   try {
     const isAuthenticated = auth.isAuthenticated();
@@ -521,6 +606,15 @@ app.get('/api/auth/status', async (req, res) => {
         if (!sessionValid) {
           logger.warn('⚠️ Sesión inválida detectada en /api/auth/status');
           auth.logout();
+          
+          // Limpiar cookie
+          res.clearCookie('ml-session', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/'
+          });
+          
           return res.json({
             authenticated: false,
             monitoring: { active: false },
@@ -531,8 +625,16 @@ app.get('/api/auth/status', async (req, res) => {
         
       } catch (error) {
         logger.error(`Error obteniendo info de usuario: ${error.message}`);
-        // Si hay error obteniendo info del usuario, forzar logout
         auth.logout();
+        
+        // Limpiar cookie
+        res.clearCookie('ml-session', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+        
         return res.json({
           authenticated: false,
           monitoring: { active: false },
@@ -571,509 +673,509 @@ app.get('/api/auth/status', async (req, res) => {
 
 // API para iniciar el monitoreo manualmente
 app.post('/api/monitor/start', async (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-await stockMonitor.start();
-res.json({ 
-success: true, 
-message: 'Monitoreo iniciado',
-timestamp: Date.now()
-});
-} catch (error) {
-logger.error(`Error al iniciar monitoreo: ${error.message}`);
-res.status(500).json({ error: 'Error al iniciar monitoreo' });
-}
+  try {
+    await stockMonitor.start();
+    res.json({ 
+      success: true, 
+      message: 'Monitoreo iniciado',
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logger.error(`Error al iniciar monitoreo: ${error.message}`);
+    res.status(500).json({ error: 'Error al iniciar monitoreo' });
+  }
 });
 
 // API para detener el monitoreo
 app.post('/api/monitor/stop', (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-stockMonitor.stop();
-res.json({ 
-success: true, 
-message: 'Monitoreo detenido',
-timestamp: Date.now()
-});
-} catch (error) {
-logger.error(`Error al detener monitoreo: ${error.message}`);
-res.status(500).json({ error: 'Error al detener monitoreo' });
-}
+  try {
+    stockMonitor.stop();
+    res.json({ 
+      success: true, 
+      message: 'Monitoreo detenido',
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logger.error(`Error al detener monitoreo: ${error.message}`);
+    res.status(500).json({ error: 'Error al detener monitoreo' });
+  }
 });
 
 // API para forzar verificación de stock
 app.post('/api/monitor/check-now', async (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-logger.info('🔍 Verificación manual iniciada desde API');
-const result = await stockMonitor.checkStock();
+  try {
+    logger.info('🔍 Verificación manual iniciada desde API');
+    const result = await stockMonitor.checkStock();
 
-res.json({ 
-success: true, 
-message: 'Verificación completada',
-result: {
-...result,
-checkTime: new Date().toISOString()
-}
-});
-} catch (error) {
-logger.error(`Error al verificar stock: ${error.message}`);
-res.status(500).json({ error: 'Error al verificar stock: ' + error.message });
-}
+    res.json({ 
+      success: true, 
+      message: 'Verificación completada',
+      result: {
+        ...result,
+        checkTime: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    logger.error(`Error al verificar stock: ${error.message}`);
+    res.status(500).json({ error: 'Error al verificar stock: ' + error.message });
+  }
 });
 
 // API para verificar stock de un producto específico
 app.get('/api/products/:id/stock', async (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-const productId = req.params.id;
-logger.info(`🔍 API: Verificación individual de producto ${productId}`);
+  try {
+    const productId = req.params.id;
+    logger.info(`🔍 API: Verificación individual de producto ${productId}`);
 
-// Usar el método del monitor para mantener consistencia
-const product = await stockMonitor.checkProductStock(productId);
+    // Usar el método del monitor para mantener consistencia
+    const product = await stockMonitor.checkProductStock(productId);
 
-const responseData = {
-id: product.id,
-title: product.title,
-available_quantity: product.available_quantity,
-has_low_stock: product.hasLowStock(config.monitoring.stockThreshold),
-is_out_of_stock: product.isOutOfStock(),
-threshold: config.monitoring.stockThreshold,
-last_updated: Date.now(),
-last_updated_iso: new Date().toISOString()
-};
+    const responseData = {
+      id: product.id,
+      title: product.title,
+      available_quantity: product.available_quantity, // Stock actual en tiempo real
+      has_low_stock: product.hasLowStock(config.monitoring.stockThreshold),
+      is_out_of_stock: product.isOutOfStock(),
+      threshold: config.monitoring.stockThreshold,
+      last_updated: Date.now(),
+      last_updated_iso: new Date().toISOString()
+    };
 
-logger.info(`📊 API: Respuesta para ${productId}: ${product.available_quantity} unidades`);
+    logger.info(`📊 API: Respuesta para ${productId}: ${product.available_quantity} unidades`);
 
-res.json(responseData);
-} catch (error) {
-logger.error(`Error al verificar stock de producto ${req.params.id}: ${error.message}`);
-res.status(500).json({ 
-error: 'Error al verificar stock',
-productId: req.params.id,
-message: error.message
+    res.json(responseData);
+  } catch (error) {
+    logger.error(`Error al verificar stock de producto ${req.params.id}: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al verificar stock',
+      productId: req.params.id,
+      message: error.message
+    });
+  }
 });
-}
-});
 
-// API para debug (solo en desarrollo)
+// NUEVO: API para debug (solo en desarrollo)
 app.get('/api/debug/stock-state', (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-if (process.env.NODE_ENV !== 'development') {
-return res.status(403).json({ error: 'Solo disponible en desarrollo' });
-}
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+  }
 
-try {
-const monitorStatus = stockMonitor.getStatus();
-const trackedProducts = Array.from(stockMonitor.trackedProducts.values()).map(p => ({
-id: p.id,
-title: p.title,
-stock: p.available_quantity,
-hasLowStock: p.hasLowStock(config.monitoring.stockThreshold)
-}));
+  try {
+    const monitorStatus = stockMonitor.getStatus();
+    const trackedProducts = Array.from(stockMonitor.trackedProducts.values()).map(p => ({
+      id: p.id,
+      title: p.title,
+      stock: p.available_quantity,
+      hasLowStock: p.hasLowStock(config.monitoring.stockThreshold)
+    }));
 
-// Si estamos en modo mock, incluir estado del Mock API
-let mockState = null;
-if (process.env.MOCK_ML_API === 'true') {
-try {
-const mockAPI = require('./api/mock-ml-api');
-mockState = {
-...mockAPI.getCurrentStockStatus(),
-stats: mockAPI.getStockChangeStats()
-};
-} catch (mockError) {
-logger.error(`Error obteniendo estado mock: ${mockError.message}`);
-mockState = { error: mockError.message };
-}
-}
+    // Si estamos en modo mock, incluir estado del Mock API
+    let mockState = null;
+    if (process.env.MOCK_ML_API === 'true') {
+      try {
+        const mockAPI = require('./api/mock-ml-api');
+        mockState = {
+          ...mockAPI.getCurrentStockStatus(),
+          stats: mockAPI.getStockChangeStats()
+        };
+      } catch (mockError) {
+        logger.error(`Error obteniendo estado mock: ${mockError.message}`);
+        mockState = { error: mockError.message };
+      }
+    }
 
-res.json({
-monitorStatus,
-trackedProducts,
-mockState,
-timestamp: Date.now()
+    res.json({
+      monitorStatus,
+      trackedProducts,
+      mockState,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
-} catch (error) {
-res.status(500).json({ error: error.message });
-}
-});
 
-// API para controlar cambios automáticos de stock (solo desarrollo)
+// NUEVO: API para controlar cambios automáticos de stock (solo desarrollo)
 app.post('/api/debug/trigger-stock-changes', (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-if (process.env.NODE_ENV !== 'development') {
-return res.status(403).json({ error: 'Solo disponible en desarrollo' });
-}
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+  }
 
-try {
-if (process.env.MOCK_ML_API === 'true') {
-const mockAPI = require('./api/mock-ml-api');
-const changesCount = mockAPI.triggerStockChanges();
+  try {
+    if (process.env.MOCK_ML_API === 'true') {
+      const mockAPI = require('./api/mock-ml-api');
+      const changesCount = mockAPI.triggerStockChanges();
 
-res.json({
-success: true,
-message: `${changesCount} productos cambiaron stock`,
-changesCount,
-timestamp: Date.now()
+      res.json({
+        success: true,
+        message: `${changesCount} productos cambiaron stock`,
+        changesCount,
+        timestamp: Date.now()
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'Solo disponible en modo mock'
+      });
+    }
+  } catch (error) {
+    logger.error(`Error forzando cambios de stock: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
 });
-} else {
-res.json({
-success: false,
-message: 'Solo disponible en modo mock'
-});
-}
-} catch (error) {
-logger.error(`Error forzando cambios de stock: ${error.message}`);
-res.status(500).json({ error: error.message });
-}
-});
 
-// API para configurar frecuencia de cambios (solo desarrollo)
+// NUEVO: API para configurar frecuencia de cambios (solo desarrollo)
 app.post('/api/debug/set-change-frequency', (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-if (process.env.NODE_ENV !== 'development') {
-return res.status(403).json({ error: 'Solo disponible en desarrollo' });
-}
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Solo disponible en desarrollo' });
+  }
 
-try {
-const { seconds } = req.body;
+  try {
+    const { seconds } = req.body;
 
-if (!seconds || seconds < 5 || seconds > 300) {
-return res.status(400).json({ 
-error: 'La frecuencia debe estar entre 5 y 300 segundos' 
-});
-}
+    if (!seconds || seconds < 5 || seconds > 300) {
+      return res.status(400).json({ 
+        error: 'La frecuencia debe estar entre 5 y 300 segundos' 
+      });
+    }
 
-if (process.env.MOCK_ML_API === 'true') {
-const mockAPI = require('./api/mock-ml-api');
-mockAPI.setStockChangeFrequency(seconds);
+    if (process.env.MOCK_ML_API === 'true') {
+      const mockAPI = require('./api/mock-ml-api');
+      mockAPI.setStockChangeFrequency(seconds);
 
-res.json({
-success: true,
-message: `Frecuencia actualizada a ${seconds} segundos`,
-frequency: seconds,
-timestamp: Date.now()
-});
-} else {
-res.json({
-success: false,
-message: 'Solo disponible en modo mock'
-});
-}
-} catch (error) {
-logger.error(`Error configurando frecuencia: ${error.message}`);
-res.status(500).json({ error: error.message });
-}
+      res.json({
+        success: true,
+        message: `Frecuencia actualizada a ${seconds} segundos`,
+        frequency: seconds,
+        timestamp: Date.now()
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'Solo disponible en modo mock'
+      });
+    }
+  } catch (error) {
+    logger.error(`Error configurando frecuencia: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Mostrar información de la aplicación
 app.get('/api/app-info', (req, res) => {
-res.json({
-name: 'Mercado Libre Stock Monitor',
-version: '1.0.1',
-environment: process.env.NODE_ENV || 'production',
-vercel: !!process.env.VERCEL,
-mockMode: process.env.MOCK_ML_API === 'true',
-plan: 'free',
-features: {
-autoMonitoring: 'on-access',
-cronJobs: false,
-manualCheck: true,
-realTimeSync: true,
-dynamicStock: true,
-secureSessions: true // NUEVO
-}
-});
+  res.json({
+    name: 'Mercado Libre Stock Monitor',
+    version: '1.0.1',
+    environment: process.env.NODE_ENV || 'production',
+    vercel: !!process.env.VERCEL,
+    mockMode: process.env.MOCK_ML_API === 'true',
+    plan: 'free',
+    features: {
+      autoMonitoring: 'on-access',
+      cronJobs: false,
+      manualCheck: true,
+      realTimeSync: true,
+      dynamicStock: true,
+      secureSessions: true // NUEVO
+    }
+  });
 });
 
 // Ruta de verificación de estado para Vercel - MODIFICADO con info de sesiones
 app.get('/health', (req, res) => {
-try {
-const status = stockMonitor.getStatus();
-const sessionStats = sessionManager.getStats();
+  try {
+    const status = stockMonitor.getStatus();
+    const sessionStats = sessionManager.getStats();
 
-res.status(200).json({
-status: 'OK',
-message: 'El servicio está funcionando correctamente',
-timestamp: new Date().toISOString(),
-authenticated: auth.isAuthenticated(),
-monitoring: {
-active: status.active,
-totalProducts: status.totalProducts,
-lowStockProducts: status.lowStockProducts.length
-},
-sessions: sessionStats, // NUEVO
-mockMode: process.env.MOCK_ML_API === 'true'
-});
-} catch (error) {
-logger.error(`Error en health check: ${error.message}`);
-res.status(500).json({
-status: 'ERROR',
-message: 'Error interno del servidor',
-error: error.message,
-timestamp: new Date().toISOString()
-});
-}
+    res.status(200).json({
+      status: 'OK',
+      message: 'El servicio está funcionando correctamente',
+      timestamp: new Date().toISOString(),
+      authenticated: auth.isAuthenticated(),
+      monitoring: {
+        active: status.active,
+        totalProducts: status.totalProducts,
+        lowStockProducts: status.lowStockProducts.length
+      },
+      sessions: sessionStats, // NUEVO
+      mockMode: process.env.MOCK_ML_API === 'true'
+    });
+  } catch (error) {
+    logger.error(`Error en health check: ${error.message}`);
+    res.status(500).json({
+      status: 'ERROR',
+      message: 'Error interno del servidor',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ========== ENDPOINTS DE RATE LIMITING ==========
 // API para obtener estadísticas de rate limiting
 app.get('/api/rate-limit/stats', (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-const productsService = require('./api/products');
-const stats = productsService.getRateLimitStats();
+  try {
+    const productsService = require('./api/products');
+    const stats = productsService.getRateLimitStats();
 
-res.json({
-success: true,
-rateLimitStats: stats,
-timestamp: new Date().toISOString(),
-recommendations: generateRateLimitRecommendations(stats)
-});
-} catch (error) {
-logger.error(`Error obteniendo stats de rate limit: ${error.message}`);
-res.status(500).json({ error: error.message });
-}
+    res.json({
+      success: true,
+      rateLimitStats: stats,
+      timestamp: new Date().toISOString(),
+      recommendations: generateRateLimitRecommendations(stats)
+    });
+  } catch (error) {
+    logger.error(`Error obteniendo stats de rate limit: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // API para optimizar rate limiting
 app.post('/api/rate-limit/optimize', async (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-const productsService = require('./api/products');
-const optimization = await productsService.optimizeRateLimit();
+  try {
+    const productsService = require('./api/products');
+    const optimization = await productsService.optimizeRateLimit();
 
-res.json({
-success: true,
-optimization,
-timestamp: new Date().toISOString()
-});
-} catch (error) {
-logger.error(`Error optimizando rate limit: ${error.message}`);
-res.status(500).json({ error: error.message });
-}
+    res.json({
+      success: true,
+      optimization,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`Error optimizando rate limit: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // API para hacer pausa inteligente
 app.post('/api/rate-limit/smart-pause', async (req, res) => {
-if (!auth.isAuthenticated()) {
-return res.status(401).json({ error: 'No autenticado' });
-}
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
-try {
-const productsService = require('./api/products');
-await productsService.smartPause();
+  try {
+    const productsService = require('./api/products');
+    await productsService.smartPause();
 
-res.json({
-success: true,
-message: 'Pausa inteligente aplicada',
-timestamp: new Date().toISOString()
-});
-} catch (error) {
-logger.error(`Error en pausa inteligente: ${error.message}`);
-res.status(500).json({ error: error.message });
-}
+    res.json({
+      success: true,
+      message: 'Pausa inteligente aplicada',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`Error en pausa inteligente: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Health check con información de rate limiting
 app.get('/api/health/detailed', async (req, res) => {
-try {
-const productsService = require('./api/products');
-const healthCheck = await productsService.healthCheck();
-const rateLimitStats = productsService.getRateLimitStats();
+  try {
+    const productsService = require('./api/products');
+    const healthCheck = await productsService.healthCheck();
+    const rateLimitStats = productsService.getRateLimitStats();
 
-res.json({
-status: healthCheck.status,
-services: {
-api: healthCheck,
-rateLimit: {
-status: rateLimitStats.utilizationPercent > 90 ? 'WARNING' : 'OK',
-stats: rateLimitStats
-}
-},
-timestamp: new Date().toISOString()
-});
-} catch (error) {
-res.status(500).json({
-status: 'ERROR',
-error: error.message,
-timestamp: new Date().toISOString()
-});
-}
+    res.json({
+      status: healthCheck.status,
+      services: {
+        api: healthCheck,
+        rateLimit: {
+          status: rateLimitStats.utilizationPercent > 90 ? 'WARNING' : 'OK',
+          stats: rateLimitStats
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'ERROR',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ========== FUNCIONES AUXILIARES ==========
 
 function generateRateLimitRecommendations(stats) {
-const recommendations = [];
+  const recommendations = [];
 
-if (stats.utilizationPercent > 80) {
-recommendations.push({
-type: 'warning',
-message: 'Alto uso del rate limit',
-action: 'Considera reducir la frecuencia de verificaciones'
-});
-}
+  if (stats.utilizationPercent > 80) {
+    recommendations.push({
+      type: 'warning',
+      message: 'Alto uso del rate limit',
+      action: 'Considera reducir la frecuencia de verificaciones'
+    });
+  }
 
-if (stats.queueLength > 5) {
-recommendations.push({
-type: 'info',
-message: 'Cola de requests larga',
-action: 'Las verificaciones pueden tardar más de lo normal'
-});
-}
+  if (stats.queueLength > 5) {
+    recommendations.push({
+      type: 'info',
+      message: 'Cola de requests larga',
+      action: 'Las verificaciones pueden tardar más de lo normal'
+    });
+  }
 
-if (stats.rejectedRequests > 0) {
-recommendations.push({
-type: 'error',
-message: 'Requests rechazadas por rate limit',
-action: 'El sistema está ajustando automáticamente los límites'
-});
-}
+  if (stats.rejectedRequests > 0) {
+    recommendations.push({
+      type: 'error',
+      message: 'Requests rechazadas por rate limit',
+      action: 'El sistema está ajustando automáticamente los límites'
+    });
+  }
 
-if (stats.averageWaitTime > 5000) {
-recommendations.push({
-type: 'warning',
-message: 'Tiempo de espera elevado',
-action: 'Considera usar verificaciones en lote'
-});
-}
+  if (stats.averageWaitTime > 5000) {
+    recommendations.push({
+      type: 'warning',
+      message: 'Tiempo de espera elevado',
+      action: 'Considera usar verificaciones en lote'
+    });
+  }
 
-return recommendations;
+  return recommendations;
 }
 
 // ========== MIDDLEWARE DE RATE LIMITING ==========
 // Middleware para agregar headers informativos
 app.use('/api/', (req, res, next) => {
-// Solo aplicar a rutas que hacen llamadas a ML API
-const mlApiRoutes = ['/api/monitor/', '/api/products/'];
-const isMLApiRoute = mlApiRoutes.some(route => req.path.startsWith(route));
+  // Solo aplicar a rutas que hacen llamadas a ML API
+  const mlApiRoutes = ['/api/monitor/', '/api/products/'];
+  const isMLApiRoute = mlApiRoutes.some(route => req.path.startsWith(route));
 
-if (isMLApiRoute && auth.isAuthenticated()) {
-const productsService = require('./api/products');
-const stats = productsService.getRateLimitStats();
+  if (isMLApiRoute && auth.isAuthenticated()) {
+    const productsService = require('./api/products');
+    const stats = productsService.getRateLimitStats();
 
-// Agregar headers informativos
-res.set({
-'X-RateLimit-Limit': stats.maxRequests,
-'X-RateLimit-Remaining': Math.max(0, stats.maxRequests - stats.currentRequests),
-'X-RateLimit-Reset': Date.now() + 60000,
-'X-RateLimit-Window': '60'
-});
+    // Agregar headers informativos
+    res.set({
+      'X-RateLimit-Limit': stats.maxRequests,
+      'X-RateLimit-Remaining': Math.max(0, stats.maxRequests - stats.currentRequests),
+      'X-RateLimit-Reset': Date.now() + 60000,
+      'X-RateLimit-Window': '60'
+    });
 
-// Si está muy saturado, responder con 429
-if (stats.utilizationPercent > 95) {
-return res.status(429).json({
-error: 'Rate limit interno alcanzado',
-message: 'Demasiadas requests en un corto período',
-retryAfter: 60,
-stats: {
-current: stats.currentRequests,
-max: stats.maxRequests,
-utilization: stats.utilizationPercent
-}
-});
-}
-}
+    // Si está muy saturado, responder con 429
+    if (stats.utilizationPercent > 95) {
+      return res.status(429).json({
+        error: 'Rate limit interno alcanzado',
+        message: 'Demasiadas requests en un corto período',
+        retryAfter: 60,
+        stats: {
+          current: stats.currentRequests,
+          max: stats.maxRequests,
+          utilization: stats.utilizationPercent
+        }
+      });
+    }
+  }
 
-next();
+  next();
 });
 
 // Solo iniciar el servidor si no estamos en Vercel
 if (!process.env.VERCEL) {
-try {
-const server = app.listen(port, () => {
-const baseUrl = `http://localhost:${port}`;
-logger.info(`🚀 Servidor iniciado en ${baseUrl}`);
-logger.info(`🔗 URL para redirección OAuth: ${baseUrl}/auth/callback`);
-logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
-logger.info(`🔐 Sistema de sesiones seguras: ACTIVADO`);
+  try {
+    const server = app.listen(port, () => {
+      const baseUrl = `http://localhost:${port}`;
+      logger.info(`🚀 Servidor iniciado en ${baseUrl}`);
+      logger.info(`🔗 URL para redirección OAuth: ${baseUrl}/auth/callback`);
+      logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+      logger.info(`🔐 Sistema de sesiones seguras con cookies: ACTIVADO`);
 
-if (process.env.MOCK_ML_API === 'true') {
-logger.info(`✨ Modo Demo: Puedes iniciar sesión directamente sin credenciales reales`);
-logger.info(`🔄 Stock cambia automáticamente cada 30 segundos`);
-}
+      if (process.env.MOCK_ML_API === 'true') {
+        logger.info(`✨ Modo Demo: Puedes iniciar sesión directamente sin credenciales reales`);
+        logger.info(`🔄 Stock cambia automáticamente cada 30 segundos`);
+      }
 
-// En desarrollo local, iniciar monitoreo si ya estamos autenticados
-if (auth.isAuthenticated()) {
-stockMonitor.start()
-.then(() => {
-logger.info('✅ Monitoreo iniciado automáticamente');
-})
-.catch(error => {
-logger.error(`❌ Error al iniciar monitoreo automático: ${error.message}`);
-});
+      // En desarrollo local, iniciar monitoreo si ya estamos autenticados
+      if (auth.isAuthenticated()) {
+        stockMonitor.start()
+          .then(() => {
+            logger.info('✅ Monitoreo iniciado automáticamente');
+          })
+          .catch(error => {
+            logger.error(`❌ Error al iniciar monitoreo automático: ${error.message}`);
+          });
+      } else {
+        logger.info('⏳ Esperando autenticación para iniciar monitoreo');
+      }
+    });
+
+    // Manejar errores del servidor
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        logger.error(`❌ Puerto ${port} ya está en uso. Intenta con otro puerto.`);
+        process.exit(1);
+      } else {
+        logger.error(`❌ Error del servidor: ${error.message}`);
+        process.exit(1);
+      }
+    });
+
+    // Manejo de cierre limpio
+    process.on('SIGTERM', () => {
+      logger.info('⏹️  Cerrando servidor...');
+      stockMonitor.stop();
+      server.close(() => {
+        logger.info('✅ Servidor cerrado correctamente');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      logger.info('⏹️  Cerrando servidor...');
+      stockMonitor.stop();
+      server.close(() => {
+        logger.info('✅ Servidor cerrado correctamente');
+        process.exit(0);
+      });
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error fatal al iniciar servidor: ${error.message}`);
+    process.exit(1);
+  }
 } else {
-logger.info('⏳ Esperando autenticación para iniciar monitoreo');
-}
-});
-
-// Manejar errores del servidor
-server.on('error', (error) => {
-if (error.code === 'EADDRINUSE') {
-logger.error(`❌ Puerto ${port} ya está en uso. Intenta con otro puerto.`);
-process.exit(1);
-} else {
-logger.error(`❌ Error del servidor: ${error.message}`);
-process.exit(1);
-}
-});
-
-// Manejo de cierre limpio
-process.on('SIGTERM', () => {
-logger.info('⏹️  Cerrando servidor...');
-stockMonitor.stop();
-server.close(() => {
-logger.info('✅ Servidor cerrado correctamente');
-process.exit(0);
-});
-});
-
-process.on('SIGINT', () => {
-logger.info('⏹️  Cerrando servidor...');
-stockMonitor.stop();
-server.close(() => {
-logger.info('✅ Servidor cerrado correctamente');
-process.exit(0);
-});
-});
-
-} catch (error) {
-logger.error(`❌ Error fatal al iniciar servidor: ${error.message}`);
-process.exit(1);
-}
-} else {
-// En Vercel, solo logear que está ejecutando
-logger.info('🔧 Ejecutando en modo Vercel serverless');
-logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
-logger.info(`🔐 Sistema de sesiones seguras: ACTIVADO`);
+  // En Vercel, solo logear que está ejecutando
+  logger.info('🔧 Ejecutando en modo Vercel serverless');
+  logger.info(`🎭 Modo Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
+  logger.info(`🔐 Sistema de sesiones seguras con cookies: ACTIVADO`);
 }
 
 // Exportar la aplicación para Vercel
@@ -1081,17 +1183,17 @@ module.exports = app;
 
 // Manejo de errores no capturados
 process.on('uncaughtException', (error) => {
-logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
+  logger.error(`❌ Error no capturado: ${error.message}`, { stack: error.stack });
 
-if (!process.env.VERCEL) {
-process.exit(1);
-}
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-logger.error('❌ Rechazo de promesa no manejado', { reason });
+  logger.error('❌ Rechazo de promesa no manejado', { reason });
 
-if (!process.env.VERCEL) {
-process.exit(1);
-}
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 });

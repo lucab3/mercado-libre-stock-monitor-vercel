@@ -16,8 +16,8 @@ class MercadoLibreAuth {
     // URLs base separadas para API y Auth según país
     this.baseUrls = this.getBaseUrlsByCountry(this.country);
     
-    // MODIFICADO: No usar this.tokens, usar sesiones
-    this.currentSessionId = null; // Solo el ID de sesión actual
+    // MODIFICADO: En lugar de currentSessionId, usar cookieId del request
+    this.currentCookieId = null; // Se establece en cada request
     
     // Detectar si estamos en modo mock
     this.mockMode = process.env.MOCK_ML_API === 'true' || 
@@ -74,7 +74,14 @@ class MercadoLibreAuth {
   }
 
   /**
-   * NUEVO: Obtiene tokens desde la sesión actual
+   * NUEVO: Establecer cookieId para este request
+   */
+  setCurrentCookieId(cookieId) {
+    this.currentCookieId = cookieId;
+  }
+
+  /**
+   * MODIFICADO: Obtiene tokens desde la sesión del navegador actual
    */
   getCurrentTokens() {
     if (this.mockMode) {
@@ -85,30 +92,26 @@ class MercadoLibreAuth {
       };
     }
 
-    if (!this.currentSessionId) {
+    if (!this.currentCookieId) {
       return null;
     }
 
-    const session = sessionManager.getSession(this.currentSessionId);
+    const session = sessionManager.getSessionByCookie(this.currentCookieId);
     return session ? session.tokens : null;
   }
 
   /**
-   * NUEVO: Propiedad tokens para compatibilidad (getter)
+   * Propiedad tokens para compatibilidad (getter)
    */
   get tokens() {
     return this.getCurrentTokens();
   }
 
   /**
-   * Carga los tokens desde el almacenamiento
-   * MODIFICADO: Intenta cargar sesión existente
-   * @returns {Object|null} Objeto con tokens o null si no existe
+   * MANTENIDO: Carga los tokens desde el almacenamiento
    */
   loadTokens() {
     try {
-      // En el nuevo sistema, esto no se usa directamente
-      // pero mantenemos compatibilidad
       return storage.loadTokens();
     } catch (error) {
       logger.error(`Error al cargar tokens: ${error.message}`);
@@ -117,9 +120,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Guarda los tokens en el almacenamiento
-   * MODIFICADO: Actualiza la sesión actual
-   * @param {Object} tokens - Objeto con los tokens
+   * MODIFICADO: Guarda los tokens en el almacenamiento y actualiza la sesión
    */
   saveTokens(tokens) {
     try {
@@ -127,8 +128,8 @@ class MercadoLibreAuth {
       storage.saveTokens(tokens);
       
       // Si hay sesión activa, actualizar tokens en la sesión
-      if (this.currentSessionId) {
-        const session = sessionManager.getSession(this.currentSessionId);
+      if (this.currentCookieId) {
+        const session = sessionManager.getSessionByCookie(this.currentCookieId);
         if (session) {
           session.tokens = tokens;
           logger.info('🔄 Tokens actualizados en sesión activa');
@@ -143,12 +144,10 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Obtiene la URL de autorización para iniciar el flujo OAuth
-   * @returns {string} URL de autorización
+   * MANTENIDO: Obtiene la URL de autorización para iniciar el flujo OAuth
    */
   getAuthUrl() {
     if (this.mockMode) {
-      // En modo mock, devolver una URL que simule el proceso
       logger.info('🎭 Generando URL de auth en modo mock');
       return `/auth/callback?code=mock-auth-code-${Date.now()}`;
     }
@@ -157,7 +156,6 @@ class MercadoLibreAuth {
       throw new Error('Client ID y Redirect URI son requeridos para generar URL de autorización');
     }
 
-    // URL de autorización sin PKCE
     const authUrl = `${this.baseUrls.auth}/authorization?response_type=code&client_id=${this.clientId}&redirect_uri=${encodeURIComponent(this.redirectUri)}`;
     
     logger.info('🔐 URL de autorización generada');
@@ -168,29 +166,25 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Obtiene tokens a partir del código de autorización
-   * MODIFICADO: Crea sesión segura después del OAuth
-   * @param {string} code - Código de autorización
-   * @returns {Promise<Object>} Objeto con los tokens
+   * MODIFICADO: Crear sesión con cookie específica
    */
-  async getTokensFromCode(code) {
+  async getTokensFromCode(code, cookieId = null) {
     try {
       if (this.mockMode) {
         logger.info('🎭 Obteniendo tokens en modo MOCK');
         const tokens = await this.mockAPI.getTokensFromCode(code);
         
-        // Crear sesión mock
+        // Crear sesión mock con cookie
         const mockUserId = 'mock_user_123';
-        this.currentSessionId = sessionManager.createSession(mockUserId, tokens);
+        const newCookieId = sessionManager.createSession(mockUserId, tokens, cookieId);
+        this.currentCookieId = newCookieId;
         
-        // Mantener compatibilidad
         this.saveTokens(tokens);
-        return tokens;
+        return { tokens, cookieId: newCookieId };
       }
 
       logger.info('🔄 Intercambiando código por tokens...');
       
-      // Crear datos como URLSearchParams (form data)
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: this.clientId,
@@ -214,18 +208,18 @@ class MercadoLibreAuth {
         expires_at: Date.now() + response.data.expires_in * 1000
       };
 
-      // NUEVO: Obtener info del usuario para la sesión
+      // Obtener info del usuario para la sesión
       const userInfo = await this.getUserInfoWithToken(tokens.access_token);
       const userId = userInfo.id.toString();
 
-      // NUEVO: Crear sesión segura vinculada al usuario
-      this.currentSessionId = sessionManager.createSession(userId, tokens);
+      // Crear sesión segura vinculada al usuario Y al navegador
+      const newCookieId = sessionManager.createSession(userId, tokens, cookieId);
+      this.currentCookieId = newCookieId;
 
-      logger.info(`🔐 Sesión creada para usuario ML: ${userId}`);
+      logger.info(`🔐 Sesión creada para usuario ML: ${userId} en navegador ${newCookieId.substring(0, 8)}...`);
 
-      // Mantener compatibilidad
       this.saveTokens(tokens);
-      return tokens;
+      return { tokens, cookieId: newCookieId };
     } catch (error) {
       logger.error(`❌ Error al obtener tokens: ${error.message}`);
       
@@ -239,9 +233,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Refresca el token de acceso usando el refresh token
-   * MODIFICADO: Actualiza la sesión actual
-   * @returns {Promise<Object>} Objeto con los nuevos tokens
+   * MODIFICADO: Refresca el token de acceso y actualiza la sesión
    */
   async refreshAccessToken() {
     const currentTokens = this.getCurrentTokens();
@@ -256,8 +248,8 @@ class MercadoLibreAuth {
         const tokens = await this.mockAPI.refreshAccessToken(currentTokens.refresh_token);
         
         // Actualizar sesión mock
-        if (this.currentSessionId) {
-          const session = sessionManager.getSession(this.currentSessionId);
+        if (this.currentCookieId) {
+          const session = sessionManager.getSessionByCookie(this.currentCookieId);
           if (session) {
             session.tokens = tokens;
           }
@@ -269,7 +261,6 @@ class MercadoLibreAuth {
 
       logger.info('🔄 Refrescando token de acceso...');
 
-      // Crear datos como URLSearchParams (form data)
       const params = new URLSearchParams({
         grant_type: 'refresh_token',
         client_id: this.clientId,
@@ -284,7 +275,6 @@ class MercadoLibreAuth {
         timeout: 10000
       });
 
-      // Actualizar tokens
       const tokens = {
         access_token: response.data.access_token,
         refresh_token: response.data.refresh_token || currentTokens.refresh_token,
@@ -292,8 +282,8 @@ class MercadoLibreAuth {
       };
 
       // Actualizar tokens en la sesión actual
-      if (this.currentSessionId) {
-        const session = sessionManager.getSession(this.currentSessionId);
+      if (this.currentCookieId) {
+        const session = sessionManager.getSessionByCookie(this.currentCookieId);
         if (session) {
           session.tokens = tokens;
         }
@@ -315,9 +305,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Obtiene un token de acceso válido, refrescándolo si es necesario
-   * MODIFICADO: Usa sesión actual
-   * @returns {Promise<string>} Token de acceso válido
+   * MODIFICADO: Obtiene un token de acceso válido usando sesión actual
    */
   async getAccessToken() {
     if (this.mockMode) {
@@ -346,22 +334,20 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Verifica si el usuario está autenticado
-   * MODIFICADO: Usa sesión actual
-   * @returns {boolean} true si está autenticado, false en caso contrario
+   * MODIFICADO: Verificar autenticación basada en cookie
    */
   isAuthenticated() {
     if (this.mockMode) {
-      return true; // En modo mock siempre está autenticado
+      return true;
     }
     
-    if (!this.currentSessionId) {
+    if (!this.currentCookieId) {
       return false;
     }
 
-    const session = sessionManager.getSession(this.currentSessionId);
+    const session = sessionManager.getSessionByCookie(this.currentCookieId);
     if (!session) {
-      this.currentSessionId = null;
+      this.currentCookieId = null;
       return false;
     }
 
@@ -396,9 +382,7 @@ class MercadoLibreAuth {
   }
 
   /**
-   * Obtiene información del usuario autenticado
-   * MODIFICADO: Usa sesión actual
-   * @returns {Promise<Object>} Información del usuario
+   * MODIFICADO: Obtiene información del usuario usando sesión actual
    */
   async getUserInfo() {
     if (this.mockMode) {
@@ -422,7 +406,7 @@ class MercadoLibreAuth {
       return true;
     }
 
-    if (!this.currentSessionId) {
+    if (!this.currentCookieId) {
       return false;
     }
 
@@ -430,7 +414,7 @@ class MercadoLibreAuth {
       const userInfo = await this.getUserInfo();
       const userId = userInfo.id.toString();
       
-      return sessionManager.validateUserSession(this.currentSessionId, userId);
+      return sessionManager.validateUserSession(this.currentCookieId, userId);
     } catch (error) {
       logger.error(`Error validando sesión: ${error.message}`);
       return false;
@@ -445,11 +429,11 @@ class MercadoLibreAuth {
       return 'mock_user_123';
     }
 
-    if (!this.currentSessionId) {
+    if (!this.currentCookieId) {
       return null;
     }
 
-    const session = sessionManager.getSession(this.currentSessionId);
+    const session = sessionManager.getSessionByCookie(this.currentCookieId);
     return session ? session.userId : null;
   }
 
@@ -457,21 +441,20 @@ class MercadoLibreAuth {
    * NUEVO: Obtener información de la sesión actual
    */
   getCurrentSessionInfo() {
-    if (!this.currentSessionId) {
+    if (!this.currentCookieId) {
       return null;
     }
 
-    return sessionManager.getSessionInfo(this.currentSessionId);
+    return sessionManager.getSessionInfo(this.currentCookieId);
   }
 
   /**
-   * Cierra la sesión y limpia los tokens
-   * MODIFICADO: Invalida la sesión
+   * MODIFICADO: Logout que invalida la sesión del navegador actual
    */
   logout() {
-    if (this.currentSessionId) {
-      sessionManager.invalidateSession(this.currentSessionId);
-      this.currentSessionId = null;
+    if (this.currentCookieId) {
+      sessionManager.invalidateSession(this.currentCookieId);
+      this.currentCookieId = null;
     }
     
     try {
@@ -479,10 +462,44 @@ class MercadoLibreAuth {
       if (this.mockMode && this.mockAPI && typeof this.mockAPI.reset === 'function') {
         this.mockAPI.reset();
       }
-      logger.info('👋 Sesión cerrada correctamente');
+      logger.info('👋 Sesión cerrada correctamente para este navegador');
     } catch (error) {
       logger.error(`Error al cerrar sesión: ${error.message}`);
     }
+  }
+
+  /**
+   * NUEVO: Logout de TODAS las sesiones del usuario
+   */
+  async logoutAllSessions() {
+    if (this.mockMode) {
+      this.logout();
+      return;
+    }
+
+    try {
+      const userId = await this.getCurrentUserId();
+      if (userId) {
+        const count = sessionManager.invalidateAllUserSessions(userId);
+        logger.info(`👋 ${count} sesiones cerradas para usuario ${userId}`);
+      }
+      
+      this.currentCookieId = null;
+      storage.clearTokens();
+    } catch (error) {
+      logger.error(`Error al cerrar todas las sesiones: ${error.message}`);
+    }
+  }
+
+  /**
+   * MANTENIDO: Alias para compatibilidad con código existente
+   */
+  get currentSessionId() {
+    return this.currentCookieId;
+  }
+
+  set currentSessionId(value) {
+    this.currentCookieId = value;
   }
 }
 

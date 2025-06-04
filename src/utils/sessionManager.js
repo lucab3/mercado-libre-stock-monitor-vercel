@@ -1,6 +1,7 @@
 /**
- * Gestor de sesiones seguras por usuario
+ * Gestor de sesiones seguras por usuario CON COOKIES
  * Previene que usuarios diferentes compartan tokens
+ * Integrado con el sistema existente
  */
 
 const crypto = require('crypto');
@@ -8,67 +9,78 @@ const logger = require('./logger');
 
 class SessionManager {
   constructor() {
-    // Almacén temporal de sesiones (en memoria para Vercel)
-    this.sessions = new Map();
+    // Almacén de sesiones por cookieId
+    this.sessions = new Map(); // cookieId -> sessionData
+    this.userSessions = new Map(); // userId -> Set of cookieIds
     this.sessionTimeout = 6 * 60 * 60 * 1000; // 6 horas como ML tokens
     
     // Limpiar sesiones expiradas cada hora
     setInterval(() => this.cleanExpiredSessions(), 60 * 60 * 1000);
     
-    logger.info('🔐 Session Manager inicializado');
+    logger.info('🔐 Session Manager con Cookies inicializado');
   }
 
   /**
-   * Genera un ID de sesión único y seguro
+   * Genera un ID de cookie único y seguro
    */
-  generateSessionId() {
+  generateCookieId() {
     return crypto.randomBytes(32).toString('hex');
   }
 
   /**
-   * Crea una nueva sesión para un usuario
+   * MODIFICADO: Crea una nueva sesión para un usuario EN UN NAVEGADOR ESPECÍFICO
    */
-  createSession(userId, tokens) {
-    const sessionId = this.generateSessionId();
+  createSession(userId, tokens, cookieId = null) {
+    // Si no hay cookieId, generar uno nuevo
+    if (!cookieId) {
+      cookieId = this.generateCookieId();
+    }
     
     const sessionData = {
-      sessionId,
+      cookieId,
       userId,
       tokens,
       createdAt: Date.now(),
       expiresAt: Date.now() + this.sessionTimeout,
-      lastActivity: Date.now()
+      lastActivity: Date.now(),
+      userAgent: null // Se puede agregar después
     };
     
-    // Invalidar sesiones anteriores del mismo usuario (opcional)
-    this.invalidateUserSessions(userId);
+    // Limpiar sesión anterior de este navegador (si existe)
+    this.invalidateSession(cookieId);
     
-    this.sessions.set(sessionId, sessionData);
+    // Agregar nueva sesión
+    this.sessions.set(cookieId, sessionData);
     
-    logger.info(`🔑 Nueva sesión creada para usuario ${userId}: ${sessionId.substring(0, 8)}...`);
+    // Registrar qué cookieIds pertenecen a este usuario
+    if (!this.userSessions.has(userId)) {
+      this.userSessions.set(userId, new Set());
+    }
+    this.userSessions.get(userId).add(cookieId);
     
-    return sessionId;
+    logger.info(`🔑 Sesión creada para usuario ${userId} en navegador ${cookieId.substring(0, 8)}...`);
+    
+    return cookieId;
   }
 
   /**
-   * Obtiene los datos de una sesión válida
+   * NUEVO: Obtiene sesión por cookieId (del navegador específico)
    */
-  getSession(sessionId) {
-    if (!sessionId) {
+  getSessionByCookie(cookieId) {
+    if (!cookieId) {
       return null;
     }
 
-    const session = this.sessions.get(sessionId);
+    const session = this.sessions.get(cookieId);
     
     if (!session) {
-      logger.warn(`⚠️ Sesión no encontrada: ${sessionId.substring(0, 8)}...`);
       return null;
     }
 
     // Verificar si la sesión ha expirado
     if (Date.now() > session.expiresAt) {
-      logger.warn(`⏰ Sesión expirada: ${sessionId.substring(0, 8)}...`);
-      this.sessions.delete(sessionId);
+      logger.warn(`⏰ Sesión expirada: ${cookieId.substring(0, 8)}...`);
+      this.invalidateSession(cookieId);
       return null;
     }
 
@@ -79,17 +91,25 @@ class SessionManager {
   }
 
   /**
-   * Valida si una sesión pertenece a un usuario específico
+   * MANTENIDO: Obtiene los datos de una sesión válida (compatibilidad)
    */
-  validateUserSession(sessionId, expectedUserId) {
-    const session = this.getSession(sessionId);
+  getSession(sessionId) {
+    // Para compatibilidad con el código existente
+    return this.getSessionByCookie(sessionId);
+  }
+
+  /**
+   * MODIFICADO: Valida si un cookieId pertenece a un usuario específico
+   */
+  validateUserSession(cookieId, expectedUserId) {
+    const session = this.getSessionByCookie(cookieId);
     
     if (!session) {
       return false;
     }
 
     if (session.userId !== expectedUserId) {
-      logger.error(`🚨 SEGURIDAD: Intento de acceso con sesión incorrecta. Sesión: ${session.userId}, Esperado: ${expectedUserId}`);
+      logger.error(`🚨 SEGURIDAD: Intento de acceso con sesión incorrecta. Cookie ${cookieId.substring(0, 8)}: usuario ${session.userId}, esperado: ${expectedUserId}`);
       return false;
     }
 
@@ -97,43 +117,68 @@ class SessionManager {
   }
 
   /**
-   * Invalida una sesión específica
+   * MODIFICADO: Invalida una sesión específica por cookieId
    */
-  invalidateSession(sessionId) {
-    const session = this.sessions.get(sessionId);
+  invalidateSession(cookieId) {
+    const session = this.sessions.get(cookieId);
     if (session) {
-      this.sessions.delete(sessionId);
-      logger.info(`🗑️ Sesión invalidada: ${sessionId.substring(0, 8)}... (Usuario: ${session.userId})`);
+      // Remover de sesiones de usuario
+      const userCookies = this.userSessions.get(session.userId);
+      if (userCookies) {
+        userCookies.delete(cookieId);
+        if (userCookies.size === 0) {
+          this.userSessions.delete(session.userId);
+        }
+      }
+      
+      this.sessions.delete(cookieId);
+      logger.info(`🗑️ Sesión invalidada: ${cookieId.substring(0, 8)}... (Usuario: ${session.userId})`);
     }
   }
 
   /**
-   * Invalida todas las sesiones de un usuario
+   * MODIFICADO: Invalida TODAS las sesiones de un usuario (todos sus navegadores)
    */
   invalidateUserSessions(userId) {
+    const userCookies = this.userSessions.get(userId);
+    if (!userCookies) {
+      return 0;
+    }
+
     let count = 0;
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.userId === userId) {
-        this.sessions.delete(sessionId);
+    for (const cookieId of userCookies) {
+      if (this.sessions.has(cookieId)) {
+        this.sessions.delete(cookieId);
         count++;
       }
     }
     
+    this.userSessions.delete(userId);
+    
     if (count > 0) {
-      logger.info(`🧹 ${count} sesiones invalidadas para usuario ${userId}`);
+      logger.info(`🧹 ${count} sesiones invalidadas para usuario ${userId} (todos los navegadores)`);
     }
+    
+    return count;
   }
 
   /**
-   * Limpia sesiones expiradas
+   * MODIFICADO: Invalida todas las sesiones de un usuario (alias para compatibilidad)
+   */
+  invalidateAllUserSessions(userId) {
+    return this.invalidateUserSessions(userId);
+  }
+
+  /**
+   * MANTENIDO: Limpia sesiones expiradas
    */
   cleanExpiredSessions() {
     const now = Date.now();
     let cleaned = 0;
     
-    for (const [sessionId, session] of this.sessions.entries()) {
+    for (const [cookieId, session] of this.sessions.entries()) {
       if (now > session.expiresAt) {
-        this.sessions.delete(sessionId);
+        this.invalidateSession(cookieId);
         cleaned++;
       }
     }
@@ -144,7 +189,7 @@ class SessionManager {
   }
 
   /**
-   * Obtiene estadísticas de sesiones activas
+   * MEJORADO: Obtiene estadísticas de sesiones activas
    */
   getStats() {
     const now = Date.now();
@@ -152,30 +197,73 @@ class SessionManager {
       session => now <= session.expiresAt
     );
 
+    const uniqueUsers = new Set(activeSessions.map(s => s.userId));
+    const sessionsByUser = {};
+    
+    for (const userId of uniqueUsers) {
+      const userCookies = this.userSessions.get(userId) || new Set();
+      sessionsByUser[userId] = userCookies.size;
+    }
+
     return {
       totalSessions: this.sessions.size,
       activeSessions: activeSessions.length,
-      uniqueUsers: new Set(activeSessions.map(s => s.userId)).size
+      uniqueUsers: uniqueUsers.size,
+      sessionsByUser,
+      avgSessionsPerUser: uniqueUsers.size > 0 ? activeSessions.length / uniqueUsers.size : 0
     };
   }
 
   /**
-   * Obtiene información de sesión (sin tokens sensibles)
+   * NUEVO: Obtener sesiones de un usuario específico
+   */
+  getUserSessions(userId) {
+    const userCookies = this.userSessions.get(userId);
+    if (!userCookies) {
+      return [];
+    }
+
+    const sessions = [];
+    for (const cookieId of userCookies) {
+      const session = this.sessions.get(cookieId);
+      if (session && Date.now() <= session.expiresAt) {
+        sessions.push({
+          cookieId: cookieId.substring(0, 8) + '...',
+          createdAt: session.createdAt,
+          lastActivity: session.lastActivity,
+          userAgent: session.userAgent
+        });
+      }
+    }
+
+    return sessions;
+  }
+
+  /**
+   * MANTENIDO: Obtiene información de sesión (sin tokens sensibles)
    */
   getSessionInfo(sessionId) {
-    const session = this.getSession(sessionId);
+    const session = this.getSessionByCookie(sessionId);
     if (!session) {
       return null;
     }
 
     return {
-      sessionId: session.sessionId.substring(0, 8) + '...',
+      sessionId: session.cookieId.substring(0, 8) + '...',
+      cookieId: session.cookieId.substring(0, 8) + '...',
       userId: session.userId,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       lastActivity: session.lastActivity,
       isValid: Date.now() <= session.expiresAt
     };
+  }
+
+  /**
+   * NUEVO: Alias para generateCookieId para compatibilidad
+   */
+  generateSessionId() {
+    return this.generateCookieId();
   }
 }
 
