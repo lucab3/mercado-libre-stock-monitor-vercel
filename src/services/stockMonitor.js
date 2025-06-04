@@ -11,11 +11,11 @@ class StockMonitor {
     this.trackedProducts = new Map();
     this.monitoringActive = false;
     this.lastCheckTime = null;
-    this.lastFullCheckTime = null; // Para tracking de verificaciones completas
+    this.lastFullCheckTime = null;
     this.autoCheckTimeout = null;
-    this.lowStockProducts = []; // Mantener lista persistente de productos con stock bajo
+    this.lowStockProducts = [];
     
-    // NUEVO: Cache de último estado conocido para consistencia
+    // Cache de último estado conocido para consistencia
     this.lastKnownStockState = new Map();
   }
 
@@ -99,8 +99,7 @@ class StockMonitor {
   }
 
   /**
-   * Actualiza la lista de productos monitoreados
-   * MEJORADO: Mantiene consistencia de datos CON PERMALINKS
+   * CORREGIDO: Actualiza la lista de productos monitoreados con validación de datos
    */
   async refreshProductList() {
     try {
@@ -115,16 +114,44 @@ class StockMonitor {
         return;
       }
       
-      // CLAVE: Obtener todos los detalles en una sola operación
+      logger.info(`📋 Procesando ${productIds.length} productos...`);
+      
+      // MEJORADO: Obtener todos los detalles con validación completa
       const productDetails = [];
+      let successCount = 0;
+      let errorCount = 0;
+      
       for (const id of productIds) {
         try {
+          logger.debug(`🔍 Obteniendo detalles de producto ${id}...`);
           const productData = await products.getProduct(id);
+          
+          // NUEVO: Validación de datos críticos
+          if (!productData.id) {
+            logger.error(`❌ Producto sin ID válido: ${JSON.stringify(productData)}`);
+            errorCount++;
+            continue;
+          }
+          
+          if (typeof productData.available_quantity !== 'number') {
+            logger.error(`❌ Producto ${productData.id} sin stock válido: ${productData.available_quantity}`);
+            errorCount++;
+            continue;
+          }
+          
           productDetails.push(productData);
+          successCount++;
+          
+          // Log detallado para debugging
+          logger.info(`✅ ${productData.id}: "${productData.title ? productData.title.substring(0, 40) + '...' : 'Sin título'}" - ${productData.available_quantity} unidades - SKU: ${productData.seller_sku || 'Sin SKU'}`);
+          
         } catch (error) {
-          logger.error(`Error obteniendo producto ${id}: ${error.message}`);
+          logger.error(`❌ Error obteniendo producto ${id}: ${error.message}`);
+          errorCount++;
         }
       }
+      
+      logger.info(`📊 Resultados: ${successCount} exitosos, ${errorCount} errores de ${productIds.length} total`);
       
       // Actualizar both trackedProducts y lastKnownStockState
       this.trackedProducts.clear();
@@ -135,15 +162,17 @@ class StockMonitor {
         // Mantener el producto actual
         this.trackedProducts.set(product.id, product);
         
-        // NUEVO: Actualizar estado conocido para consistencia CON PERMALINK
+        // ACTUALIZADO: Estado conocido con SKU incluido
         this.lastKnownStockState.set(product.id, {
           stock: product.available_quantity,
           timestamp: Date.now(),
           title: product.title,
-          permalink: product.permalink // NUEVO: Incluir enlace
+          permalink: product.permalink,
+          seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
+          last_sync: new Date().toISOString()
         });
         
-        logger.info(`🔄 Producto ${product.id}: ${product.available_quantity} unidades (${product.title}) - ${product.permalink}`);
+        logger.debug(`🔄 Sincronizado: ${product.id} - Stock: ${product.available_quantity} - SKU: ${product.seller_sku || 'Sin SKU'} - Link: ${product.permalink ? 'Sí' : 'Generado'}`);
       });
       
       logger.info(`Lista de productos actualizada. Monitoreando ${this.trackedProducts.size} productos`);
@@ -156,8 +185,7 @@ class StockMonitor {
   }
 
   /**
-   * Verifica el stock de todos los productos monitoreados
-   * MEJORADO: Datos consistentes y sincronizados CON PERMALINKS
+   * MEJORADO: Verifica el stock de todos los productos monitoreados con datos sincronizados
    */
   async checkStock() {
     try {
@@ -176,17 +204,19 @@ class StockMonitor {
       for (const [id, product] of this.trackedProducts.entries()) {
         const hasLowStock = product.hasLowStock(this.stockThreshold);
         
-        logger.info(`📦 ${product.title} (${id}): ${product.available_quantity} unidades - ${hasLowStock ? '⚠️ STOCK BAJO' : '✅ OK'}`);
+        logger.info(`📦 ${product.title} (${id}): ${product.available_quantity} unidades - SKU: ${product.seller_sku || 'Sin SKU'} - ${hasLowStock ? '⚠️ STOCK BAJO' : '✅ OK'}`);
         
         if (hasLowStock) {
-          // Usar datos DIRECTOS del producto, no del caché anterior
+          // MEJORADO: Usar datos DIRECTOS del producto con SKU
           const productInfo = {
             id: product.id,
             title: product.title,
             stock: product.available_quantity, // Dato DIRECTO de la API
-            permalink: product.permalink, // NUEVO: Incluir enlace
+            permalink: product.permalink,
+            seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
             hasLowStock: true,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            productUrl: product.getProductUrl() // NUEVO: URL validada
           };
           
           currentLowStockProducts.push(productInfo);
@@ -203,10 +233,10 @@ class StockMonitor {
       // ACTUALIZAR la lista de productos con stock bajo con datos FRESH
       this.lowStockProducts = currentLowStockProducts;
       
-      // Debug: Mostrar estado actual
+      // Debug: Mostrar estado actual con SKU
       logger.info(`📊 Estado actual de stock:`);
       this.lowStockProducts.forEach(p => {
-        logger.info(`   - ${p.title}: ${p.stock} unidades - ${p.permalink}`);
+        logger.info(`   - ${p.title}: ${p.stock} unidades - SKU: ${p.seller_sku || 'Sin SKU'} - ${p.permalink || p.productUrl}`);
       });
       
       // Enviar alertas en paralelo
@@ -229,8 +259,10 @@ class StockMonitor {
           id: p.id,
           title: p.title,
           stock: p.available_quantity,
-          permalink: p.permalink, // NUEVO: Incluir enlace
-          hasLowStock: p.hasLowStock(this.stockThreshold)
+          permalink: p.permalink,
+          seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
+          hasLowStock: p.hasLowStock(this.stockThreshold),
+          productUrl: p.getProductUrl() // NUEVO: URL validada
         }))
       };
       
@@ -244,8 +276,7 @@ class StockMonitor {
   }
 
   /**
-   * Verifica el stock de un producto específico
-   * MEJORADO: Sincronización inmediata con estado global CON PERMALINKS
+   * MEJORADO: Verifica el stock de un producto específico con sincronización completa
    */
   async checkProductStock(productId) {
     try {
@@ -255,15 +286,26 @@ class StockMonitor {
       const productData = await products.getProduct(productId);
       const product = Product.fromApiData(productData);
       
+      // NUEVO: Log detallado para debugging
+      logger.info(`🔍 DATOS OBTENIDOS:`);
+      logger.info(`   ID: ${product.id}`);
+      logger.info(`   Título: ${product.title}`);
+      logger.info(`   Stock: ${product.available_quantity}`);
+      logger.info(`   SKU: ${product.seller_sku || 'Sin SKU'}`);
+      logger.info(`   Permalink: ${product.permalink || 'Sin permalink'}`);
+      logger.info(`   URL generada: ${product.getProductUrl()}`);
+      
       // Actualizar inmediatamente en trackedProducts
       this.trackedProducts.set(product.id, product);
       
-      // Actualizar estado conocido
+      // Actualizar estado conocido con SKU
       this.lastKnownStockState.set(product.id, {
         stock: product.available_quantity,
         timestamp: Date.now(),
         title: product.title,
-        permalink: product.permalink // NUEVO: Incluir enlace
+        permalink: product.permalink,
+        seller_sku: product.seller_sku || null,
+        last_sync: new Date().toISOString()
       });
       
       // Actualizar lista de productos con stock bajo
@@ -274,9 +316,11 @@ class StockMonitor {
           id: product.id,
           title: product.title,
           stock: product.available_quantity, // Dato FRESCO
-          permalink: product.permalink, // NUEVO: Incluir enlace
+          permalink: product.permalink,
+          seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
           hasLowStock: true,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          productUrl: product.getProductUrl()
         };
         
         if (existingIndex >= 0) {
@@ -294,13 +338,13 @@ class StockMonitor {
           logger.info(`📧 Alerta enviada para ${productId}: ${product.available_quantity} unidades`);
         }
         
-        logger.info(`⚠️ ${product.title}: ${product.available_quantity} unidades (STOCK BAJO) - ${product.permalink}`);
+        logger.info(`⚠️ ${product.title}: ${product.available_quantity} unidades (STOCK BAJO) - SKU: ${product.seller_sku || 'Sin SKU'} - ${product.permalink || product.getProductUrl()}`);
       } else {
         // Remover de lista de stock bajo si ya no aplica
         if (existingIndex >= 0) {
           this.lowStockProducts.splice(existingIndex, 1);
         }
-        logger.info(`✅ ${product.title}: ${product.available_quantity} unidades (STOCK SUFICIENTE) - ${product.permalink}`);
+        logger.info(`✅ ${product.title}: ${product.available_quantity} unidades (STOCK SUFICIENTE) - SKU: ${product.seller_sku || 'Sin SKU'} - ${product.permalink || product.getProductUrl()}`);
       }
       
       return product;
@@ -311,11 +355,10 @@ class StockMonitor {
   }
 
   /**
-   * Obtiene el estado actual del monitoreo
-   * MEJORADO: Datos sincronizados en tiempo real CON PERMALINKS
+   * MEJORADO: Obtiene el estado actual del monitoreo con datos sincronizados y SKU
    */
   getStatus() {
-    // Asegurar que lowStockProducts tiene datos actualizados
+    // Asegurar que lowStockProducts tiene datos actualizados con SKU
     const syncedLowStockProducts = this.lowStockProducts.map(p => {
       // Buscar datos más recientes en trackedProducts
       const trackedProduct = this.trackedProducts.get(p.id);
@@ -324,14 +367,18 @@ class StockMonitor {
           id: trackedProduct.id,
           title: trackedProduct.title,
           stock: trackedProduct.available_quantity, // Dato sincronizado
-          permalink: trackedProduct.permalink // NUEVO: Enlace sincronizado
+          permalink: trackedProduct.permalink,
+          seller_sku: trackedProduct.seller_sku || null, // NUEVO: SKU sincronizado
+          productUrl: trackedProduct.getProductUrl()
         };
       }
       return {
         id: p.id,
         title: p.title,
         stock: p.stock,
-        permalink: p.permalink // NUEVO: Incluir enlace
+        permalink: p.permalink,
+        seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
+        productUrl: p.productUrl || products.generateProductUrl(p.id)
       };
     });
     
@@ -347,24 +394,77 @@ class StockMonitor {
   }
 
   /**
-   * NUEVO: Método para debugging - mostrar estado interno CON PERMALINKS
+   * MEJORADO: Método para debugging - mostrar estado interno con SKU y enlaces
    */
   debugCurrentState() {
     logger.info('🐛 DEBUG - Estado interno del monitor:');
     logger.info(`   Productos rastreados: ${this.trackedProducts.size}`);
     logger.info(`   Productos con stock bajo: ${this.lowStockProducts.length}`);
     
-    // Mostrar cada producto
+    // Mostrar cada producto con detalles completos
     this.trackedProducts.forEach((product, id) => {
       const inLowStock = this.lowStockProducts.find(p => p.id === id);
-      logger.info(`   - ${product.title}: ${product.available_quantity} unidades ${inLowStock ? '(EN LISTA STOCK BAJO)' : ''} - ${product.permalink}`);
+      const status = inLowStock ? '(EN LISTA STOCK BAJO)' : '';
+      const sku = product.seller_sku ? `SKU: ${product.seller_sku}` : 'Sin SKU';
+      const link = product.permalink || product.getProductUrl();
+      
+      logger.info(`   - ${product.title}: ${product.available_quantity} unidades - ${sku} ${status}`);
+      logger.info(`     URL: ${link}`);
+      
+      // Validar consistencia de enlaces
+      if (product.permalink) {
+        const generated = product.getProductUrl();
+        if (product.permalink !== generated) {
+          logger.warn(`     ⚠️ DIFERENCIA: Real: ${product.permalink}, Generado: ${generated}`);
+        }
+      }
     });
     
-    // Mostrar lista de stock bajo
+    // Mostrar lista de stock bajo con detalles
     logger.info('📋 Lista actual de stock bajo:');
     this.lowStockProducts.forEach(p => {
-      logger.info(`   - ${p.title}: ${p.stock} unidades - ${p.permalink}`);
+      logger.info(`   - ${p.title}: ${p.stock} unidades - SKU: ${p.seller_sku || 'Sin SKU'}`);
+      logger.info(`     URL: ${p.permalink || p.productUrl}`);
     });
+    
+    // Estadísticas de calidad de datos
+    const withPermalink = Array.from(this.trackedProducts.values()).filter(p => p.permalink).length;
+    const withSKU = Array.from(this.trackedProducts.values()).filter(p => p.seller_sku).length;
+    const total = this.trackedProducts.size;
+    
+    logger.info(`📊 Calidad de datos:`);
+    logger.info(`   Con Permalink: ${withPermalink}/${total} (${Math.round(withPermalink/total*100)}%)`);
+    logger.info(`   Con SKU: ${withSKU}/${total} (${Math.round(withSKU/total*100)}%)`);
+  }
+
+  /**
+   * NUEVO: Función para debuggear datos específicos de productos
+   */
+  async debugProductData() {
+    try {
+      logger.info('🐛 Iniciando debugging detallado de datos de productos...');
+      
+      const debugResult = await products.debugProductsData();
+      
+      // Log local adicional
+      logger.info('🔍 ANÁLISIS LOCAL DE PRODUCTOS TRACKEADOS:');
+      
+      this.trackedProducts.forEach((product, id) => {
+        logger.info(`📦 ${id}:`);
+        logger.info(`   Título: ${product.title}`);
+        logger.info(`   Stock: ${product.available_quantity}`);
+        logger.info(`   SKU: ${product.seller_sku || 'Sin SKU'}`);
+        logger.info(`   Permalink: ${product.permalink || 'No disponible'}`);
+        logger.info(`   URL generada: ${product.getProductUrl()}`);
+        logger.info(`   Enlaces coinciden: ${product.permalink === product.getProductUrl()}`);
+      });
+      
+      return debugResult;
+      
+    } catch (error) {
+      logger.error(`❌ Error en debugging de datos: ${error.message}`);
+      throw error;
+    }
   }
 }
 

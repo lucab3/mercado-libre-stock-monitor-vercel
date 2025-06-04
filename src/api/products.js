@@ -1,6 +1,6 @@
 /**
  * Servicio de productos con Rate Limiting integrado
- * VERSIÓN CORREGIDA - Arregla auth.getTokens() error
+ * VERSIÓN CORREGIDA - Arregla inconsistencias de datos y permalinks
  */
 
 const mlApiClient = require('./ml-api-client');
@@ -31,7 +31,7 @@ class ProductsService {
   }
 
   /**
-   * NUEVO: Método auxiliar para verificar y configurar autenticación
+   * Método auxiliar para verificar y configurar autenticación
    */
   async ensureAuthentication() {
     if (this.mockMode) {
@@ -63,8 +63,7 @@ class ProductsService {
   }
 
   /**
-   * Obtiene todos los productos del usuario con rate limiting inteligente
-   * CORREGIDO: Manejo correcto de tokens
+   * CORREGIDO: Obtiene todos los productos del usuario con validación de datos
    */
   async getAllProducts() {
     if (this.mockMode) {
@@ -79,22 +78,21 @@ class ProductsService {
     }
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
       const user = await mlApiClient.getUser();
       logger.info(`👤 Obteniendo productos para usuario: ${user.nickname} (${user.id})`);
       
-      const allProducts = [];
+      const allProductIds = [];
       let offset = 0;
-      const limit = 50; // Lotes de 50 productos
+      const limit = 50;
       
       // Verificar rate limit antes de comenzar
       const stats = mlApiClient.getRateLimitStats();
       logger.info(`📊 Rate Limit Status: ${stats.currentRequests}/${stats.maxRequests} (${stats.utilizationPercent}%)`);
       
       while (true) {
-        // Obtener lote de productos con rate limiting
+        // Obtener lote de IDs de productos
         const response = await mlApiClient.getUserProducts(user.id, {
           offset,
           limit,
@@ -106,8 +104,8 @@ class ProductsService {
           break;
         }
         
-        allProducts.push(...response.results);
-        logger.info(`📦 Obtenidos ${allProducts.length}/${response.paging.total} productos`);
+        allProductIds.push(...response.results);
+        logger.info(`📦 Obtenidos ${allProductIds.length}/${response.paging.total} IDs de productos`);
         
         // Si obtuvimos menos productos de los solicitados, es el último lote
         if (response.results.length < limit) {
@@ -123,8 +121,8 @@ class ProductsService {
         }
       }
       
-      logger.info(`✅ Total productos obtenidos: ${allProducts.length}`);
-      return allProducts;
+      logger.info(`✅ Total IDs de productos obtenidos: ${allProductIds.length}`);
+      return allProductIds;
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);
@@ -133,8 +131,7 @@ class ProductsService {
   }
 
   /**
-   * Obtiene un producto específico con rate limiting
-   * CORREGIDO: Manejo correcto de tokens
+   * CORREGIDO: Obtiene un producto específico con validación completa de datos
    */
   async getProduct(productId) {
     if (this.mockMode) {
@@ -148,11 +145,15 @@ class ProductsService {
     }
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
       logger.debug(`🔍 Obteniendo producto ${productId} con rate limiting`);
-      return await mlApiClient.getProduct(productId);
+      const productData = await mlApiClient.getProduct(productId);
+      
+      // NUEVO: Validación y logging detallado de datos
+      this.validateAndLogProductData(productData);
+      
+      return productData;
       
     } catch (error) {
       logger.error(`❌ Error obteniendo producto ${productId}: ${error.message}`);
@@ -161,8 +162,135 @@ class ProductsService {
   }
 
   /**
+   * NUEVO: Valida y registra datos del producto para debugging
+   */
+  validateAndLogProductData(productData) {
+    if (!productData) {
+      logger.error('❌ Producto devuelto es null o undefined');
+      return;
+    }
+
+    // Log detallado para debugging
+    logger.info(`🔍 VALIDACIÓN PRODUCTO:`);
+    logger.info(`   ID: ${productData.id || 'MISSING'}`);
+    logger.info(`   Título: ${productData.title ? productData.title.substring(0, 50) + '...' : 'MISSING'}`);
+    logger.info(`   Stock: ${productData.available_quantity ?? 'MISSING'}`);
+    logger.info(`   SKU: ${productData.seller_sku || 'Sin SKU'}`);
+    logger.info(`   Permalink: ${productData.permalink || 'MISSING'}`);
+    logger.info(`   Status: ${productData.status || 'MISSING'}`);
+
+    // Validaciones críticas
+    const issues = [];
+    
+    if (!productData.id) {
+      issues.push('ID faltante');
+    }
+    
+    if (!productData.title) {
+      issues.push('Título faltante');
+    }
+    
+    if (typeof productData.available_quantity !== 'number') {
+      issues.push('Stock no es número');
+    }
+    
+    if (!productData.permalink) {
+      issues.push('Permalink faltante');
+    }
+
+    if (issues.length > 0) {
+      logger.error(`❌ PROBLEMAS EN PRODUCTO ${productData.id}: ${issues.join(', ')}`);
+    } else {
+      logger.info(`✅ Producto ${productData.id} validado correctamente`);
+    }
+
+    // Log del enlace generado vs real
+    if (productData.permalink) {
+      logger.info(`🔗 ENLACE REAL: ${productData.permalink}`);
+    }
+    
+    const generatedLink = this.generateProductUrl(productData.id);
+    logger.info(`🔗 ENLACE GENERADO: ${generatedLink}`);
+    
+    if (productData.permalink && productData.permalink !== generatedLink) {
+      logger.warn(`⚠️ DIFERENCIA EN ENLACES para ${productData.id}`);
+    }
+  }
+
+  /**
+   * CORREGIDO: Genera URL de producto correcta basada en ID
+   */
+  generateProductUrl(productId) {
+    if (!productId) {
+      return 'https://mercadolibre.com.ar';
+    }
+
+    // Extraer código de país y número de producto
+    const countryCode = productId.substring(0, 3);
+    const productNumber = productId.substring(3); // Todo después de MLA/MLM etc.
+    
+    const countryDomains = {
+      'MLA': 'com.ar',
+      'MLM': 'com.mx', 
+      'MLB': 'com.br',
+      'MLC': 'cl',
+      'MCO': 'com.co'
+    };
+    
+    const domain = countryDomains[countryCode] || 'com.ar';
+    
+    // CORREGIDO: Formato correcto de URL con guión
+    return `https://articulo.mercadolibre.${domain}/${countryCode}-${productNumber}`;
+  }
+
+  /**
+   * NUEVO: Obtiene información completa de producto con debugging
+   */
+  async getProductWithDebugInfo(productId) {
+    try {
+      const productData = await this.getProduct(productId);
+      
+      // Información de debugging extendida
+      const debugInfo = {
+        originalData: {
+          id: productData.id,
+          title: productData.title,
+          seller_sku: productData.seller_sku,
+          available_quantity: productData.available_quantity,
+          permalink: productData.permalink,
+          status: productData.status,
+          price: productData.price,
+          currency_id: productData.currency_id
+        },
+        validation: {
+          hasId: !!productData.id,
+          hasTitle: !!productData.title,
+          hasSku: !!productData.seller_sku,
+          hasStock: typeof productData.available_quantity === 'number',
+          hasPermalink: !!productData.permalink,
+          isActive: productData.status === 'active'
+        },
+        links: {
+          originalPermalink: productData.permalink,
+          generatedUrl: this.generateProductUrl(productData.id),
+          matches: productData.permalink === this.generateProductUrl(productData.id)
+        },
+        retrievalTime: new Date().toISOString()
+      };
+
+      return {
+        product: productData,
+        debug: debugInfo
+      };
+
+    } catch (error) {
+      logger.error(`❌ Error en getProductWithDebugInfo para ${productId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Obtiene múltiples productos de forma eficiente con rate limiting
-   * CORREGIDO: Manejo correcto de tokens
    */
   async getMultipleProducts(productIds, includeFullDetails = false) {
     if (this.mockMode) {
@@ -184,15 +312,14 @@ class ProductsService {
     }
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
-      // Definir atributos para optimizar la respuesta
+      // MEJORADO: Incluir SKU en los atributos solicitados
       const attributes = includeFullDetails 
         ? null 
-        : ['id', 'title', 'available_quantity', 'price', 'currency_id', 'status', 'last_updated'];
+        : ['id', 'title', 'available_quantity', 'price', 'currency_id', 'status', 'permalink', 'seller_sku', 'last_updated'];
 
-      logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado`);
+      logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);
       
       // Verificar rate limit
       const stats = mlApiClient.getRateLimitStats();
@@ -200,7 +327,14 @@ class ProductsService {
         logger.warn('⚠️ Cerca del rate limit - usando cola para multiget');
       }
       
-      return await mlApiClient.getMultipleProducts(productIds, attributes);
+      const products = await mlApiClient.getMultipleProducts(productIds, attributes);
+      
+      // NUEVO: Validar cada producto obtenido
+      products.forEach(product => {
+        this.validateAndLogProductData(product);
+      });
+      
+      return products;
       
     } catch (error) {
       logger.error(`❌ Error obteniendo múltiples productos: ${error.message}`);
@@ -210,7 +344,6 @@ class ProductsService {
 
   /**
    * Actualiza el stock de un producto con rate limiting
-   * CORREGIDO: Manejo correcto de tokens
    */
   async updateProductStock(productId, quantity) {
     if (this.mockMode) {
@@ -224,7 +357,6 @@ class ProductsService {
     }
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
       logger.info(`📝 Actualizando stock de ${productId} a ${quantity} unidades`);
@@ -237,8 +369,127 @@ class ProductsService {
   }
 
   /**
+   * NUEVO: Debugging completo de datos de productos
+   */
+  async debugProductsData() {
+    try {
+      logger.info('🐛 Iniciando debugging completo de productos...');
+      
+      // Obtener lista de IDs
+      const productIds = await this.getAllProducts();
+      
+      if (productIds.length === 0) {
+        return {
+          error: 'No se encontraron productos para debuggear',
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Analizar una muestra de productos
+      const sampleSize = Math.min(5, productIds.length);
+      const sampleIds = productIds.slice(0, sampleSize);
+      
+      logger.info(`🎯 Analizando muestra de ${sampleSize} productos de ${productIds.length} total`);
+
+      const sampleProductData = [];
+      const issues = [];
+      let dataQuality = {
+        withPermalink: 0,
+        withoutPermalink: 0,
+        withSKU: 0,
+        withoutSKU: 0,
+        withErrors: 0
+      };
+
+      for (const id of sampleIds) {
+        try {
+          const productData = await this.getProduct(id);
+          
+          // Análisis de calidad de datos
+          if (productData.permalink) {
+            dataQuality.withPermalink++;
+          } else {
+            dataQuality.withoutPermalink++;
+          }
+          
+          if (productData.seller_sku) {
+            dataQuality.withSKU++;
+          } else {
+            dataQuality.withoutSKU++;
+          }
+
+          sampleProductData.push({
+            id: productData.id,
+            title: productData.title ? productData.title.substring(0, 50) + '...' : null,
+            seller_sku: productData.seller_sku || null,
+            available_quantity: productData.available_quantity,
+            permalink: productData.permalink,
+            generated_url: this.generateProductUrl(productData.id),
+            links_match: productData.permalink === this.generateProductUrl(productData.id),
+            status: productData.status,
+            has_issues: !productData.id || !productData.title || typeof productData.available_quantity !== 'number'
+          });
+
+        } catch (error) {
+          dataQuality.withErrors++;
+          sampleProductData.push({
+            id,
+            error: error.message,
+            generated_url: this.generateProductUrl(id)
+          });
+        }
+      }
+
+      // Generar recomendaciones
+      const recommendations = [];
+      
+      if (dataQuality.withoutPermalink > 0) {
+        recommendations.push({
+          type: 'warning',
+          message: `${dataQuality.withoutPermalink} productos sin permalink`,
+          action: 'Verificar configuración de API o permisos'
+        });
+      }
+      
+      if (dataQuality.withoutSKU > 0) {
+        recommendations.push({
+          type: 'info',
+          message: `${dataQuality.withoutSKU} productos sin SKU`,
+          action: 'Agregar SKU a productos en Mercado Libre'
+        });
+      }
+      
+      if (dataQuality.withErrors > 0) {
+        recommendations.push({
+          type: 'error',
+          message: `${dataQuality.withErrors} productos con errores`,
+          action: 'Revisar logs para detalles específicos'
+        });
+      }
+
+      const debugResult = {
+        analysis: {
+          totalProducts: productIds.length,
+          sampleAnalyzed: sampleSize,
+          dataQuality,
+          timestamp: new Date().toISOString()
+        },
+        sampleProductData,
+        recommendations,
+        mockMode: this.mockMode
+      };
+
+      logger.info('✅ Debugging de productos completado');
+      return debugResult;
+
+    } catch (error) {
+      logger.error(`❌ Error en debugging de productos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Procesa productos en lotes con control de rate limiting
-   * CORREGIDO: Manejo correcto de tokens
    */
   async processProductsBatch(productIds, processor, options = {}) {
     if (this.mockMode) {
@@ -261,7 +512,6 @@ class ProductsService {
     const { batchSize = 10, pauseBetweenBatches = 1000 } = options;
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
       return await mlApiClient.processBatch(
@@ -316,7 +566,6 @@ class ProductsService {
 
   /**
    * Health check del servicio
-   * CORREGIDO: Manejo correcto de tokens
    */
   async healthCheck() {
     if (this.mockMode) {
@@ -330,7 +579,6 @@ class ProductsService {
     }
 
     try {
-      // CORREGIDO: Verificar y configurar autenticación
       await this.ensureAuthentication();
 
       return await mlApiClient.healthCheck();
@@ -345,7 +593,6 @@ class ProductsService {
 
   /**
    * Verifica y optimiza el uso del rate limit
-   * CORREGIDO: Manejo correcto de tokens
    */
   async optimizeRateLimit() {
     const stats = this.getRateLimitStats();
@@ -377,7 +624,6 @@ class ProductsService {
 
   /**
    * Estrategia inteligente para monitoreo masivo
-   * CORREGIDO: Manejo correcto de tokens
    */
   async smartBulkMonitoring(productIds, options = {}) {
     const { 
@@ -388,7 +634,6 @@ class ProductsService {
 
     logger.info(`🧠 Iniciando monitoreo inteligente de ${productIds.length} productos`);
     
-    // CORREGIDO: Verificar autenticación antes de procesar
     if (!this.mockMode) {
       await this.ensureAuthentication();
     }
@@ -446,7 +691,7 @@ class ProductsService {
   }
 
   /**
-   * NUEVO: Método para verificar el estado de autenticación
+   * Método para verificar el estado de autenticación
    */
   getAuthenticationStatus() {
     return {

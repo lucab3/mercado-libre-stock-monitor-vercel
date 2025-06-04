@@ -12,12 +12,12 @@ if (fs.existsSync(envPath)) {
 }
 
 const express = require('express');
-const cookieParser = require('cookie-parser'); // NUEVO
+const cookieParser = require('cookie-parser');
 const config = require('../config/config');
 const logger = require('./utils/logger');
 const auth = require('./api/auth');
 const stockMonitor = require('./services/stockMonitor');
-const sessionManager = require('./utils/sessionManager'); // NUEVO
+const sessionManager = require('./utils/sessionManager');
 
 // Inicialización de la aplicación Express
 const app = express();
@@ -27,15 +27,15 @@ logger.info('🚀 Iniciando aplicación Monitor de Stock ML...');
 logger.info(`📊 Puerto configurado: ${port}`);
 logger.info(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
 logger.info(`🎭 Mock API: ${process.env.MOCK_ML_API === 'true' ? 'ACTIVADO' : 'DESACTIVADO'}`);
-logger.info(`🔐 Sistema de sesiones con cookies: ACTIVADO`); // NUEVO
+logger.info(`🔐 Sistema de sesiones con cookies: ACTIVADO`);
 
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(cookieParser()); // NUEVO
+app.use(cookieParser());
 
-// NUEVO: Middleware para manejar cookies de sesión
+// Middleware para manejar cookies de sesión
 app.use((req, res, next) => {
   // Obtener cookie de sesión
   let sessionCookie = req.cookies['ml-session'];
@@ -53,7 +53,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// NUEVO: Middleware de seguridad para validar sesiones
+// Middleware de seguridad para validar sesiones
 app.use('/api/', async (req, res, next) => {
   // Solo aplicar a rutas que requieren autenticación
   const protectedRoutes = ['/api/monitor/', '/api/products/', '/api/rate-limit/'];
@@ -120,7 +120,7 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Debug básico - AGREGAR DESPUÉS DE LOS MIDDLEWARE
+// Debug básico
 app.get('/debug/simple', (req, res) => {
   res.json({
     message: 'Debug endpoint funcionando',
@@ -192,7 +192,7 @@ app.get('/debug/oauth-flow', (req, res) => {
   }
 });
 
-// NUEVO: Debug de cookies y sesiones
+// Debug de cookies y sesiones
 app.get('/debug/cookie-sessions', (req, res) => {
   if (process.env.NODE_ENV !== 'development') {
     return res.status(403).json({ error: 'Solo disponible en desarrollo' });
@@ -216,7 +216,7 @@ app.get('/debug/cookie-sessions', (req, res) => {
   }
 });
 
-// NUEVO: Debug de sesiones (solo desarrollo)
+// Debug de sesiones (solo desarrollo)
 app.get('/debug/sessions', (req, res) => {
   if (process.env.NODE_ENV !== 'development') {
     return res.status(403).json({ error: 'Solo disponible en desarrollo' });
@@ -343,25 +343,249 @@ app.get('/debug/products-flow', async (req, res) => {
   }
 });
 
+// NUEVO: API para debug detallado de productos
+app.get('/debug/products-data', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const products = require('./api/products');
+    const debugResult = await products.debugProductsData();
+    
+    res.json(debugResult);
+  } catch (error) {
+    logger.error(`Error en debug de productos: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al debuggear productos',
+      message: error.message 
+    });
+  }
+});
+
+// NUEVO: API para debug de producto específico con SKU y enlaces
+app.get('/debug/product/:id', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const productId = req.params.id;
+    const products = require('./api/products');
+    
+    logger.info(`🔍 Debug de producto específico: ${productId}`);
+    
+    const debugResult = await products.getProductWithDebugInfo(productId);
+    
+    res.json(debugResult);
+  } catch (error) {
+    logger.error(`Error en debug de producto ${req.params.id}: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al debuggear producto',
+      productId: req.params.id,
+      message: error.message 
+    });
+  }
+});
+
+// NUEVO: API para comparar datos del dashboard vs API real
+app.get('/debug/dashboard-consistency', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const stockMonitor = require('./services/stockMonitor');
+    const products = require('./api/products');
+    
+    logger.info('🔍 Verificando consistencia entre dashboard y API...');
+    
+    // Obtener estado actual del monitor
+    const monitorStatus = stockMonitor.getStatus();
+    
+    // Obtener productos con stock bajo del monitor
+    const dashboardProducts = monitorStatus.lowStockProducts;
+    
+    // Verificar cada producto individualmente contra la API
+    const consistencyCheck = [];
+    
+    for (const dashboardProduct of dashboardProducts.slice(0, 5)) { // Limitar a 5 para evitar rate limit
+      try {
+        const apiProduct = await products.getProduct(dashboardProduct.id);
+        
+        const isConsistent = {
+          id: dashboardProduct.id === apiProduct.id,
+          title: dashboardProduct.title === apiProduct.title,
+          stock: dashboardProduct.stock === apiProduct.available_quantity,
+          sku: (dashboardProduct.seller_sku || null) === (apiProduct.seller_sku || null),
+          permalink: (dashboardProduct.permalink || null) === (apiProduct.permalink || null)
+        };
+        
+        const allConsistent = Object.values(isConsistent).every(v => v === true);
+        
+        consistencyCheck.push({
+          productId: dashboardProduct.id,
+          consistent: allConsistent,
+          dashboard: {
+            title: dashboardProduct.title,
+            stock: dashboardProduct.stock,
+            sku: dashboardProduct.seller_sku,
+            permalink: dashboardProduct.permalink
+          },
+          api: {
+            title: apiProduct.title,
+            stock: apiProduct.available_quantity,
+            sku: apiProduct.seller_sku,
+            permalink: apiProduct.permalink
+          },
+          fieldComparison: isConsistent,
+          links: {
+            dashboardUrl: dashboardProduct.productUrl || products.generateProductUrl(dashboardProduct.id),
+            apiPermalink: apiProduct.permalink,
+            generatedUrl: products.generateProductUrl(apiProduct.id),
+            allLinksMatch: (dashboardProduct.permalink === apiProduct.permalink)
+          }
+        });
+        
+      } catch (productError) {
+        consistencyCheck.push({
+          productId: dashboardProduct.id,
+          consistent: false,
+          error: productError.message,
+          dashboard: dashboardProduct
+        });
+      }
+    }
+    
+    const totalChecked = consistencyCheck.length;
+    const consistentCount = consistencyCheck.filter(c => c.consistent).length;
+    const consistencyPercentage = totalChecked > 0 ? Math.round((consistentCount / totalChecked) * 100) : 0;
+    
+    const result = {
+      summary: {
+        totalProductsInDashboard: dashboardProducts.length,
+        productsChecked: totalChecked,
+        consistentProducts: consistentCount,
+        inconsistentProducts: totalChecked - consistentCount,
+        consistencyPercentage: consistencyPercentage
+      },
+      detailedCheck: consistencyCheck,
+      recommendations: [],
+      timestamp: new Date().toISOString()
+    };
+    
+    // Generar recomendaciones
+    if (consistencyPercentage < 100) {
+      result.recommendations.push({
+        type: 'warning',
+        message: `${totalChecked - consistentCount} productos tienen inconsistencias`,
+        action: 'Revisar sincronización de datos entre dashboard y API'
+      });
+    }
+    
+    const linkIssues = consistencyCheck.filter(c => c.links && !c.links.allLinksMatch).length;
+    if (linkIssues > 0) {
+      result.recommendations.push({
+        type: 'error',
+        message: `${linkIssues} productos tienen problemas con enlaces`,
+        action: 'Verificar generación de URLs y permalinks'
+      });
+    }
+    
+    logger.info(`✅ Consistencia verificada: ${consistencyPercentage}% (${consistentCount}/${totalChecked})`);
+    
+    res.json(result);
+    
+  } catch (error) {
+    logger.error(`Error verificando consistencia: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al verificar consistencia',
+      message: error.message 
+    });
+  }
+});
+
+// NUEVO: API para forzar sincronización completa
+app.post('/debug/force-sync', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const stockMonitor = require('./services/stockMonitor');
+    
+    logger.info('🔄 Forzando sincronización completa...');
+    
+    // Forzar actualización completa de la lista de productos
+    await stockMonitor.refreshProductList();
+    
+    // Realizar verificación de stock
+    const result = await stockMonitor.checkStock();
+    
+    // Debug del estado actual
+    stockMonitor.debugCurrentState();
+    
+    res.json({
+      success: true,
+      message: 'Sincronización forzada completada',
+      result: {
+        totalProducts: result.totalProducts,
+        lowStockProducts: result.lowStockProducts,
+        timestamp: result.timestamp
+      }
+    });
+    
+  } catch (error) {
+    logger.error(`Error en sincronización forzada: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error en sincronización forzada',
+      message: error.message 
+    });
+  }
+});
+
 // Debug del estado del monitor
 app.get('/debug/monitor-state', (req, res) => {
   try {
     const stockMonitor = require('./services/stockMonitor');
     
     const status = stockMonitor.getStatus();
+    
+    // Información detallada de productos rastreados
     const trackedProducts = Array.from(stockMonitor.trackedProducts.entries()).map(([id, product]) => ({
       id,
       title: product.title,
+      seller_sku: product.seller_sku,
       stock: product.available_quantity,
-      hasLowStock: product.hasLowStock(5)
+      hasLowStock: product.hasLowStock(5),
+      permalink: product.permalink,
+      productUrl: product.getProductUrl(),
+      linksMatch: product.permalink === product.getProductUrl(),
+      isValid: product.isValid()
     }));
+    
+    // Estadísticas de calidad de datos
+    const total = trackedProducts.length;
+    const withPermalink = trackedProducts.filter(p => p.permalink).length;
+    const withSKU = trackedProducts.filter(p => p.seller_sku).length;
+    const withValidLinks = trackedProducts.filter(p => p.linksMatch || p.permalink).length;
     
     res.json({
       message: 'Estado completo del monitor',
       timestamp: new Date().toISOString(),
       monitorStatus: status,
       trackedProducts,
-      trackedProductsCount: stockMonitor.trackedProducts.size,
+      statistics: {
+        totalProducts: total,
+        withPermalink: withPermalink,
+        withSKU: withSKU,
+        withValidLinks: withValidLinks,
+        dataQuality: {
+          permalinkPercentage: total > 0 ? Math.round((withPermalink / total) * 100) : 0,
+          skuPercentage: total > 0 ? Math.round((withSKU / total) * 100) : 0,
+          linkValidityPercentage: total > 0 ? Math.round((withValidLinks / total) * 100) : 0
+        }
+      },
       lowStockProductsCount: status.lowStockProducts.length
     });
     
@@ -466,7 +690,7 @@ app.get('/auth/login', (req, res) => {
   }
 });
 
-// MODIFICADO: Callback de autenticación para establecer cookie
+// Callback de autenticación para establecer cookie
 app.get('/auth/callback', async (req, res) => {
   const { code, error, error_description } = req.query;
 
@@ -507,7 +731,7 @@ app.get('/auth/callback', async (req, res) => {
       throw new Error('No se obtuvieron tokens válidos del intercambio');
     }
 
-    // CRÍTICO: Establecer cookie segura en el navegador
+    // Establecer cookie segura en el navegador
     res.cookie('ml-session', result.cookieId, {
       httpOnly: true,           // No accesible desde JavaScript
       secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
@@ -559,7 +783,7 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// MODIFICADO: Logout para limpiar cookie
+// Logout para limpiar cookie
 app.get('/auth/logout', (req, res) => {
   try {
     const currentUserId = auth.currentSessionId;
@@ -570,7 +794,7 @@ app.get('/auth/logout', (req, res) => {
     auth.logout(); // Esto ahora invalida la sesión automáticamente
     stockMonitor.stop();
 
-    // CRÍTICO: Limpiar cookie del navegador
+    // Limpiar cookie del navegador
     res.clearCookie('ml-session', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -586,7 +810,7 @@ app.get('/auth/logout', (req, res) => {
   }
 });
 
-// MODIFICADO: API para verificar el estado de autenticación y monitoreo con validación de cookies
+// API para verificar el estado de autenticación y monitoreo con validación de cookies
 app.get('/api/auth/status', async (req, res) => {
   try {
     const isAuthenticated = auth.isAuthenticated();
@@ -733,7 +957,7 @@ app.post('/api/monitor/check-now', async (req, res) => {
   }
 });
 
-// API para verificar stock de un producto específico - MODIFICADO para incluir permalink
+// API para verificar stock de producto específico con debug completo
 app.get('/api/products/:id/stock', async (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -744,22 +968,33 @@ app.get('/api/products/:id/stock', async (req, res) => {
     logger.info(`🔍 API: Verificación individual de producto ${productId}`);
 
     // Usar el método del monitor para mantener consistencia
+    const stockMonitor = require('./services/stockMonitor');
     const product = await stockMonitor.checkProductStock(productId);
 
+    // Información de debugging adicional
+    const debugInfo = product.getDebugInfo();
+    
     const responseData = {
       id: product.id,
       title: product.title,
-      available_quantity: product.available_quantity, // Stock actual en tiempo real
+      seller_sku: product.seller_sku, // Incluir SKU
+      available_quantity: product.available_quantity,
       has_low_stock: product.hasLowStock(config.monitoring.stockThreshold),
       is_out_of_stock: product.isOutOfStock(),
       threshold: config.monitoring.stockThreshold,
-      permalink: product.permalink, // NUEVO: Incluir enlace a ML
+      permalink: product.permalink,
+      productUrl: product.getProductUrl(), // URL validada
       last_updated: Date.now(),
-      last_updated_iso: new Date().toISOString()
+      last_updated_iso: new Date().toISOString(),
+      debug: debugInfo // Información de debug
     };
 
-    logger.info(`📊 API: Respuesta para ${productId}: ${product.available_quantity} unidades`);
-    logger.info(`🔗 Enlace ML: ${product.permalink}`);
+    logger.info(`📊 API: Respuesta para ${productId}:`);
+    logger.info(`   Título: ${product.title}`);
+    logger.info(`   Stock: ${product.available_quantity} unidades`);
+    logger.info(`   SKU: ${product.seller_sku || 'Sin SKU'}`);
+    logger.info(`   Permalink: ${product.permalink || 'No disponible'}`);
+    logger.info(`   URL usada: ${product.getProductUrl()}`);
 
     res.json(responseData);
   } catch (error) {
@@ -772,7 +1007,7 @@ app.get('/api/products/:id/stock', async (req, res) => {
   }
 });
 
-// NUEVO: API para debug (solo en desarrollo)
+// API para debug (solo en desarrollo)
 app.get('/api/debug/stock-state', (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -817,7 +1052,7 @@ app.get('/api/debug/stock-state', (req, res) => {
   }
 });
 
-// NUEVO: API para controlar cambios automáticos de stock (solo desarrollo)
+// API para controlar cambios automáticos de stock (solo desarrollo)
 app.post('/api/debug/trigger-stock-changes', (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -850,7 +1085,7 @@ app.post('/api/debug/trigger-stock-changes', (req, res) => {
   }
 });
 
-// NUEVO: API para configurar frecuencia de cambios (solo desarrollo)
+// API para configurar frecuencia de cambios (solo desarrollo)
 app.post('/api/debug/set-change-frequency', (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -906,13 +1141,13 @@ app.get('/api/app-info', (req, res) => {
       manualCheck: true,
       realTimeSync: true,
       dynamicStock: true,
-      secureSessions: true, // NUEVO
-      mercadoLibreLinks: true // NUEVO
+      secureSessions: true,
+      mercadoLibreLinks: true
     }
   });
 });
 
-// Ruta de verificación de estado para Vercel - MODIFICADO con info de sesiones
+// Ruta de verificación de estado para Vercel
 app.get('/health', (req, res) => {
   try {
     const status = stockMonitor.getStatus();
@@ -928,7 +1163,7 @@ app.get('/health', (req, res) => {
         totalProducts: status.totalProducts,
         lowStockProducts: status.lowStockProducts.length
       },
-      sessions: sessionStats, // NUEVO
+      sessions: sessionStats,
       mockMode: process.env.MOCK_ML_API === 'true'
     });
   } catch (error) {
