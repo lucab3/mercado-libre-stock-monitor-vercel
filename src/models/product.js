@@ -11,18 +11,72 @@ class Product {
     this.id = data.id;
     this.title = data.title;
     this.permalink = data.permalink; // Enlace directo al producto en ML
-    this.seller_sku = data.seller_sku || null; // NUEVO: SKU del vendedor
+    this.seller_sku = this.extractSKU(data); // MEJORADO: Extracción inteligente de SKU
     this.price = data.price;
     this.currency_id = data.currency_id;
     this.available_quantity = data.available_quantity;
-    this.status = data.status;
+    this.status = data.status; // active, paused, closed, etc.
     this.listing_type_id = data.listing_type_id;
     this.category_id = data.category_id;
     this.thumbnail = data.thumbnail;
     this.lastAlertSent = null;
     
+    // NUEVO: Campos adicionales para mejor debugging
+    this.health = data.health || null;
+    this.condition = data.condition || null;
+    this.date_created = data.date_created || null;
+    this.stop_time = data.stop_time || null;
+    this.last_updated = data.last_updated || null;
+    this.catalog_listing = data.catalog_listing || null;
+    
+    // NUEVO: Análisis del tipo de enlace
+    this.linkType = this.analyzeLinkType();
+    
     // NUEVO: Validación de datos en constructor
     this.validateData();
+  }
+
+  /**
+   * NUEVO: Extrae SKU de múltiples fuentes
+   */
+  extractSKU(data) {
+    // 1. Verificar seller_sku directo
+    if (data.seller_sku) {
+      return data.seller_sku;
+    }
+
+    // 2. Buscar en attributes si existe
+    if (data.attributes && Array.isArray(data.attributes)) {
+      const skuAttribute = data.attributes.find(attr => 
+        attr.id === 'SELLER_SKU' || 
+        attr.id === 'SKU' || 
+        (attr.name && attr.name.toLowerCase().includes('sku'))
+      );
+      
+      if (skuAttribute && skuAttribute.value_name) {
+        return skuAttribute.value_name;
+      }
+    }
+
+    // 3. Si no se encuentra, retornar null
+    return null;
+  }
+
+  /**
+   * NUEVO: Analiza el tipo de enlace del producto
+   */
+  analyzeLinkType() {
+    if (!this.permalink) {
+      return 'missing';
+    }
+
+    if (this.permalink.includes('internal-shop.mercadoshops.com.ar')) {
+      return 'mercadoshops';
+    } else if (this.permalink.includes('articulo.mercadolibre.com.ar')) {
+      return 'standard';
+    } else {
+      return 'unknown';
+    }
   }
 
   /**
@@ -151,7 +205,7 @@ class Product {
   }
 
   /**
-   * MEJORADO: Información completa del producto incluyendo SKU y enlaces validados
+   * MEJORADO: Información completa del producto incluyendo estado y enlaces analizados
    * @returns {Object} Objeto con toda la información del producto
    */
   getFullInfo() {
@@ -164,12 +218,22 @@ class Product {
       permalink: this.permalink,
       productUrl: this.getProductUrl(),
       linkComparison: linkComparison,
+      linkType: this.linkType, // NUEVO: Tipo de enlace
       price: this.price,
       currency_id: this.currency_id,
       available_quantity: this.available_quantity,
-      status: this.status,
+      status: this.status, // NUEVO: Estado de la publicación
+      health: this.health, // NUEVO: Estado de salud
+      condition: this.condition, // NUEVO: Condición
+      listing_type_id: this.listing_type_id,
+      date_created: this.date_created, // NUEVO: Fecha de creación
+      stop_time: this.stop_time, // NUEVO: Fecha de finalización
+      last_updated: this.last_updated, // NUEVO: Última actualización
+      catalog_listing: this.catalog_listing, // NUEVO: Si es catálogo
       hasLowStock: this.hasLowStock(5), // Umbral por defecto
       isOutOfStock: this.isOutOfStock(),
+      isActive: this.status === 'active', // NUEVO: Si está activo
+      isPaused: this.status === 'paused', // NUEVO: Si está pausado
       thumbnail: this.thumbnail,
       lastAlertSent: this.lastAlertSent,
       isValid: this.isValid()

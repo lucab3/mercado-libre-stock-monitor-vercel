@@ -207,13 +207,18 @@ class StockMonitor {
         logger.info(`📦 ${product.title} (${id}): ${product.available_quantity} unidades - SKU: ${product.seller_sku || 'Sin SKU'} - ${hasLowStock ? '⚠️ STOCK BAJO' : '✅ OK'}`);
         
         if (hasLowStock) {
-          // MEJORADO: Usar datos DIRECTOS del producto con SKU
+          // MEJORADO: Usar datos DIRECTOS del producto con SKU y estado
           const productInfo = {
             id: product.id,
             title: product.title,
             stock: product.available_quantity, // Dato DIRECTO de la API
             permalink: product.permalink,
             seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
+            status: product.status || 'unknown', // NUEVO: Estado de publicación
+            health: product.health || null, // NUEVO: Estado de salud
+            condition: product.condition || null, // NUEVO: Condición
+            listing_type_id: product.listing_type_id || null, // NUEVO: Tipo de publicación
+            linkType: product.linkType || 'unknown', // NUEVO: Tipo de enlace
             hasLowStock: true,
             timestamp: Date.now(),
             productUrl: product.getProductUrl() // NUEVO: URL validada
@@ -318,6 +323,11 @@ class StockMonitor {
           stock: product.available_quantity, // Dato FRESCO
           permalink: product.permalink,
           seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
+          status: product.status || 'unknown', // NUEVO: Estado de publicación
+          health: product.health || null, // NUEVO: Estado de salud
+          condition: product.condition || null, // NUEVO: Condición
+          listing_type_id: product.listing_type_id || null, // NUEVO: Tipo de publicación
+          linkType: product.linkType || 'unknown', // NUEVO: Tipo de enlace
           hasLowStock: true,
           timestamp: Date.now(),
           productUrl: product.getProductUrl()
@@ -369,6 +379,11 @@ class StockMonitor {
           stock: trackedProduct.available_quantity, // Dato sincronizado
           permalink: trackedProduct.permalink,
           seller_sku: trackedProduct.seller_sku || null, // NUEVO: SKU sincronizado
+          status: trackedProduct.status || 'unknown', // NUEVO: Estado sincronizado
+          health: trackedProduct.health || null, // NUEVO: Estado de salud
+          condition: trackedProduct.condition || null, // NUEVO: Condición
+          listing_type_id: trackedProduct.listing_type_id || null, // NUEVO: Tipo de publicación
+          linkType: trackedProduct.linkType || 'unknown', // NUEVO: Tipo de enlace
           productUrl: trackedProduct.getProductUrl()
         };
       }
@@ -378,6 +393,11 @@ class StockMonitor {
         stock: p.stock,
         permalink: p.permalink,
         seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
+        status: p.status || 'unknown', // NUEVO: Estado
+        health: p.health || null, // NUEVO: Estado de salud
+        condition: p.condition || null, // NUEVO: Condición
+        listing_type_id: p.listing_type_id || null, // NUEVO: Tipo de publicación
+        linkType: p.linkType || 'unknown', // NUEVO: Tipo de enlace
         productUrl: p.productUrl || this.generateProductUrl(p.id)
       };
     });

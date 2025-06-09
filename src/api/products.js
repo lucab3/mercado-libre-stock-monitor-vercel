@@ -162,7 +162,7 @@ class ProductsService {
   }
 
   /**
-   * NUEVO: Valida y registra datos del producto para debugging
+   * MEJORADO: Valida y registra datos del producto para debugging completo
    */
   validateAndLogProductData(productData) {
     if (!productData) {
@@ -170,14 +170,32 @@ class ProductsService {
       return;
     }
 
+    // NUEVO: Intentar extraer SKU de múltiples fuentes
+    const extractedSKU = this.extractSKUFromProduct(productData);
+
     // Log detallado para debugging
     logger.info(`🔍 VALIDACIÓN PRODUCTO:`);
     logger.info(`   ID: ${productData.id || 'MISSING'}`);
     logger.info(`   Título: ${productData.title ? productData.title.substring(0, 50) + '...' : 'MISSING'}`);
     logger.info(`   Stock: ${productData.available_quantity ?? 'MISSING'}`);
-    logger.info(`   SKU: ${productData.seller_sku || 'Sin SKU'}`);
-    logger.info(`   Permalink: ${productData.permalink || 'MISSING'}`);
     logger.info(`   Status: ${productData.status || 'MISSING'}`);
+    logger.info(`   SKU (seller_sku): ${productData.seller_sku || 'Sin SKU'}`);
+    logger.info(`   SKU (extraído): ${extractedSKU || 'Sin SKU extraído'}`);
+    logger.info(`   Permalink: ${productData.permalink || 'MISSING'}`);
+    logger.info(`   Health: ${productData.health || 'N/A'}`);
+    logger.info(`   Listing Type: ${productData.listing_type_id || 'N/A'}`);
+    logger.info(`   Condition: ${productData.condition || 'N/A'}`);
+
+    // NUEVO: Análisis del tipo de permalink
+    if (productData.permalink) {
+      if (productData.permalink.includes('internal-shop.mercadoshops.com.ar')) {
+        logger.warn(`⚠️ ENLACE MERCADOSHOPS: ${productData.permalink}`);
+      } else if (productData.permalink.includes('articulo.mercadolibre.com.ar')) {
+        logger.info(`✅ ENLACE ESTÁNDAR: ${productData.permalink}`);
+      } else {
+        logger.warn(`❓ ENLACE DESCONOCIDO: ${productData.permalink}`);
+      }
+    }
 
     // Validaciones críticas
     const issues = [];
@@ -198,6 +216,10 @@ class ProductsService {
       issues.push('Permalink faltante');
     }
 
+    if (productData.status !== 'active') {
+      issues.push(`Estado no activo: ${productData.status}`);
+    }
+
     if (issues.length > 0) {
       logger.error(`❌ PROBLEMAS EN PRODUCTO ${productData.id}: ${issues.join(', ')}`);
     } else {
@@ -215,6 +237,32 @@ class ProductsService {
     if (productData.permalink && productData.permalink !== generatedLink) {
       logger.warn(`⚠️ DIFERENCIA EN ENLACES para ${productData.id}`);
     }
+  }
+
+  /**
+   * NUEVO: Extrae SKU de múltiples fuentes en los datos del producto
+   */
+  extractSKUFromProduct(productData) {
+    // 1. Verificar seller_sku directo
+    if (productData.seller_sku) {
+      return productData.seller_sku;
+    }
+
+    // 2. Buscar en attributes si existe
+    if (productData.attributes && Array.isArray(productData.attributes)) {
+      const skuAttribute = productData.attributes.find(attr => 
+        attr.id === 'SELLER_SKU' || 
+        attr.id === 'SKU' || 
+        (attr.name && attr.name.toLowerCase().includes('sku'))
+      );
+      
+      if (skuAttribute && skuAttribute.value_name) {
+        return skuAttribute.value_name;
+      }
+    }
+
+    // 3. Si no se encuentra, retornar null
+    return null;
   }
 
   /**
@@ -314,10 +362,27 @@ class ProductsService {
     try {
       await this.ensureAuthentication();
 
-      // MEJORADO: Incluir SKU en los atributos solicitados
+      // MEJORADO: Incluir más atributos para debugging completo
       const attributes = includeFullDetails 
         ? null 
-        : ['id', 'title', 'available_quantity', 'price', 'currency_id', 'status', 'permalink', 'seller_sku', 'last_updated'];
+        : [
+            'id', 
+            'title', 
+            'available_quantity', 
+            'price', 
+            'currency_id', 
+            'status',           // Estado: active, paused, closed, etc
+            'permalink', 
+            'seller_sku',       // SKU del vendedor
+            'last_updated',
+            'listing_type_id',  // Tipo de publicación 
+            'condition',        // Condición del producto
+            'date_created',     // Fecha de creación
+            'stop_time',        // Fecha de finalización si está pausada
+            'health',          // Estado de salud de la publicación
+            'catalog_listing', // Si es catálogo
+            'attributes'       // Atributos adicionales que pueden incluir SKU
+          ];
 
       logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);
       

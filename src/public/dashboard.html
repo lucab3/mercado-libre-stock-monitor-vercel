@@ -271,12 +271,13 @@
                                 <th>SKU</th>
                                 <th>Stock</th>
                                 <th>Estado</th>
+                                <th>Publicación</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="low-stock-table">
                             <tr>
-                                <td colspan="6" class="text-center">Cargando información...</td>
+                                <td colspan="7" class="text-center">Cargando información...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -507,7 +508,7 @@
                 const tableBody = document.getElementById('low-stock-table');
                 
                 if (!lowStockProducts || lowStockProducts.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
                     return;
                 }
                 
@@ -522,8 +523,22 @@
                     // CORREGIDO: Usar productUrl validado del backend que incluye permalink real
                     const mlLink = product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`;
                     
+                    // NUEVO: Analizar tipo de enlace y estado de publicación
+                    const linkType = product.permalink ? 
+                        (product.permalink.includes('internal-shop.mercadoshops.com.ar') ? 'mercadoshops' : 'standard') : 
+                        'generated';
+                    const linkIcon = linkType === 'mercadoshops' ? '🏪' : (linkType === 'standard' ? '🔗' : '⚙️');
+                    
+                    // Estado de publicación
+                    const pubStatus = product.status || 'unknown';
+                    const pubStatusClass = pubStatus === 'active' ? 'bg-success' : 
+                                          pubStatus === 'paused' ? 'bg-warning' : 'bg-danger';
+                    const pubStatusText = pubStatus === 'active' ? 'Activa' : 
+                                         pubStatus === 'paused' ? 'Pausada' : 
+                                         pubStatus === 'closed' ? 'Cerrada' : 'Desconocido';
+                    
                     // Debug de enlaces para verificar que están correctos
-                    console.log(`🔗 Producto ${product.id}: URL = ${mlLink}`);
+                    console.log(`🔗 Producto ${product.id}: URL = ${mlLink}, Tipo: ${linkType}, Estado: ${pubStatus}`);
                     if (product.permalink && product.productUrl && product.permalink !== product.productUrl) {
                         console.warn(`⚠️ Diferencia en enlaces para ${product.id}:`, {
                             permalink: product.permalink,
@@ -542,7 +557,7 @@
                                     <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem;"></i>
                                 </a>
                                 <div class="product-meta" style="font-size: 0.6rem; color: #888;">
-                                    ${product.permalink ? 'Permalink real' : 'URL generada'}
+                                    ${linkIcon} ${linkType === 'mercadoshops' ? 'MercadoShops' : linkType === 'standard' ? 'ML Estándar' : 'Generado'}
                                     <button class="btn btn-xs btn-outline-secondary" onclick="debugProductDetails('${product.id}')" style="font-size: 0.5rem; padding: 1px 3px; margin-left: 5px;" title="Debug detalles">
                                         <i class="bi bi-bug"></i>
                                     </button>
@@ -566,6 +581,12 @@
                                 <span class="badge ${statusClass}">
                                     ${statusText}
                                 </span>
+                            </td>
+                            <td>
+                                <span class="badge ${pubStatusClass}" style="font-size: 0.75rem;">
+                                    ${pubStatusText}
+                                </span>
+                                ${linkType === 'mercadoshops' ? '<div style="font-size: 0.6rem; color: #ff6b00;">🏪 MercadoShops</div>' : ''}
                             </td>
                             <td>
                                 <div class="product-actions">
