@@ -478,6 +478,50 @@ app.get('/debug/all-products', async (req, res) => {
   }
 });
 
+// NUEVO: API para debug detallado del proceso de scan
+app.get('/debug/scan-process', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const mlApiClient = require('./api/ml-api-client');
+    const user = await mlApiClient.getUser();
+    
+    logger.info('🔍 DEBUG: Ejecutando scan paso a paso...');
+    
+    // Simular el proceso de scan con logging detallado
+    const result = await mlApiClient.getAllUserProducts(user.id, {
+      limit: 100,
+      maxProducts: 500 // Límite más bajo para debugging rápido
+    });
+    
+    res.json({
+      message: 'Debug del proceso de scan',
+      userId: user.id,
+      userNickname: user.nickname,
+      scanResult: {
+        totalProductsFound: result.results.length,
+        scanCompleted: result.scanCompleted,
+        pagesProcessed: result.pagesProcessed,
+        error: result.error,
+        firstFewProducts: result.results.slice(0, 5),
+        lastFewProducts: result.results.slice(-5)
+      },
+      rateLimitStats: mlApiClient.getRateLimitStats(),
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`Error en debug de scan: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error en debug de scan',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // NUEVO: API para debug de producto específico con SKU y enlaces
 app.get('/debug/product/:id', async (req, res) => {
   if (!auth.isAuthenticated()) {

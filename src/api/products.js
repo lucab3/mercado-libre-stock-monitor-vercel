@@ -90,22 +90,32 @@ class ProductsService {
       // CORREGIDO: Usar el método scan para obtener TODOS los productos (sin filtro de status)
       const response = await mlApiClient.getAllUserProducts(user.id, {
         limit: 100, // Máximo para scan según ML API
-        maxProducts: 3000 // Límite para evitar timeout en Vercel (ajustable)
+        maxProducts: 5000 // Aumentado para obtener todos los ~2908 productos
       });
       
       const allProductIds = response.results || [];
       
-      logger.info(`✅ Total IDs de productos obtenidos con scan: ${allProductIds.length}`);
+      logger.info(`✅ Total IDs únicos de productos obtenidos con scan: ${allProductIds.length}`);
       logger.info(`📊 Scan completado: ${response.scanCompleted ? 'SÍ' : 'NO'} (${response.pagesProcessed} páginas)`);
+      logger.info(`🔢 Duplicados detectados: ${response.duplicatesDetected || 0}`);
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
       
       // Log adicional si el scan no se completó
       if (!response.scanCompleted) {
-        logger.warn(`⚠️ Scan parcial: se obtuvieron ${allProductIds.length} productos de los ~2908 totales`);
+        logger.warn(`⚠️ Scan parcial: se obtuvieron ${allProductIds.length} productos únicos de los ~2908 totales`);
         logger.warn(`🔧 Para obtener más productos, considera aumentar maxProducts en el código`);
       }
       
-      return allProductIds;
+      // CORREGIDO: Retornar objeto completo con información del scan
+      return {
+        results: allProductIds,
+        scanCompleted: response.scanCompleted,
+        pagesProcessed: response.pagesProcessed,
+        duplicatesDetected: response.duplicatesDetected,
+        uniqueProducts: response.uniqueProducts,
+        error: response.error,
+        total: allProductIds.length
+      };
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);

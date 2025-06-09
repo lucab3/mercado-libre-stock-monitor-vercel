@@ -133,11 +133,13 @@ class MLAPIClient {
    * Implementa correctamente la paginación con scroll_id según documentación ML
    */
   async getAllUserProducts(userId, options = {}) {
-    const { limit = 100, maxProducts = 3000 } = options; // Máximo 100 para scan, límite total para Vercel
+    const { limit = 100, maxProducts = 5000 } = options; // Aumentado para obtener todos los ~2908 productos
     let scrollId = null;
     const allProducts = [];
+    const seenProductIds = new Set(); // Para detectar y evitar duplicados
     let pageCount = 0;
     const maxPages = Math.ceil(maxProducts / limit); // Límite de páginas para evitar timeout en Vercel
+    let duplicatesDetected = 0;
     
     logger.info(`🔍 Obteniendo TODOS los productos del usuario ${userId} usando scan (máximo ${maxProducts})...`);
     
@@ -193,9 +195,26 @@ class MLAPIClient {
           break;
         }
         
-        // Agregar productos obtenidos
-        allProducts.push(...response.results);
-        logger.info(`📦 [Página ${pageCount}] Obtenidos ${response.results.length} productos. Total acumulado: ${allProducts.length}`);
+        // Agregar productos obtenidos, evitando duplicados
+        const newProducts = [];
+        for (const productId of response.results) {
+          if (!seenProductIds.has(productId)) {
+            seenProductIds.add(productId);
+            newProducts.push(productId);
+          } else {
+            duplicatesDetected++;
+            logger.warn(`⚠️ Producto duplicado detectado: ${productId} (total duplicados: ${duplicatesDetected})`);
+          }
+        }
+        
+        allProducts.push(...newProducts);
+        logger.info(`📦 [Página ${pageCount}] Obtenidos ${response.results.length} productos (${newProducts.length} nuevos, ${response.results.length - newProducts.length} duplicados). Total acumulado: ${allProducts.length}`);
+        
+        // Si no hay productos nuevos únicos, probablemente hemos terminado
+        if (newProducts.length === 0) {
+          logger.info(`📦 [Página ${pageCount}] Solo productos duplicados, probablemente terminamos el scan`);
+          break;
+        }
         
         // Obtener scroll_id para la siguiente página
         const newScrollId = response.scroll_id;
@@ -219,13 +238,16 @@ class MLAPIClient {
         logger.warn(`📊 Productos obtenidos: ${allProducts.length} de aproximadamente ${maxProducts}+ totales`);
       }
       
-      logger.info(`✅ Scan completado: ${allProducts.length} productos en ${pageCount} páginas`);
+      logger.info(`✅ Scan completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
+      logger.info(`🔢 Estadísticas: ${duplicatesDetected} productos duplicados detectados y filtrados`);
       
       return {
         results: allProducts,
         total: allProducts.length,
         scanCompleted: pageCount < maxPages, // Indica si el scan se completó totalmente
         pagesProcessed: pageCount,
+        duplicatesDetected: duplicatesDetected,
+        uniqueProducts: allProducts.length,
         paging: {
           total: allProducts.length,
           offset: 0,
@@ -243,6 +265,8 @@ class MLAPIClient {
         total: allProducts.length,
         scanCompleted: false,
         pagesProcessed: pageCount,
+        duplicatesDetected: duplicatesDetected,
+        uniqueProducts: allProducts.length,
         error: error.message,
         paging: {
           total: allProducts.length,
