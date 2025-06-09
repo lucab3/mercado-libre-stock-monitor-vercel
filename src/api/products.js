@@ -87,15 +87,23 @@ class ProductsService {
       const stats = mlApiClient.getRateLimitStats();
       logger.info(`📊 Rate Limit Status: ${stats.currentRequests}/${stats.maxRequests} (${stats.utilizationPercent}%)`);
       
-      // NUEVO: Usar el método scan para obtener TODOS los productos (sin filtro de status)
+      // CORREGIDO: Usar el método scan para obtener TODOS los productos (sin filtro de status)
       const response = await mlApiClient.getAllUserProducts(user.id, {
-        limit: 100 // Máximo para scan
+        limit: 100, // Máximo para scan según ML API
+        maxProducts: 3000 // Límite para evitar timeout en Vercel (ajustable)
       });
       
       const allProductIds = response.results || [];
       
       logger.info(`✅ Total IDs de productos obtenidos con scan: ${allProductIds.length}`);
+      logger.info(`📊 Scan completado: ${response.scanCompleted ? 'SÍ' : 'NO'} (${response.pagesProcessed} páginas)`);
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
+      
+      // Log adicional si el scan no se completó
+      if (!response.scanCompleted) {
+        logger.warn(`⚠️ Scan parcial: se obtuvieron ${allProductIds.length} productos de los ~2908 totales`);
+        logger.warn(`🔧 Para obtener más productos, considera aumentar maxProducts en el código`);
+      }
       
       return allProductIds;
       

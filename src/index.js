@@ -376,9 +376,15 @@ app.get('/debug/all-products', async (req, res) => {
     logger.info('🔍 Obteniendo TODOS los productos del usuario...');
     
     // Obtener lista completa de IDs usando scan (TODOS los productos)
-    const allProductIds = await products.getAllProducts();
+    const scanResult = await products.getAllProducts();
+    const allProductIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
     
     logger.info(`📋 Total de IDs obtenidos con scan: ${allProductIds.length}`);
+    
+    // Info adicional del scan si está disponible
+    if (scanResult.scanCompleted !== undefined) {
+      logger.info(`📊 Scan completado: ${scanResult.scanCompleted ? 'SÍ' : 'NO'} (${scanResult.pagesProcessed || 'N/A'} páginas)`);
+    }
     
     // Obtener detalles de los primeros 50 productos para análisis rápido
     // (para 2908 productos sería demasiado lento obtener todos los detalles)
@@ -438,7 +444,10 @@ app.get('/debug/all-products', async (req, res) => {
       byLinkType: {},
       withSKU: allProductDetails.filter(p => p.seller_sku).length,
       withoutSKU: allProductDetails.filter(p => !p.seller_sku).length,
-      scanMethod: true // Indica que usamos el método scan
+      scanMethod: true, // Indica que usamos el método scan
+      scanCompleted: scanResult.scanCompleted !== undefined ? scanResult.scanCompleted : null,
+      pagesProcessed: scanResult.pagesProcessed || null,
+      scanError: scanResult.error || null
     };
     
     // Estadísticas por estado

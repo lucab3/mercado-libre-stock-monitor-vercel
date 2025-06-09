@@ -129,69 +129,103 @@ class MLAPIClient {
   }
 
   /**
-   * NUEVO: Obtener TODOS los productos del usuario usando scan (para más de 1000 items)
+   * CORREGIDO: Obtener TODOS los productos del usuario usando scan (para más de 1000 items)
+   * Implementa correctamente la paginación con scroll_id según documentación ML
    */
   async getAllUserProducts(userId, options = {}) {
-    const { limit = 100 } = options; // Máximo 100 para scan
+    const { limit = 100, maxProducts = 3000 } = options; // Máximo 100 para scan, límite total para Vercel
     let scrollId = null;
     const allProducts = [];
+    let pageCount = 0;
+    const maxPages = Math.ceil(maxProducts / limit); // Límite de páginas para evitar timeout en Vercel
     
-    logger.info(`🔍 Obteniendo TODOS los productos del usuario ${userId} usando scan...`);
+    logger.info(`🔍 Obteniendo TODOS los productos del usuario ${userId} usando scan (máximo ${maxProducts})...`);
     
     try {
-      while (true) {
-        const params = {
-          search_type: 'scan',
-          limit
-        };
+      while (pageCount < maxPages) {
+        pageCount++;
         
-        // Si tenemos scroll_id, usarlo en lugar de search_type
-        if (scrollId) {
-          delete params.search_type;
+        // Preparar parámetros según si es primera llamada o paginación
+        const params = {};
+        
+        if (!scrollId) {
+          // Primera llamada: usar search_type=scan
+          params.search_type = 'scan';
+          params.limit = limit;
+          logger.info(`📦 [Página ${pageCount}] Primera llamada con search_type=scan, limit=${limit}`);
+        } else {
+          // Llamadas subsiguientes: usar scroll_id (SIN search_type)
           params.scroll_id = scrollId;
+          logger.info(`📦 [Página ${pageCount}] Usando scroll_id: ${scrollId.substring(0, 30)}...`);
         }
-        
-        logger.info(`📦 Obteniendo lote con ${scrollId ? 'scroll_id' : 'search_type=scan'}...`);
         
         let response;
-        if (rateLimiter.isNearLimit()) {
-          logger.warn('⚠️ Cerca del rate limit - usando cola de requests');
-          response = await rateLimiter.queueRequest(
-            () => this.get(`/users/${userId}/items/search`, { params })
-          );
-        } else {
-          response = await this.get(`/users/${userId}/items/search`, { params });
+        try {
+          if (rateLimiter.isNearLimit()) {
+            logger.warn('⚠️ Cerca del rate limit - usando cola de requests');
+            response = await rateLimiter.queueRequest(
+              () => this.get(`/users/${userId}/items/search`, { params })
+            );
+          } else {
+            response = await this.get(`/users/${userId}/items/search`, { params });
+          }
+        } catch (apiError) {
+          logger.error(`❌ Error en API call página ${pageCount}: ${apiError.message}`);
+          // Si es error de scroll_id expirado, reintentar sin scroll_id
+          if (apiError.message.includes('scroll_id') || apiError.message.includes('expired')) {
+            logger.warn('🔄 scroll_id expirado, reiniciando scan...');
+            scrollId = null;
+            pageCount--; // Reintentar esta página
+            continue;
+          }
+          throw apiError;
         }
         
-        if (!response.results || response.results.length === 0) {
-          logger.info('📦 No hay más productos para obtener');
+        // Verificar respuesta válida
+        if (!response || !response.results) {
+          logger.warn(`⚠️ Respuesta inválida en página ${pageCount}:`, response);
           break;
         }
         
+        // Si no hay productos en esta página, terminamos
+        if (response.results.length === 0) {
+          logger.info(`📦 [Página ${pageCount}] Sin productos, finalizando scan`);
+          break;
+        }
+        
+        // Agregar productos obtenidos
         allProducts.push(...response.results);
-        logger.info(`📦 Obtenidos ${allProducts.length} productos hasta ahora...`);
+        logger.info(`📦 [Página ${pageCount}] Obtenidos ${response.results.length} productos. Total acumulado: ${allProducts.length}`);
         
         // Obtener scroll_id para la siguiente página
-        scrollId = response.scroll_id;
+        const newScrollId = response.scroll_id;
         
-        // Si no hay scroll_id, hemos terminado
-        if (!scrollId) {
-          logger.info('📦 No hay más páginas (sin scroll_id)');
+        if (!newScrollId) {
+          logger.info(`📦 [Página ${pageCount}] Sin scroll_id, finalizando scan (última página)`);
           break;
         }
         
-        // Pausa entre requests para rate limiting
-        if (rateLimiter.isNearLimit()) {
-          logger.info('⏳ Pausando entre lotes para evitar rate limit');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        scrollId = newScrollId;
+        logger.debug(`🔄 Nuevo scroll_id para siguiente página: ${scrollId.substring(0, 30)}...`);
+        
+        // Pausa estratégica entre requests
+        const pauseTime = rateLimiter.isNearLimit() ? 3000 : 1000;
+        logger.debug(`⏳ Pausa de ${pauseTime}ms antes de siguiente página...`);
+        await new Promise(resolve => setTimeout(resolve, pauseTime));
       }
       
-      logger.info(`✅ Total de productos obtenidos con scan: ${allProducts.length}`);
+      if (pageCount >= maxPages) {
+        logger.warn(`⚠️ Alcanzado límite máximo de páginas (${maxPages}) para evitar timeout en Vercel`);
+        logger.warn(`📊 Productos obtenidos: ${allProducts.length} de aproximadamente ${maxProducts}+ totales`);
+      }
+      
+      logger.info(`✅ Scan completado: ${allProducts.length} productos en ${pageCount} páginas`);
       
       return {
         results: allProducts,
         total: allProducts.length,
+        scanCompleted: pageCount < maxPages, // Indica si el scan se completó totalmente
+        pagesProcessed: pageCount,
         paging: {
           total: allProducts.length,
           offset: 0,
@@ -200,8 +234,22 @@ class MLAPIClient {
       };
       
     } catch (error) {
-      logger.error(`❌ Error obteniendo productos con scan: ${error.message}`);
-      throw error;
+      logger.error(`❌ Error obteniendo productos con scan después de ${pageCount} páginas: ${error.message}`);
+      logger.error(`📊 Productos obtenidos antes del error: ${allProducts.length}`);
+      
+      // Devolver lo que tenemos hasta ahora en caso de error
+      return {
+        results: allProducts,
+        total: allProducts.length,
+        scanCompleted: false,
+        pagesProcessed: pageCount,
+        error: error.message,
+        paging: {
+          total: allProducts.length,
+          offset: 0,
+          limit: allProducts.length
+        }
+      };
     }
   }
 
