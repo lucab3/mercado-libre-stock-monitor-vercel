@@ -363,6 +363,105 @@ app.get('/debug/products-data', async (req, res) => {
   }
 });
 
+// NUEVO: API para listar TODOS los productos (no solo muestra)
+app.get('/debug/all-products', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const products = require('./api/products');
+    const stockMonitor = require('./services/stockMonitor');
+    
+    logger.info('🔍 Obteniendo TODOS los productos del usuario...');
+    
+    // Obtener lista completa de IDs
+    const allProductIds = await products.getAllProducts();
+    
+    logger.info(`📋 Total de IDs obtenidos: ${allProductIds.length}`);
+    
+    // Obtener detalles de todos los productos (no solo muestra)
+    const allProductDetails = [];
+    const errorProducts = [];
+    
+    // Procesar en lotes para evitar rate limit
+    const batchSize = 10;
+    for (let i = 0; i < allProductIds.length; i += batchSize) {
+      const batch = allProductIds.slice(i, i + batchSize);
+      
+      logger.info(`📦 Procesando lote ${Math.floor(i/batchSize) + 1}/${Math.ceil(allProductIds.length/batchSize)}: ${batch.length} productos`);
+      
+      for (const id of batch) {
+        try {
+          const productData = await products.getProduct(id);
+          allProductDetails.push({
+            id: productData.id,
+            title: productData.title,
+            seller_sku: productData.seller_sku,
+            available_quantity: productData.available_quantity,
+            status: productData.status,
+            permalink: productData.permalink,
+            health: productData.health,
+            listing_type_id: productData.listing_type_id,
+            last_updated: productData.last_updated,
+            linkType: productData.permalink ? 
+              (productData.permalink.includes('internal-shop.mercadoshops.com.ar') ? 'mercadoshops' : 'standard') : 
+              'missing'
+          });
+        } catch (error) {
+          logger.error(`❌ Error obteniendo producto ${id}: ${error.message}`);
+          errorProducts.push({
+            id,
+            error: error.message
+          });
+        }
+      }
+      
+      // Pausa entre lotes
+      if (i + batchSize < allProductIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Estadísticas
+    const stats = {
+      totalIdsFound: allProductIds.length,
+      successfullyLoaded: allProductDetails.length,
+      errorProducts: errorProducts.length,
+      byStatus: {},
+      byLinkType: {},
+      withSKU: allProductDetails.filter(p => p.seller_sku).length,
+      withoutSKU: allProductDetails.filter(p => !p.seller_sku).length
+    };
+    
+    // Estadísticas por estado
+    allProductDetails.forEach(p => {
+      const status = p.status || 'unknown';
+      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+      
+      const linkType = p.linkType || 'unknown';
+      stats.byLinkType[linkType] = (stats.byLinkType[linkType] || 0) + 1;
+    });
+    
+    logger.info(`✅ Análisis completo: ${stats.successfullyLoaded}/${stats.totalIdsFound} productos cargados`);
+    
+    res.json({
+      summary: stats,
+      productIds: allProductIds,
+      productDetails: allProductDetails,
+      errors: errorProducts,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`Error en debug de todos los productos: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener todos los productos',
+      message: error.message 
+    });
+  }
+});
+
 // NUEVO: API para debug de producto específico con SKU y enlaces
 app.get('/debug/product/:id', async (req, res) => {
   if (!auth.isAuthenticated()) {
@@ -516,6 +615,13 @@ app.post('/debug/force-sync', async (req, res) => {
     
     logger.info('🔄 Forzando sincronización completa...');
     
+    // NUEVO: Limpiar completamente el estado interno
+    stockMonitor.trackedProducts.clear();
+    stockMonitor.lastKnownStockState.clear();
+    stockMonitor.lowStockProducts = [];
+    
+    logger.info('🧹 Cache y estado interno limpiado');
+    
     // Forzar actualización completa de la lista de productos
     await stockMonitor.refreshProductList();
     
@@ -527,7 +633,7 @@ app.post('/debug/force-sync', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Sincronización forzada completada',
+      message: 'Sincronización forzada completada con limpieza de cache',
       result: {
         totalProducts: result.totalProducts,
         lowStockProducts: result.lowStockProducts,
@@ -539,6 +645,53 @@ app.post('/debug/force-sync', async (req, res) => {
     logger.error(`Error en sincronización forzada: ${error.message}`);
     res.status(500).json({ 
       error: 'Error en sincronización forzada',
+      message: error.message 
+    });
+  }
+});
+
+// NUEVO: API para limpiar cache específico de un producto fantasma
+app.post('/debug/remove-phantom-product/:id', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const productId = req.params.id;
+    const stockMonitor = require('./services/stockMonitor');
+    
+    logger.info(`🔍 Eliminando producto fantasma: ${productId}`);
+    
+    // Eliminar de todas las estructuras internas
+    const wasInTracked = stockMonitor.trackedProducts.has(productId);
+    const wasInState = stockMonitor.lastKnownStockState.has(productId);
+    const lowStockIndex = stockMonitor.lowStockProducts.findIndex(p => p.id === productId);
+    
+    stockMonitor.trackedProducts.delete(productId);
+    stockMonitor.lastKnownStockState.delete(productId);
+    
+    if (lowStockIndex >= 0) {
+      stockMonitor.lowStockProducts.splice(lowStockIndex, 1);
+    }
+    
+    logger.info(`✅ Producto ${productId} eliminado del cache interno`);
+    
+    res.json({
+      success: true,
+      message: `Producto fantasma ${productId} eliminado`,
+      cleanupResults: {
+        wasInTracked,
+        wasInState,
+        wasInLowStock: lowStockIndex >= 0,
+        remainingTrackedProducts: stockMonitor.trackedProducts.size,
+        remainingLowStockProducts: stockMonitor.lowStockProducts.length
+      }
+    });
+    
+  } catch (error) {
+    logger.error(`Error eliminando producto fantasma: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al eliminar producto fantasma',
       message: error.message 
     });
   }

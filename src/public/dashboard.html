@@ -222,6 +222,12 @@
                         <button type="button" onclick="debugSystem()" class="btn btn-sm btn-outline-warning" title="Debug completo del sistema">
                             <i class="bi bi-bug"></i> Debug Sistema
                         </button>
+                        <button type="button" onclick="debugAllProducts()" class="btn btn-sm btn-outline-info" title="Ver todos los productos">
+                            <i class="bi bi-list-check"></i> Todos los Productos
+                        </button>
+                        <button type="button" onclick="forceSyncClean()" class="btn btn-sm btn-outline-danger" title="Limpiar cache y sincronizar">
+                            <i class="bi bi-arrow-clockwise"></i> Sync Completo
+                        </button>
                     </div>
                 </div>
 
@@ -602,6 +608,9 @@
                                     <button class="btn btn-sm btn-outline-info" onclick="debugProduct('${product.id}')" title="Ver datos de debug">
                                         <i class="bi bi-bug"></i> Debug
                                     </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removePhantomProduct('${product.id}')" title="Eliminar si es fantasma">
+                                        <i class="bi bi-trash"></i> Limpiar
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -699,10 +708,151 @@
                 alert('Debug completo enviado a la consola del navegador. Abre Developer Tools > Console para ver los detalles.');
             };
             
+            // NUEVA: Función para debuggear todos los productos
+            window.debugAllProducts = function() {
+                console.log('🔍 Obteniendo información de TODOS los productos...');
+                
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-hourglass-split"></i> Cargando...';
+                button.disabled = true;
+                
+                fetch('/debug/all-products')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('📊 INFORMACIÓN COMPLETA DE PRODUCTOS:', data);
+                        
+                        // Mostrar resumen
+                        const summary = data.summary;
+                        let summaryText = `RESUMEN DE PRODUCTOS:\n\n`;
+                        summaryText += `📋 Total de IDs encontrados: ${summary.totalIdsFound}\n`;
+                        summaryText += `✅ Cargados exitosamente: ${summary.successfullyLoaded}\n`;
+                        summaryText += `❌ Errores: ${summary.errorProducts}\n`;
+                        summaryText += `🏷️ Con SKU: ${summary.withSKU}\n`;
+                        summaryText += `🚫 Sin SKU: ${summary.withoutSKU}\n\n`;
+                        
+                        summaryText += `ESTADOS:\n`;
+                        Object.entries(summary.byStatus).forEach(([status, count]) => {
+                            summaryText += `- ${status}: ${count} productos\n`;
+                        });
+                        
+                        summaryText += `\nTIPOS DE ENLACES:\n`;
+                        Object.entries(summary.byLinkType).forEach(([type, count]) => {
+                            summaryText += `- ${type}: ${count} productos\n`;
+                        });
+                        
+                        if (data.errors && data.errors.length > 0) {
+                            summaryText += `\n❌ PRODUCTOS CON ERRORES:\n`;
+                            data.errors.forEach(error => {
+                                summaryText += `- ${error.id}: ${error.error}\n`;
+                            });
+                        }
+                        
+                        alert(summaryText + '\n\nRevisa la consola para detalles completos.');
+                        
+                        // Buscar específicamente el DDJ-200 problemático
+                        const ddj200Problem = data.productDetails.find(p => p.id === 'MLA1511790506');
+                        if (ddj200Problem) {
+                            console.warn('🎛️ PRODUCTO DDJ-200 PROBLEMÁTICO ENCONTRADO:', ddj200Problem);
+                        } else {
+                            console.warn('🎛️ PRODUCTO DDJ-200 (MLA1511790506) NO ENCONTRADO EN LA LISTA DE PRODUCTOS');
+                            
+                            // Buscar productos similares
+                            const ddj200Similar = data.productDetails.filter(p => 
+                                p.title && p.title.toLowerCase().includes('ddj')
+                            );
+                            if (ddj200Similar.length > 0) {
+                                console.warn('🎛️ PRODUCTOS DDJ SIMILARES ENCONTRADOS:', ddj200Similar);
+                            }
+                        }
+                        
+                    })
+                    .catch(error => {
+                        console.error('❌ Error obteniendo todos los productos:', error);
+                        alert('Error al obtener información de productos. Revisa la consola.');
+                    })
+                    .finally(() => {
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    });
+            };
+            
+            // NUEVA: Función para sincronización completa con limpieza de cache
+            window.forceSyncClean = function() {
+                if (!confirm('¿Estás seguro? Esto limpiará todo el cache y volverá a cargar todos los productos desde cero.')) {
+                    return;
+                }
+                
+                console.log('🧹 Iniciando sincronización completa con limpieza...');
+                
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-hourglass-split"></i> Limpiando...';
+                button.disabled = true;
+                
+                updateSyncStatus('syncing', 'Limpiando cache y sincronizando...');
+                
+                fetch('/debug/force-sync', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('✅ SINCRONIZACIÓN COMPLETA:', data);
+                        
+                        if (data.success) {
+                            alert(`Sincronización completa exitosa!\n\nTotal productos: ${data.result.totalProducts}\nProductos con stock bajo: ${data.result.lowStockProducts}\n\nCache limpiado y datos actualizados.`);
+                            
+                            // Forzar actualización del dashboard
+                            setTimeout(() => loadStatus(true), 1000);
+                        } else {
+                            alert('Error en la sincronización: ' + (data.message || 'Error desconocido'));
+                            updateSyncStatus('error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Error en sincronización:', error);
+                        alert('Error al sincronizar. Revisa la consola.');
+                        updateSyncStatus('error');
+                    })
+                    .finally(() => {
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    });
+            };
+            
+            // NUEVA: Función para eliminar un producto fantasma específico
+            window.removePhantomProduct = function(productId) {
+                if (!confirm(`¿Eliminar el producto fantasma ${productId} del cache?`)) {
+                    return;
+                }
+                
+                console.log(`🔍 Eliminando producto fantasma: ${productId}`);
+                
+                fetch(`/debug/remove-phantom-product/${productId}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('✅ PRODUCTO FANTASMA ELIMINADO:', data);
+                        
+                        if (data.success) {
+                            alert(`Producto fantasma ${productId} eliminado del cache.\n\nResultados:\n- Estaba en tracked: ${data.cleanupResults.wasInTracked}\n- Estaba en state: ${data.cleanupResults.wasInState}\n- Estaba en low stock: ${data.cleanupResults.wasInLowStock}`);
+                            
+                            // Actualizar dashboard
+                            setTimeout(() => loadStatus(true), 500);
+                        } else {
+                            alert('Error eliminando producto fantasma: ' + (data.message || 'Error desconocido'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Error eliminando producto fantasma:', error);
+                        alert('Error al eliminar producto fantasma. Revisa la consola.');
+                    });
+            };
+            
             // Hacer funciones de debug disponibles globalmente
             console.log('🐛 FUNCIONES DE DEBUG DISPONIBLES:');
             console.log('- debugProductDetails(productId): Debug de un producto específico');
             console.log('- debugSystem(): Debug completo del sistema');
+            console.log('- debugAllProducts(): Ver TODOS los productos del usuario');
+            console.log('- forceSyncClean(): Sincronización completa con limpieza');
+            console.log('- removePhantomProduct(productId): Eliminar producto fantasma');
             console.log('- Para usar: debugSystem() o debugProductDetails("MLA1234567890")');
         });
     </script>
