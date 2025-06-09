@@ -17,6 +17,9 @@ class StockMonitor {
     
     // Cache de último estado conocido para consistencia
     this.lastKnownStockState = new Map();
+    
+    // NUEVO: Información del scan por lotes
+    this.lastScanInfo = null;
   }
 
   /**
@@ -107,6 +110,18 @@ class StockMonitor {
       
       const scanResult = await products.getAllProducts();
       const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
+      
+      // NUEVO: Guardar información del scan
+      this.lastScanInfo = {
+        scanCompleted: scanResult.scanCompleted,
+        batchCompleted: scanResult.batchCompleted,
+        hasMoreProducts: scanResult.hasMoreProducts,
+        pagesProcessed: scanResult.pagesProcessed,
+        duplicatesDetected: scanResult.duplicatesDetected,
+        uniqueProducts: scanResult.uniqueProducts,
+        error: scanResult.error,
+        lastUpdate: Date.now()
+      };
       
       // Log información del scan
       if (scanResult.scanCompleted !== undefined) {
@@ -421,7 +436,8 @@ class StockMonitor {
       totalProducts: this.trackedProducts.size,
       threshold: this.stockThreshold,
       checkInterval: this.checkInterval,
-      lowStockProducts: syncedLowStockProducts
+      lowStockProducts: syncedLowStockProducts,
+      scanInfo: this.lastScanInfo // NUEVO: Información del scan por lotes
     };
   }
 

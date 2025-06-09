@@ -228,6 +228,9 @@
                         <button type="button" onclick="forceSyncClean()" class="btn btn-sm btn-outline-danger" title="Limpiar cache y sincronizar">
                             <i class="bi bi-arrow-clockwise"></i> Sync Completo
                         </button>
+                        <button type="button" id="continue-scan-btn" onclick="continueProductScan()" class="btn btn-sm btn-success" title="Obtener siguientes productos" style="display: none;">
+                            <i class="bi bi-plus-circle"></i> <span id="continue-scan-text">Obtener más productos</span>
+                        </button>
                     </div>
                 </div>
 
@@ -259,9 +262,12 @@
                         <div class="card">
                             <div class="card-body">
                                 <h5 class="card-title">Resumen</h5>
-                                <p class="card-text">Total de productos: <span id="total-products">0</span></p>
+                                <p class="card-text">Total de productos: <span id="total-products">0</span> <span id="scan-progress" class="badge bg-info" style="display: none;"></span></p>
                                 <p class="card-text">Productos con stock bajo: <span id="low-stock-products">0</span></p>
                                 <p class="card-text">Próxima verificación automática: <span id="next-auto-check">Al recargar la página</span></p>
+                                <div id="scan-status" class="alert alert-info" style="display: none; margin-top: 10px; padding: 8px;">
+                                    <small><i class="bi bi-info-circle"></i> <span id="scan-status-text"></span></small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -507,6 +513,58 @@
                     document.getElementById('next-auto-check').textContent = 'Al recargar la página o en 15 min';
                 } else {
                     document.getElementById('next-auto-check').textContent = 'Monitoreo inactivo';
+                }
+                
+                // NUEVO: Manejo del botón de continuación del scan
+                updateScanControls(monitoring);
+            }
+            
+            function updateScanControls(monitoring) {
+                const continueBtn = document.getElementById('continue-scan-btn');
+                const scanProgress = document.getElementById('scan-progress');
+                const scanStatus = document.getElementById('scan-status');
+                const scanStatusText = document.getElementById('scan-status-text');
+                
+                // Revisar si hay información del scan por lotes
+                const scanInfo = monitoring.scanInfo || monitoring.batchInfo || null;
+                
+                if (scanInfo) {
+                    // Mostrar información del scan por lotes
+                    const totalProducts = monitoring.totalProducts || 0;
+                    const hasMoreProducts = scanInfo.hasMoreProducts;
+                    const scanCompleted = scanInfo.scanCompleted;
+                    
+                    if (hasMoreProducts && !scanCompleted) {
+                        // Hay más productos disponibles - mostrar botón
+                        continueBtn.style.display = 'inline-block';
+                        scanProgress.style.display = 'inline';
+                        scanProgress.textContent = `Lote parcial (${totalProducts}/~2908)`;
+                        scanProgress.className = 'badge bg-warning';
+                        
+                        scanStatus.style.display = 'block';
+                        scanStatusText.textContent = `Tienes ${totalProducts} productos cargados de ~2908 totales. Haz clic en "Obtener más productos" para continuar.`;
+                        scanStatus.className = 'alert alert-warning';
+                    } else if (scanCompleted) {
+                        // Scan completado - ocultar botón
+                        continueBtn.style.display = 'none';
+                        scanProgress.style.display = 'inline';
+                        scanProgress.textContent = 'Scan completo';
+                        scanProgress.className = 'badge bg-success';
+                        
+                        scanStatus.style.display = 'block';
+                        scanStatusText.textContent = `Scan completo: ${totalProducts} productos cargados.`;
+                        scanStatus.className = 'alert alert-success';
+                    } else {
+                        // Estado intermedio
+                        continueBtn.style.display = 'none';
+                        scanProgress.style.display = 'none';
+                        scanStatus.style.display = 'none';
+                    }
+                } else {
+                    // Sin información de scan - ocultar controles
+                    continueBtn.style.display = 'none';
+                    scanProgress.style.display = 'none';
+                    scanStatus.style.display = 'none';
                 }
             }
             
@@ -846,6 +904,53 @@
                     .catch(error => {
                         console.error('❌ Error eliminando producto fantasma:', error);
                         alert('Error al eliminar producto fantasma. Revisa la consola.');
+                    });
+            };
+            
+            // NUEVA: Función para continuar el scan de productos
+            window.continueProductScan = function() {
+                console.log('🔄 Continuando scan de productos...');
+                
+                const button = document.getElementById('continue-scan-btn');
+                const buttonText = document.getElementById('continue-scan-text');
+                const originalText = buttonText.innerHTML;
+                
+                buttonText.innerHTML = 'Obteniendo...';
+                button.disabled = true;
+                
+                updateSyncStatus('syncing', 'Obteniendo más productos...');
+                
+                fetch('/api/products/continue-scan', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('✅ CONTINUACIÓN DE SCAN:', data);
+                        
+                        if (data.success) {
+                            const result = data.scanResult;
+                            const newProductsCount = result.total;
+                            
+                            alert(`¡Scan continuado exitosamente!\n\n` +
+                                  `${newProductsCount} productos adicionales obtenidos\n` +
+                                  `Scan completado: ${result.scanCompleted ? 'SÍ' : 'NO'}\n` +
+                                  `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
+                            
+                            // Actualizar el dashboard inmediatamente
+                            setTimeout(() => loadStatus(true), 1000);
+                            
+                            updateSyncStatus('success', `${newProductsCount} productos adicionales obtenidos`);
+                        } else {
+                            alert('Error continuando scan: ' + (data.message || 'Error desconocido'));
+                            updateSyncStatus('error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Error continuando scan:', error);
+                        alert('Error al continuar scan. Revisa la consola.');
+                        updateSyncStatus('error');
+                    })
+                    .finally(() => {
+                        buttonText.innerHTML = originalText;
+                        button.disabled = false;
                     });
             };
             
