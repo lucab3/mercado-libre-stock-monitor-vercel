@@ -219,6 +219,9 @@
                         <button type="button" id="refresh-status" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-arrow-repeat"></i> Actualizar estado
                         </button>
+                        <button type="button" onclick="debugSystem()" class="btn btn-sm btn-outline-warning" title="Debug completo del sistema">
+                            <i class="bi bi-bug"></i> Debug Sistema
+                        </button>
                     </div>
                 </div>
 
@@ -265,6 +268,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Producto</th>
+                                <th>SKU</th>
                                 <th>Stock</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
@@ -272,7 +276,7 @@
                         </thead>
                         <tbody id="low-stock-table">
                             <tr>
-                                <td colspan="5" class="text-center">Cargando información...</td>
+                                <td colspan="6" class="text-center">Cargando información...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -503,7 +507,7 @@
                 const tableBody = document.getElementById('low-stock-table');
                 
                 if (!lowStockProducts || lowStockProducts.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
                     return;
                 }
                 
@@ -515,8 +519,17 @@
                     const statusText = product.stock === 0 ? 'Sin stock' : 'Stock bajo';
                     const trendIcon = product.stock === 0 ? '🔴' : product.stock <= 2 ? '⚠️' : '📦';
                     
-                    // NUEVO: Generar enlace a ML (si no tiene permalink, usar un formato genérico)
-                    const mlLink = product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`;
+                    // CORREGIDO: Usar productUrl validado del backend que incluye permalink real
+                    const mlLink = product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`;
+                    
+                    // Debug de enlaces para verificar que están correctos
+                    console.log(`🔗 Producto ${product.id}: URL = ${mlLink}`);
+                    if (product.permalink && product.productUrl && product.permalink !== product.productUrl) {
+                        console.warn(`⚠️ Diferencia en enlaces para ${product.id}:`, {
+                            permalink: product.permalink,
+                            productUrl: product.productUrl
+                        });
+                    }
                     
                     return `
                         <tr>
@@ -528,10 +541,21 @@
                                     ${product.id}
                                     <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem;"></i>
                                 </a>
+                                <div class="product-meta" style="font-size: 0.6rem; color: #888;">
+                                    ${product.permalink ? 'Permalink real' : 'URL generada'}
+                                    <button class="btn btn-xs btn-outline-secondary" onclick="debugProductDetails('${product.id}')" style="font-size: 0.5rem; padding: 1px 3px; margin-left: 5px;" title="Debug detalles">
+                                        <i class="bi bi-bug"></i>
+                                    </button>
+                                </div>
                             </td>
                             <td class="product-title-container">
                                 <div class="product-title">${trendIcon} ${product.title}</div>
                                 <div class="product-meta">Actualizado: ${new Date().toLocaleTimeString()}</div>
+                            </td>
+                            <td>
+                                <span class="badge ${product.seller_sku ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.75rem;">
+                                    ${product.seller_sku || 'Sin SKU'}
+                                </span>
                             </td>
                             <td>
                                 <span class="badge ${statusClass}">
@@ -554,6 +578,9 @@
                                        title="Ver en MercadoLibre">
                                         <i class="bi bi-shop"></i> ML
                                     </a>
+                                    <button class="btn btn-sm btn-outline-info" onclick="debugProduct('${product.id}')" title="Ver datos de debug">
+                                        <i class="bi bi-bug"></i> Debug
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -580,10 +607,11 @@
                             const stockStatus = data.available_quantity === 0 ? 'Sin stock' : 
                                               data.has_low_stock ? 'Stock bajo' : 'Stock suficiente';
                             
-                            // NUEVO: Incluir enlace en el alert
-                            const mlLink = data.permalink || `https://articulo.mercadolibre.com.ar/${data.id}`;
+                            // NUEVO: Incluir enlace y SKU en el alert
+                            const mlLink = data.productUrl || data.permalink || `https://articulo.mercadolibre.com.ar/${data.id}`;
+                            const skuInfo = data.seller_sku ? `\nSKU: ${data.seller_sku}` : '\nSKU: Sin SKU';
                             
-                            alert(`Producto: ${data.title}\nStock actual: ${data.available_quantity} unidades\nEstado: ${stockStatus}\nÚltima actualización: ${new Date(data.last_updated).toLocaleString()}\n\n🔗 Ver en ML: ${mlLink}`);
+                            alert(`Producto: ${data.title}${skuInfo}\nStock actual: ${data.available_quantity} unidades\nEstado: ${stockStatus}\nÚltima actualización: ${new Date(data.last_updated).toLocaleString()}\n\n🔗 Ver en ML: ${mlLink}`);
                             
                             // Recargar estado después de verificación individual
                             setTimeout(() => loadStatus(true), 500);
@@ -599,6 +627,62 @@
                         button.disabled = false;
                     });
             };
+            
+            // NUEVA: Función global para debuggear detalles específicos de un producto
+            window.debugProductDetails = function(productId) {
+                console.log('🐛 DEBUGGING DETALLES DE PRODUCTO:', productId);
+                
+                // Buscar el producto en los datos actuales
+                const product = lastKnownState?.lowStockProducts?.find(p => p.id === productId);
+                if (product) {
+                    console.log('📦 DATOS DEL PRODUCTO EN DASHBOARD:', {
+                        id: product.id,
+                        title: product.title,
+                        stock: product.stock,
+                        seller_sku: product.seller_sku,
+                        permalink: product.permalink,
+                        productUrl: product.productUrl,
+                        linksMatch: product.permalink === product.productUrl
+                    });
+                    
+                    // Mostrar alert con información de debug
+                    const skuInfo = product.seller_sku ? `\nSKU: ${product.seller_sku}` : '\nSKU: Sin SKU';
+                    const linkInfo = `\nPermalink: ${product.permalink || 'No disponible'}\nProductURL: ${product.productUrl || 'No disponible'}`;
+                    const matchInfo = product.permalink && product.productUrl ? `\nEnlaces coinciden: ${product.permalink === product.productUrl ? 'SÍ' : 'NO'}` : '';
+                    
+                    alert(`DEBUG PRODUCTO ${productId}:\n\nTítulo: ${product.title}${skuInfo}\nStock: ${product.stock}${linkInfo}${matchInfo}`);
+                } else {
+                    alert(`No se encontraron datos para el producto ${productId} en el estado actual del dashboard`);
+                }
+            };
+            
+            // NUEVA: Función global para debug completo del sistema
+            window.debugSystem = function() {
+                console.log('🔧 DEBUGGING COMPLETO DEL SISTEMA:');
+                console.log('Estado actual:', lastKnownState);
+                console.log('Productos con stock bajo:', lastKnownState?.lowStockProducts);
+                
+                if (lastKnownState?.lowStockProducts) {
+                    lastKnownState.lowStockProducts.forEach(product => {
+                        console.log(`📦 ${product.id}:`, {
+                            title: product.title,
+                            stock: product.stock,
+                            seller_sku: product.seller_sku,
+                            permalink: product.permalink,
+                            productUrl: product.productUrl,
+                            linksMatch: product.permalink === product.productUrl
+                        });
+                    });
+                }
+                
+                alert('Debug completo enviado a la consola del navegador. Abre Developer Tools > Console para ver los detalles.');
+            };
+            
+            // Hacer funciones de debug disponibles globalmente
+            console.log('🐛 FUNCIONES DE DEBUG DISPONIBLES:');
+            console.log('- debugProductDetails(productId): Debug de un producto específico');
+            console.log('- debugSystem(): Debug completo del sistema');
+            console.log('- Para usar: debugSystem() o debugProductDetails("MLA1234567890")');
         });
     </script>
 </body>

@@ -378,7 +378,7 @@ class StockMonitor {
         stock: p.stock,
         permalink: p.permalink,
         seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
-        productUrl: p.productUrl || products.generateProductUrl(p.id)
+        productUrl: p.productUrl || this.generateProductUrl(p.id)
       };
     });
     
@@ -435,6 +435,32 @@ class StockMonitor {
     logger.info(`📊 Calidad de datos:`);
     logger.info(`   Con Permalink: ${withPermalink}/${total} (${Math.round(withPermalink/total*100)}%)`);
     logger.info(`   Con SKU: ${withSKU}/${total} (${Math.round(withSKU/total*100)}%)`);
+  }
+
+  /**
+   * NUEVO: Genera URL de producto correcta basada en ID
+   */
+  generateProductUrl(productId) {
+    if (!productId) {
+      return 'https://mercadolibre.com.ar';
+    }
+
+    // Extraer código de país y número de producto
+    const countryCode = productId.substring(0, 3);
+    const productNumber = productId.substring(3); // Todo después de MLA/MLM etc.
+    
+    const countryDomains = {
+      'MLA': 'com.ar',
+      'MLM': 'com.mx', 
+      'MLB': 'com.br',
+      'MLC': 'cl',
+      'MCO': 'com.co'
+    };
+    
+    const domain = countryDomains[countryCode] || 'com.ar';
+    
+    // CORREGIDO: Formato correcto de URL con guión
+    return `https://articulo.mercadolibre.${domain}/${countryCode}-${productNumber}`;
   }
 
   /**
