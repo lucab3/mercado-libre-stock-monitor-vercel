@@ -436,7 +436,7 @@ app.get('/debug/all-products', async (req, res) => {
     
     // Estadísticas
     const stats = {
-      totalIdsFound: allProductIds.length, // Total de productos únicos obtenidos
+      totalIdsFound: allProductIds.length, // Total de productos únicos obtenidos en este lote
       sampleAnalyzed: sampleSize, // Muestra analizada para detalles
       successfullyLoaded: allProductDetails.length,
       errorProducts: errorProducts.length,
@@ -444,13 +444,16 @@ app.get('/debug/all-products', async (req, res) => {
       byLinkType: {},
       withSKU: allProductDetails.filter(p => p.seller_sku).length,
       withoutSKU: allProductDetails.filter(p => !p.seller_sku).length,
-      scanMethod: true, // Indica que usamos el método scan
+      scanMethod: 'batch', // Indica que usamos el método scan por lotes
       scanCompleted: scanResult.scanCompleted !== undefined ? scanResult.scanCompleted : null,
+      batchCompleted: scanResult.batchCompleted !== undefined ? scanResult.batchCompleted : null,
+      hasMoreProducts: scanResult.hasMoreProducts !== undefined ? scanResult.hasMoreProducts : null,
       pagesProcessed: scanResult.pagesProcessed || null,
       duplicatesDetected: scanResult.duplicatesDetected || null,
       uniqueProducts: scanResult.uniqueProducts || allProductIds.length,
       scanError: scanResult.error || null,
-      expectedTotal: '~2908' // Tu total real en MercadoLibre
+      expectedTotal: '~2908', // Tu total real en MercadoLibre
+      continueEndpoint: scanResult.hasMoreProducts ? '/api/products/continue-scan' : null
     };
     
     // Estadísticas por estado
@@ -476,6 +479,35 @@ app.get('/debug/all-products', async (req, res) => {
     logger.error(`Error en debug de todos los productos: ${error.message}`);
     res.status(500).json({ 
       error: 'Error al obtener todos los productos',
+      message: error.message 
+    });
+  }
+});
+
+// NUEVO: API para continuar scan por lotes
+app.post('/api/products/continue-scan', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const products = require('./api/products');
+    
+    logger.info('🔄 API: Continuando scan de productos...');
+    
+    const result = await products.continueProductScan();
+    
+    res.json({
+      success: true,
+      message: `Scan continuado: ${result.total} productos adicionales obtenidos`,
+      scanResult: result,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`Error continuando scan: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error continuando scan',
       message: error.message 
     });
   }

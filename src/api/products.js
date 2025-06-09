@@ -106,29 +106,38 @@ class ProductsService {
       const stats = mlApiClient.getRateLimitStats();
       logger.info(`📊 Rate Limit Status: ${stats.currentRequests}/${stats.maxRequests} (${stats.utilizationPercent}%)`);
       
-      // CORREGIDO: Usar el método scan para obtener TODOS los productos (sin filtro de status)
+      // CORREGIDO: Usar el método scan por lotes para obtener productos (compatible con Vercel serverless)
       const response = await mlApiClient.getAllUserProducts(user.id, {
         limit: 100, // Máximo para scan según ML API
-        maxProducts: 5000 // Aumentado para obtener todos los ~2908 productos
+        maxProductsPerBatch: 1000, // Límite por lote para evitar timeout
+        continueFromCache: false, // Primera llamada
+        sessionId: user.id // Usar user ID como session ID
       });
       
       const allProductIds = response.results || [];
       
-      logger.info(`✅ Total IDs únicos de productos obtenidos con scan: ${allProductIds.length}`);
-      logger.info(`📊 Scan completado: ${response.scanCompleted ? 'SÍ' : 'NO'} (${response.pagesProcessed} páginas)`);
+      logger.info(`✅ Total IDs únicos de productos obtenidos en este lote: ${allProductIds.length}`);
+      logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'} (${response.pagesProcessed} páginas)`);
       logger.info(`🔢 Duplicados detectados: ${response.duplicatesDetected || 0}`);
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
       
-      // Log adicional si el scan no se completó
-      if (!response.scanCompleted) {
-        logger.warn(`⚠️ Scan parcial: se obtuvieron ${allProductIds.length} productos únicos de los ~2908 totales`);
-        logger.warn(`🔧 Para obtener más productos, considera aumentar maxProducts en el código`);
+      // Log información sobre continuación
+      if (response.hasMoreProducts) {
+        logger.info(`🔄 Hay más productos disponibles. Usa el endpoint de continuación para obtener el resto.`);
+        logger.info(`💾 Estado guardado para continuar desde ${allProductIds.length} productos`);
       }
       
-      // CORREGIDO: Retornar objeto completo con información del scan
+      if (!response.scanCompleted) {
+        logger.warn(`⚠️ Scan por lotes: se obtuvieron ${allProductIds.length} productos de los ~2908 totales`);
+        logger.info(`🔧 Para obtener más productos, usa el endpoint de continuación`);
+      }
+      
+      // CORREGIDO: Retornar objeto completo con información del scan por lotes
       return {
         results: allProductIds,
         scanCompleted: response.scanCompleted,
+        batchCompleted: response.batchCompleted,
+        hasMoreProducts: response.hasMoreProducts,
         pagesProcessed: response.pagesProcessed,
         duplicatesDetected: response.duplicatesDetected,
         uniqueProducts: response.uniqueProducts,
@@ -138,6 +147,60 @@ class ProductsService {
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * NUEVO: Continuar scan desde donde se quedó (para obtener todos los productos)
+   */
+  async continueProductScan() {
+    if (this.mockMode) {
+      logger.info('🎭 En modo MOCK - scan ya está completo');
+      return {
+        results: [],
+        scanCompleted: true,
+        batchCompleted: true,
+        hasMoreProducts: false,
+        total: 0,
+        message: 'Modo mock - no hay más productos'
+      };
+    }
+
+    try {
+      await this.ensureAuthentication();
+
+      const user = await mlApiClient.getUser();
+      logger.info(`🔄 Continuando scan para usuario: ${user.nickname} (${user.id})`);
+      
+      // Continuar desde cache
+      const response = await mlApiClient.getAllUserProducts(user.id, {
+        limit: 100,
+        maxProductsPerBatch: 1000,
+        continueFromCache: true, // Continuar desde donde se quedó
+        sessionId: user.id
+      });
+      
+      const newProductIds = response.results || [];
+      
+      logger.info(`✅ Continuación completada: ${newProductIds.length} productos adicionales obtenidos`);
+      logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'}`);
+      logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
+      
+      return {
+        results: newProductIds,
+        scanCompleted: response.scanCompleted,
+        batchCompleted: response.batchCompleted,
+        hasMoreProducts: response.hasMoreProducts,
+        pagesProcessed: response.pagesProcessed,
+        duplicatesDetected: response.duplicatesDetected,
+        uniqueProducts: response.uniqueProducts,
+        error: response.error,
+        total: newProductIds.length
+      };
+      
+    } catch (error) {
+      logger.error(`❌ Error continuando scan: ${error.message}`);
       throw error;
     }
   }

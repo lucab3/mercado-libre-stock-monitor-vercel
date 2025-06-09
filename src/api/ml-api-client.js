@@ -129,19 +129,42 @@ class MLAPIClient {
   }
 
   /**
-   * CORREGIDO: Obtener TODOS los productos del usuario usando scan (para más de 1000 items)
-   * Implementa correctamente la paginación con scroll_id según documentación ML
+   * CORREGIDO: Obtener productos del usuario usando scan por lotes (compatible con Vercel serverless)
+   * Implementa scan progresivo para evitar timeouts
    */
   async getAllUserProducts(userId, options = {}) {
-    const { limit = 100, maxProducts = 5000 } = options; // Aumentado para obtener todos los ~2908 productos
-    let scrollId = null;
-    const allProducts = [];
-    const seenProductIds = new Set(); // Para detectar y evitar duplicados
-    let pageCount = 0;
-    const maxPages = Math.ceil(maxProducts / limit); // Límite de páginas para evitar timeout en Vercel
-    let duplicatesDetected = 0;
+    const { 
+      limit = 100, 
+      maxProductsPerBatch = 1000, // Límite por lote para evitar timeout
+      continueFromCache = false,
+      sessionId = null
+    } = options;
     
-    logger.info(`🔍 Obteniendo TODOS los productos del usuario ${userId} usando scan (máximo ${maxProducts})...`);
+    const scanCache = require('../utils/scanCache');
+    let scrollId = null;
+    let allProducts = [];
+    let seenProductIds = new Set();
+    let pageCount = 0;
+    let duplicatesDetected = 0;
+    let totalProcessed = 0;
+    
+    // Intentar continuar desde cache si se solicita
+    if (continueFromCache && sessionId) {
+      const cachedState = scanCache.getScanState(userId, sessionId);
+      if (cachedState) {
+        scrollId = cachedState.scrollId;
+        allProducts = cachedState.products || [];
+        seenProductIds = new Set(cachedState.seenIds || []);
+        pageCount = cachedState.pageCount || 0;
+        duplicatesDetected = cachedState.duplicatesDetected || 0;
+        totalProcessed = allProducts.length;
+        
+        logger.info(`🔄 Continuando scan desde cache: ${allProducts.length} productos ya obtenidos, página ${pageCount}`);
+      }
+    }
+    
+    const maxPages = Math.ceil(maxProductsPerBatch / limit); // Límite de páginas por lote
+    logger.info(`🔍 Scan por lotes: máximo ${maxProductsPerBatch} productos por lote (${maxPages} páginas)`);
     
     try {
       while (pageCount < maxPages) {
@@ -234,21 +257,45 @@ class MLAPIClient {
         await new Promise(resolve => setTimeout(resolve, pauseTime));
       }
       
+      const batchCompleted = pageCount < maxPages;
+      const hasMoreProducts = !!scrollId; // Si hay scroll_id, hay más productos
+      
       if (pageCount >= maxPages) {
-        logger.warn(`⚠️ Alcanzado límite máximo de páginas (${maxPages}) para evitar timeout en Vercel`);
-        logger.warn(`📊 Productos obtenidos: ${allProducts.length} de aproximadamente ${maxProducts}+ totales`);
+        logger.warn(`⚠️ Alcanzado límite de lote (${maxPages} páginas) para evitar timeout en Vercel`);
+        logger.info(`📊 Productos obtenidos en este lote: ${allProducts.length - totalProcessed}`);
+        
+        // Guardar estado en cache para continuar después
+        if (sessionId && hasMoreProducts) {
+          scanCache.setScanState(userId, sessionId, {
+            scrollId: scrollId,
+            products: allProducts,
+            seenIds: Array.from(seenProductIds),
+            pageCount: pageCount,
+            duplicatesDetected: duplicatesDetected,
+            batchNumber: Math.floor(allProducts.length / maxProductsPerBatch) + 1
+          });
+          logger.info(`💾 Estado guardado en cache para continuar después`);
+        }
+      } else {
+        // Scan completado, limpiar cache
+        if (sessionId) {
+          scanCache.clearScanState(userId, sessionId);
+        }
       }
       
-      logger.info(`✅ Scan completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
+      logger.info(`✅ Lote completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
       logger.info(`🔢 Estadísticas: ${duplicatesDetected} productos duplicados detectados y filtrados`);
       
       return {
         results: allProducts,
         total: allProducts.length,
-        scanCompleted: pageCount < maxPages, // Indica si el scan se completó totalmente
+        scanCompleted: batchCompleted && !hasMoreProducts, // Verdadero si no hay más productos
+        batchCompleted: batchCompleted,
+        hasMoreProducts: hasMoreProducts,
         pagesProcessed: pageCount,
         duplicatesDetected: duplicatesDetected,
         uniqueProducts: allProducts.length,
+        scrollId: scrollId, // Para debug
         paging: {
           total: allProducts.length,
           offset: 0,
@@ -265,10 +312,13 @@ class MLAPIClient {
         results: allProducts,
         total: allProducts.length,
         scanCompleted: false,
+        batchCompleted: false,
+        hasMoreProducts: !!scrollId,
         pagesProcessed: pageCount,
         duplicatesDetected: duplicatesDetected,
         uniqueProducts: allProducts.length,
         error: error.message,
+        scrollId: scrollId,
         paging: {
           total: allProducts.length,
           offset: 0,
