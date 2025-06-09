@@ -436,8 +436,8 @@ app.get('/debug/all-products', async (req, res) => {
     
     // Estadísticas
     const stats = {
-      totalIdsFound: allProductIds.length, // Ahora incluye TODOS los productos
-      sampleAnalyzed: sampleSize, // Muestra analizada
+      totalIdsFound: allProductIds.length, // Total de productos únicos obtenidos
+      sampleAnalyzed: sampleSize, // Muestra analizada para detalles
       successfullyLoaded: allProductDetails.length,
       errorProducts: errorProducts.length,
       byStatus: {},
@@ -447,7 +447,10 @@ app.get('/debug/all-products', async (req, res) => {
       scanMethod: true, // Indica que usamos el método scan
       scanCompleted: scanResult.scanCompleted !== undefined ? scanResult.scanCompleted : null,
       pagesProcessed: scanResult.pagesProcessed || null,
-      scanError: scanResult.error || null
+      duplicatesDetected: scanResult.duplicatesDetected || null,
+      uniqueProducts: scanResult.uniqueProducts || allProductIds.length,
+      scanError: scanResult.error || null,
+      expectedTotal: '~2908' // Tu total real en MercadoLibre
     };
     
     // Estadísticas por estado

@@ -70,10 +70,29 @@ class ProductsService {
       logger.info('🎭 Obteniendo productos en modo MOCK');
       try {
         const response = await this.mockAPI.getUserProducts('mock_user');
-        return response.results || [];
+        const allProductIds = response.results || [];
+        
+        // Retornar formato consistente con modo real
+        return {
+          results: allProductIds,
+          scanCompleted: true, // En mock siempre está "completo"
+          pagesProcessed: 1,
+          duplicatesDetected: 0,
+          uniqueProducts: allProductIds.length,
+          error: null,
+          total: allProductIds.length
+        };
       } catch (error) {
         logger.error(`❌ Error en modo mock: ${error.message}`);
-        return [];
+        return {
+          results: [],
+          scanCompleted: false,
+          pagesProcessed: 0,
+          duplicatesDetected: 0,
+          uniqueProducts: 0,
+          error: error.message,
+          total: 0
+        };
       }
     }
 

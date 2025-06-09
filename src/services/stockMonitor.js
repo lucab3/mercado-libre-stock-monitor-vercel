@@ -105,7 +105,19 @@ class StockMonitor {
     try {
       logger.info('Actualizando lista de productos...');
       
-      const productIds = await products.getAllProducts();
+      const scanResult = await products.getAllProducts();
+      const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
+      
+      // Log información del scan
+      if (scanResult.scanCompleted !== undefined) {
+        logger.info(`📊 Scan completado: ${scanResult.scanCompleted ? 'SÍ' : 'NO'} (${scanResult.pagesProcessed || 0} páginas)`);
+        if (scanResult.duplicatesDetected > 0) {
+          logger.info(`🔢 Duplicados filtrados: ${scanResult.duplicatesDetected}`);
+        }
+        if (!scanResult.scanCompleted) {
+          logger.warn(`⚠️ Scan parcial: procesando ${productIds.length} productos de los ~2908 totales`);
+        }
+      }
       
       if (productIds.length === 0) {
         logger.info('No se encontraron productos para monitorear');
@@ -114,7 +126,7 @@ class StockMonitor {
         return;
       }
       
-      logger.info(`📋 Procesando ${productIds.length} productos...`);
+      logger.info(`📋 Procesando ${productIds.length} productos únicos...`);
       
       // MEJORADO: Obtener todos los detalles con validación completa
       const productDetails = [];
