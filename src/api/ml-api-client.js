@@ -129,6 +129,83 @@ class MLAPIClient {
   }
 
   /**
+   * NUEVO: Obtener TODOS los productos del usuario usando scan (para más de 1000 items)
+   */
+  async getAllUserProducts(userId, options = {}) {
+    const { limit = 100 } = options; // Máximo 100 para scan
+    let scrollId = null;
+    const allProducts = [];
+    
+    logger.info(`🔍 Obteniendo TODOS los productos del usuario ${userId} usando scan...`);
+    
+    try {
+      while (true) {
+        const params = {
+          search_type: 'scan',
+          limit
+        };
+        
+        // Si tenemos scroll_id, usarlo en lugar de search_type
+        if (scrollId) {
+          delete params.search_type;
+          params.scroll_id = scrollId;
+        }
+        
+        logger.info(`📦 Obteniendo lote con ${scrollId ? 'scroll_id' : 'search_type=scan'}...`);
+        
+        let response;
+        if (rateLimiter.isNearLimit()) {
+          logger.warn('⚠️ Cerca del rate limit - usando cola de requests');
+          response = await rateLimiter.queueRequest(
+            () => this.get(`/users/${userId}/items/search`, { params })
+          );
+        } else {
+          response = await this.get(`/users/${userId}/items/search`, { params });
+        }
+        
+        if (!response.results || response.results.length === 0) {
+          logger.info('📦 No hay más productos para obtener');
+          break;
+        }
+        
+        allProducts.push(...response.results);
+        logger.info(`📦 Obtenidos ${allProducts.length} productos hasta ahora...`);
+        
+        // Obtener scroll_id para la siguiente página
+        scrollId = response.scroll_id;
+        
+        // Si no hay scroll_id, hemos terminado
+        if (!scrollId) {
+          logger.info('📦 No hay más páginas (sin scroll_id)');
+          break;
+        }
+        
+        // Pausa entre requests para rate limiting
+        if (rateLimiter.isNearLimit()) {
+          logger.info('⏳ Pausando entre lotes para evitar rate limit');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      logger.info(`✅ Total de productos obtenidos con scan: ${allProducts.length}`);
+      
+      return {
+        results: allProducts,
+        total: allProducts.length,
+        paging: {
+          total: allProducts.length,
+          offset: 0,
+          limit: allProducts.length
+        }
+      };
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos con scan: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Obtener detalles de un producto
    */
   async getProduct(productId) {

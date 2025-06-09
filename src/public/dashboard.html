@@ -724,8 +724,11 @@
                         
                         // Mostrar resumen
                         const summary = data.summary;
-                        let summaryText = `RESUMEN DE PRODUCTOS:\n\n`;
+                        let summaryText = `RESUMEN DE PRODUCTOS ${summary.scanMethod ? '(MÉTODO SCAN)' : ''}:\n\n`;
                         summaryText += `📋 Total de IDs encontrados: ${summary.totalIdsFound}\n`;
+                        if (summary.sampleAnalyzed) {
+                            summaryText += `🔍 Muestra analizada: ${summary.sampleAnalyzed} de ${summary.totalIdsFound}\n`;
+                        }
                         summaryText += `✅ Cargados exitosamente: ${summary.successfullyLoaded}\n`;
                         summaryText += `❌ Errores: ${summary.errorProducts}\n`;
                         summaryText += `🏷️ Con SKU: ${summary.withSKU}\n`;

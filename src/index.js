@@ -375,21 +375,26 @@ app.get('/debug/all-products', async (req, res) => {
     
     logger.info('🔍 Obteniendo TODOS los productos del usuario...');
     
-    // Obtener lista completa de IDs
+    // Obtener lista completa de IDs usando scan (TODOS los productos)
     const allProductIds = await products.getAllProducts();
     
-    logger.info(`📋 Total de IDs obtenidos: ${allProductIds.length}`);
+    logger.info(`📋 Total de IDs obtenidos con scan: ${allProductIds.length}`);
     
-    // Obtener detalles de todos los productos (no solo muestra)
+    // Obtener detalles de los primeros 50 productos para análisis rápido
+    // (para 2908 productos sería demasiado lento obtener todos los detalles)
+    const sampleSize = Math.min(50, allProductIds.length);
+    const sampleIds = allProductIds.slice(0, sampleSize);
     const allProductDetails = [];
     const errorProducts = [];
     
-    // Procesar en lotes para evitar rate limit
+    logger.info(`📊 Analizando muestra de ${sampleSize} productos de ${allProductIds.length} total`);
+    
+    // Procesar muestra en lotes para evitar rate limit
     const batchSize = 10;
-    for (let i = 0; i < allProductIds.length; i += batchSize) {
-      const batch = allProductIds.slice(i, i + batchSize);
+    for (let i = 0; i < sampleIds.length; i += batchSize) {
+      const batch = sampleIds.slice(i, i + batchSize);
       
-      logger.info(`📦 Procesando lote ${Math.floor(i/batchSize) + 1}/${Math.ceil(allProductIds.length/batchSize)}: ${batch.length} productos`);
+      logger.info(`📦 Procesando lote ${Math.floor(i/batchSize) + 1}/${Math.ceil(sampleIds.length/batchSize)}: ${batch.length} productos`);
       
       for (const id of batch) {
         try {
@@ -418,20 +423,22 @@ app.get('/debug/all-products', async (req, res) => {
       }
       
       // Pausa entre lotes
-      if (i + batchSize < allProductIds.length) {
+      if (i + batchSize < sampleIds.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
     // Estadísticas
     const stats = {
-      totalIdsFound: allProductIds.length,
+      totalIdsFound: allProductIds.length, // Ahora incluye TODOS los productos
+      sampleAnalyzed: sampleSize, // Muestra analizada
       successfullyLoaded: allProductDetails.length,
       errorProducts: errorProducts.length,
       byStatus: {},
       byLinkType: {},
       withSKU: allProductDetails.filter(p => p.seller_sku).length,
-      withoutSKU: allProductDetails.filter(p => !p.seller_sku).length
+      withoutSKU: allProductDetails.filter(p => !p.seller_sku).length,
+      scanMethod: true // Indica que usamos el método scan
     };
     
     // Estadísticas por estado

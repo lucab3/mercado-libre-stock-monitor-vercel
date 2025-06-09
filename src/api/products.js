@@ -63,7 +63,7 @@ class ProductsService {
   }
 
   /**
-   * CORREGIDO: Obtiene todos los productos del usuario con validación de datos
+   * CORREGIDO: Obtiene TODOS los productos del usuario (activos, pausados, cerrados) usando scan
    */
   async getAllProducts() {
     if (this.mockMode) {
@@ -81,47 +81,22 @@ class ProductsService {
       await this.ensureAuthentication();
 
       const user = await mlApiClient.getUser();
-      logger.info(`👤 Obteniendo productos para usuario: ${user.nickname} (${user.id})`);
-      
-      const allProductIds = [];
-      let offset = 0;
-      const limit = 50;
+      logger.info(`👤 Obteniendo TODOS los productos para usuario: ${user.nickname} (${user.id})`);
       
       // Verificar rate limit antes de comenzar
       const stats = mlApiClient.getRateLimitStats();
       logger.info(`📊 Rate Limit Status: ${stats.currentRequests}/${stats.maxRequests} (${stats.utilizationPercent}%)`);
       
-      while (true) {
-        // Obtener lote de IDs de productos
-        const response = await mlApiClient.getUserProducts(user.id, {
-          offset,
-          limit,
-          status: 'active'
-        });
-        
-        if (!response.results || response.results.length === 0) {
-          logger.info('📦 No hay más productos para obtener');
-          break;
-        }
-        
-        allProductIds.push(...response.results);
-        logger.info(`📦 Obtenidos ${allProductIds.length}/${response.paging.total} IDs de productos`);
-        
-        // Si obtuvimos menos productos de los solicitados, es el último lote
-        if (response.results.length < limit) {
-          break;
-        }
-        
-        offset += limit;
-        
-        // Pausa entre lotes si estamos cerca del rate limit
-        if (mlApiClient.isNearRateLimit()) {
-          logger.info('⏳ Pausando entre lotes para evitar rate limit');
-          await mlApiClient.pauseRequests(2);
-        }
-      }
+      // NUEVO: Usar el método scan para obtener TODOS los productos (sin filtro de status)
+      const response = await mlApiClient.getAllUserProducts(user.id, {
+        limit: 100 // Máximo para scan
+      });
       
-      logger.info(`✅ Total IDs de productos obtenidos: ${allProductIds.length}`);
+      const allProductIds = response.results || [];
+      
+      logger.info(`✅ Total IDs de productos obtenidos con scan: ${allProductIds.length}`);
+      logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
+      
       return allProductIds;
       
     } catch (error) {
