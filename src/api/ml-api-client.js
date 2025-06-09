@@ -149,22 +149,29 @@ class MLAPIClient {
     let totalProcessed = 0;
     
     // Intentar continuar desde cache si se solicita
+    let previousProductsCount = 0;
+    let totalPagesProcessed = 0;
+    
     if (continueFromCache && sessionId) {
       const cachedState = scanCache.getScanState(userId, sessionId);
       if (cachedState) {
         scrollId = cachedState.scrollId;
         allProducts = cachedState.products || [];
         seenProductIds = new Set(cachedState.seenIds || []);
-        pageCount = cachedState.pageCount || 0;
         duplicatesDetected = cachedState.duplicatesDetected || 0;
-        totalProcessed = allProducts.length;
+        totalPagesProcessed = cachedState.pageCount || 0;
+        previousProductsCount = allProducts.length;
         
-        logger.info(`🔄 Continuando scan desde cache: ${allProducts.length} productos ya obtenidos, página ${pageCount}`);
+        // CORREGIDO: Resetear pageCount para el nuevo lote, pero mantener totalPagesProcessed
+        pageCount = 0; // Empezar nuevo lote desde 0
+        
+        logger.info(`🔄 Continuando scan desde cache: ${previousProductsCount} productos ya obtenidos, páginas totales procesadas: ${totalPagesProcessed}`);
+        logger.info(`🔄 Iniciando nuevo lote desde scroll_id: ${scrollId ? scrollId.substring(0, 30) + '...' : 'NO_SCROLL_ID'}`);
       }
     }
     
-    const maxPages = Math.ceil(maxProductsPerBatch / limit); // Límite de páginas por lote
-    logger.info(`🔍 Scan por lotes: máximo ${maxProductsPerBatch} productos por lote (${maxPages} páginas)`);
+    const maxPages = Math.ceil(maxProductsPerBatch / limit); // Límite de páginas por lote ACTUAL
+    logger.info(`🔍 Scan por lotes: máximo ${maxProductsPerBatch} productos por lote (${maxPages} páginas en este lote)`);
     
     try {
       while (pageCount < maxPages) {
@@ -262,19 +269,20 @@ class MLAPIClient {
       
       if (pageCount >= maxPages) {
         logger.warn(`⚠️ Alcanzado límite de lote (${maxPages} páginas) para evitar timeout en Vercel`);
-        logger.info(`📊 Productos obtenidos en este lote: ${allProducts.length - totalProcessed}`);
+        logger.info(`📊 Productos obtenidos en este lote: ${allProducts.length - previousProductsCount}`);
         
         // Guardar estado en cache para continuar después
         if (sessionId && hasMoreProducts) {
+          const updatedTotalPages = totalPagesProcessed + pageCount;
           scanCache.setScanState(userId, sessionId, {
             scrollId: scrollId,
             products: allProducts,
             seenIds: Array.from(seenProductIds),
-            pageCount: pageCount,
+            pageCount: updatedTotalPages, // Total de páginas procesadas
             duplicatesDetected: duplicatesDetected,
             batchNumber: Math.floor(allProducts.length / maxProductsPerBatch) + 1
           });
-          logger.info(`💾 Estado guardado en cache para continuar después`);
+          logger.info(`💾 Estado guardado en cache: ${allProducts.length} productos, ${updatedTotalPages} páginas totales`);
         }
       } else {
         // Scan completado, limpiar cache
@@ -286,13 +294,16 @@ class MLAPIClient {
       logger.info(`✅ Lote completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
       logger.info(`🔢 Estadísticas: ${duplicatesDetected} productos duplicados detectados y filtrados`);
       
+      const newProductsInThisBatch = allProducts.length - previousProductsCount;
+      
       return {
         results: allProducts,
         total: allProducts.length,
+        newProductsCount: newProductsInThisBatch, // NUEVO: Productos nuevos del lote actual
         scanCompleted: batchCompleted && !hasMoreProducts, // Verdadero si no hay más productos
         batchCompleted: batchCompleted,
         hasMoreProducts: hasMoreProducts,
-        pagesProcessed: pageCount,
+        pagesProcessed: totalPagesProcessed + pageCount, // Total de páginas procesadas
         duplicatesDetected: duplicatesDetected,
         uniqueProducts: allProducts.length,
         scrollId: scrollId, // Para debug
@@ -308,13 +319,16 @@ class MLAPIClient {
       logger.error(`📊 Productos obtenidos antes del error: ${allProducts.length}`);
       
       // Devolver lo que tenemos hasta ahora en caso de error
+      const newProductsInThisBatch = allProducts.length - previousProductsCount;
+      
       return {
         results: allProducts,
         total: allProducts.length,
+        newProductsCount: newProductsInThisBatch,
         scanCompleted: false,
         batchCompleted: false,
         hasMoreProducts: !!scrollId,
-        pagesProcessed: pageCount,
+        pagesProcessed: totalPagesProcessed + pageCount,
         duplicatesDetected: duplicatesDetected,
         uniqueProducts: allProducts.length,
         error: error.message,

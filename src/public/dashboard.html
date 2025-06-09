@@ -927,17 +927,19 @@
                         
                         if (data.success) {
                             const result = data.scanResult;
-                            const newProductsCount = result.total;
+                            const newProductsCount = result.newProducts || 0; // Solo productos nuevos
+                            const totalProducts = result.total || 0; // Total acumulado
                             
                             alert(`¡Scan continuado exitosamente!\n\n` +
-                                  `${newProductsCount} productos adicionales obtenidos\n` +
+                                  `${newProductsCount} productos nuevos obtenidos\n` +
+                                  `Total acumulado: ${totalProducts} productos\n` +
                                   `Scan completado: ${result.scanCompleted ? 'SÍ' : 'NO'}\n` +
                                   `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
                             
                             // Actualizar el dashboard inmediatamente
                             setTimeout(() => loadStatus(true), 1000);
                             
-                            updateSyncStatus('success', `${newProductsCount} productos adicionales obtenidos`);
+                            updateSyncStatus('success', `${newProductsCount} productos nuevos obtenidos (total: ${totalProducts})`);
                         } else {
                             alert('Error continuando scan: ' + (data.message || 'Error desconocido'));
                             updateSyncStatus('error');

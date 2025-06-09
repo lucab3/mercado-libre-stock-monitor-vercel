@@ -181,14 +181,19 @@ class ProductsService {
         sessionId: user.id
       });
       
-      const newProductIds = response.results || [];
+      const allProductIds = response.results || [];
       
-      logger.info(`✅ Continuación completada: ${newProductIds.length} productos adicionales obtenidos`);
+      // CORREGIDO: Calcular solo los productos NUEVOS del lote actual
+      const newProductsCount = response.newProductsCount || 0; // Productos del lote actual
+      const totalProducts = allProductIds.length; // Total acumulado
+      
+      logger.info(`✅ Continuación completada: ${newProductsCount} productos nuevos obtenidos (total acumulado: ${totalProducts})`);
       logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'}`);
       logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
       
       return {
-        results: newProductIds,
+        results: allProductIds, // TODOS los productos acumulados para el stockMonitor
+        newProducts: newProductsCount, // Solo los productos nuevos del lote
         scanCompleted: response.scanCompleted,
         batchCompleted: response.batchCompleted,
         hasMoreProducts: response.hasMoreProducts,
@@ -196,7 +201,7 @@ class ProductsService {
         duplicatesDetected: response.duplicatesDetected,
         uniqueProducts: response.uniqueProducts,
         error: response.error,
-        total: newProductIds.length
+        total: totalProducts // Total acumulado
       };
       
     } catch (error) {
