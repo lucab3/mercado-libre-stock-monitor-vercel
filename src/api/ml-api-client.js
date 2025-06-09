@@ -147,18 +147,19 @@ class MLAPIClient {
       while (pageCount < maxPages) {
         pageCount++;
         
-        // Preparar parámetros según si es primera llamada o paginación
-        const params = {};
+        // Preparar parámetros según documentación ML: SIEMPRE search_type=scan
+        const params = {
+          search_type: 'scan',
+          limit: limit
+        };
         
         if (!scrollId) {
-          // Primera llamada: usar search_type=scan
-          params.search_type = 'scan';
-          params.limit = limit;
+          // Primera llamada: solo search_type=scan + limit
           logger.info(`📦 [Página ${pageCount}] Primera llamada con search_type=scan, limit=${limit}`);
         } else {
-          // Llamadas subsiguientes: usar scroll_id (SIN search_type)
+          // Llamadas subsiguientes: search_type=scan + scroll_id (según documentación ML)
           params.scroll_id = scrollId;
-          logger.info(`📦 [Página ${pageCount}] Usando scroll_id: ${scrollId.substring(0, 30)}...`);
+          logger.info(`📦 [Página ${pageCount}] Usando search_type=scan + scroll_id: ${scrollId.substring(0, 30)}...`);
         }
         
         let response;
