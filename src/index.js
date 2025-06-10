@@ -492,15 +492,26 @@ app.post('/api/products/continue-scan', async (req, res) => {
 
   try {
     const products = require('./api/products');
+    const stockMonitor = require('./services/stockMonitor');
     
     logger.info('🔄 API: Continuando scan de productos...');
     
     const result = await products.continueProductScan();
     
+    // CRÍTICO: Actualizar stockMonitor con TODOS los productos acumulados
+    logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
+    
+    // Forzar actualización del stockMonitor con los nuevos productos
+    await stockMonitor.refreshProductList();
+    
+    const currentStatus = stockMonitor.getStatus();
+    logger.info(`✅ stockMonitor actualizado - ahora tiene ${currentStatus.totalProducts} productos`);
+    
     res.json({
       success: true,
-      message: `Scan continuado: ${result.total} productos adicionales obtenidos`,
+      message: `Scan continuado: ${result.newProducts} productos nuevos obtenidos (total: ${result.total})`,
       scanResult: result,
+      stockMonitorUpdated: true, // Flag para confirmar sincronización
       timestamp: new Date().toISOString()
     });
     
@@ -1117,6 +1128,9 @@ app.get('/api/auth/status', async (req, res) => {
     }
 
     const monitorStatus = stockMonitor.getStatus();
+
+    // Debug logging para diagnosticar actualizaciones de dashboard
+    logger.debug(`📊 /api/auth/status llamado - totalProducts: ${monitorStatus.totalProducts}, lowStock: ${monitorStatus.lowStockProducts?.length || 0}`);
 
     // Debug en desarrollo
     if (process.env.NODE_ENV === 'development') {

@@ -264,7 +264,7 @@ class MLAPIClient {
         await new Promise(resolve => setTimeout(resolve, pauseTime));
       }
       
-      const batchCompleted = pageCount < maxPages;
+      const batchCompleted = pageCount >= maxPages;
       const hasMoreProducts = !!scrollId; // Si hay scroll_id, hay más productos
       
       if (pageCount >= maxPages) {

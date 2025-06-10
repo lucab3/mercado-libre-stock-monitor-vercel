@@ -936,8 +936,14 @@
                                   `Scan completado: ${result.scanCompleted ? 'SÍ' : 'NO'}\n` +
                                   `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
                             
-                            // Actualizar el dashboard inmediatamente
-                            setTimeout(() => loadStatus(true), 1000);
+                            // Actualizar el dashboard INMEDIATAMENTE para mostrar los nuevos productos
+                            loadStatus(true);
+                            
+                            // También actualizar los contadores del resumen rápidamente
+                            setTimeout(() => {
+                                loadStatus(true);
+                                console.log('🔄 Segunda actualización para asegurar sincronización completa');
+                            }, 2000);
                             
                             updateSyncStatus('success', `${newProductsCount} productos nuevos obtenidos (total: ${totalProducts})`);
                         } else {
