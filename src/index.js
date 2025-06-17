@@ -484,33 +484,43 @@ app.get('/debug/all-products', async (req, res) => {
   }
 });
 
-// NUEVO: API para continuar scan por lotes
+// NUEVO: API para continuar scan por lotes - OPTIMIZADO con lotes pequeños
 app.post('/api/products/continue-scan', async (req, res) => {
   if (!auth.isAuthenticated()) {
     return res.status(401).json({ error: 'No autenticado' });
   }
 
   try {
+    const products = require('./api/products');
     const stockMonitor = require('./services/stockMonitor');
     
     logger.info('🔄 API: Continuando scan de productos...');
     
-    // MEJORADO: Usar el nuevo método optimizado que evita llamadas duplicadas
-    const result = await stockMonitor.continueScanAndRefresh();
+    const result = await products.continueProductScan();
     
-    logger.info(`✅ Scan y monitor actualizados - ${result.totalProducts} productos total, ${result.lowStockProducts} con stock bajo`);
+    // CRÍTICO: Actualizar stockMonitor con TODOS los productos acumulados
+    logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
     
-    // NUEVO: Respuesta con datos completos y actualizados
+    // Forzar actualización del stockMonitor con los nuevos productos
+    await stockMonitor.refreshProductList(result);
+    
+    // Forzar checkStock para actualizar contadores de stock bajo inmediatamente
+    logger.info('🔄 Forzando verificación de stock para actualizar contadores...');
+    await stockMonitor.checkStock(true); // skipRefresh = true, ya tenemos los datos actualizados
+    
+    const currentStatus = stockMonitor.getStatus();
+    logger.info(`✅ stockMonitor actualizado - ahora tiene ${currentStatus.totalProducts} productos, ${currentStatus.lowStockProducts.length} con stock bajo`);
+    
+    // NUEVO: Incluir datos actualizados en la respuesta para verificación
     res.json({
       success: true,
-      message: `Scan continuado: ${result.scanResult.newProducts} productos nuevos obtenidos (total: ${result.scanResult.total})`,
-      scanResult: result.scanResult,
-      stockResult: result.stockResult,
-      stockMonitorUpdated: true,
+      message: `Scan continuado: ${result.newProducts} productos nuevos obtenidos (total: ${result.total})`,
+      scanResult: result,
+      stockMonitorUpdated: true, // Flag para confirmar sincronización
       currentMonitorStatus: {
-        totalProducts: result.totalProducts,
-        lowStockProducts: result.lowStockProducts,
-        scanInfo: result.lastScanInfo
+        totalProducts: currentStatus.totalProducts,
+        lowStockProducts: currentStatus.lowStockProducts.length,
+        scanInfo: currentStatus.scanInfo
       },
       timestamp: new Date().toISOString()
     });

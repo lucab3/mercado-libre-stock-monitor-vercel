@@ -255,15 +255,18 @@ class StockMonitor {
 
   /**
    * MEJORADO: Verifica el stock de todos los productos monitoreados con datos sincronizados
+   * OPTIMIZADO: Acepta skipRefresh para evitar llamadas duplicadas
    */
-  async checkStock() {
+  async checkStock(skipRefresh = false) {
     try {
       logger.info('🔍 Verificando stock de productos...');
       
       this.lastCheckTime = Date.now();
       
-      // Refrescar datos ANTES de cualquier análisis
-      await this.refreshProductList();
+      // OPTIMIZADO: Solo refrescar datos si no se especifica skipRefresh
+      if (!skipRefresh) {
+        await this.refreshProductList();
+      }
       
       let lowStockCount = 0;
       const alertsToSend = [];
