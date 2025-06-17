@@ -103,12 +103,22 @@ class StockMonitor {
 
   /**
    * CORREGIDO: Actualiza la lista de productos monitoreados con validación de datos
+   * MEJORADO: Ahora acepta scanResult opcional para evitar llamadas duplicadas a la API
    */
-  async refreshProductList() {
+  async refreshProductList(existingScanResult = null) {
     try {
       logger.info('Actualizando lista de productos...');
       
-      const scanResult = await products.getAllProducts();
+      // NUEVO: Usar scanResult existente si se proporciona (evita llamada duplicada a API)
+      let scanResult;
+      if (existingScanResult) {
+        logger.info('✅ Usando scanResult existente (evitando llamada duplicada a API)');
+        scanResult = existingScanResult;
+      } else {
+        logger.info('🔄 Obteniendo productos desde API...');
+        scanResult = await products.getAllProducts();
+      }
+      
       const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
       
       // NUEVO: Guardar información del scan
@@ -207,6 +217,38 @@ class StockMonitor {
       
     } catch (error) {
       logger.error(`Error al actualizar lista de productos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * NUEVO: Método específico para continuar scan y actualizar inmediatamente
+   */
+  async continueScanAndRefresh() {
+    try {
+      logger.info('🔄 Continuando scan y actualizando monitor...');
+      
+      // 1. Continuar scan para obtener más productos
+      const scanResult = await products.continueProductScan();
+      
+      // 2. Actualizar lista con los resultados del scan (evita llamada duplicada)
+      await this.refreshProductList(scanResult);
+      
+      // 3. Verificar stock inmediatamente para actualizar contadores
+      const stockResult = await this.checkStock();
+      
+      logger.info(`✅ Scan continuado y monitor actualizado: ${stockResult.totalProducts} productos total, ${stockResult.lowStockProducts} con stock bajo`);
+      
+      return {
+        scanResult,
+        stockResult,
+        totalProducts: this.trackedProducts.size,
+        lowStockProducts: this.lowStockProducts.length,
+        lastScanInfo: this.lastScanInfo
+      };
+      
+    } catch (error) {
+      logger.error(`❌ Error en continueScanAndRefresh: ${error.message}`);
       throw error;
     }
   }

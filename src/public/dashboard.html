@@ -493,11 +493,30 @@
                     statusElement.innerHTML = indicator.outerHTML + ' Inactivo';
                 }
                 
-                // Actualizar otros elementos
+                // MEJORADO: Actualizar elementos con validación de datos
                 document.getElementById('stock-threshold').textContent = monitoring.threshold || '5';
                 document.getElementById('check-interval').textContent = Math.floor((monitoring.checkInterval || 900000) / 60000);
-                document.getElementById('total-products').textContent = monitoring.totalProducts || '0';
-                document.getElementById('low-stock-products').textContent = (monitoring.lowStockProducts || []).length;
+                
+                // CRÍTICO: Asegurar que totalProducts se actualice correctamente
+                const totalProducts = monitoring.totalProducts || '0';
+                const lowStockCount = (monitoring.lowStockProducts || []).length;
+                
+                const totalElement = document.getElementById('total-products');
+                const lowStockElement = document.getElementById('low-stock-products');
+                
+                // Log para debugging de actualizaciones
+                console.log(`📊 Actualizando contadores: Total=${totalProducts}, BajoStock=${lowStockCount}`);
+                
+                totalElement.textContent = totalProducts;
+                lowStockElement.textContent = lowStockCount;
+                
+                // NUEVO: Forzar repintado del DOM para asegurar que se visualicen los cambios
+                totalElement.style.fontWeight = 'bold';
+                lowStockElement.style.fontWeight = 'bold';
+                setTimeout(() => {
+                    totalElement.style.fontWeight = 'normal';
+                    lowStockElement.style.fontWeight = 'normal';
+                }, 500);
                 
                 // Última verificación
                 const lastCheck = monitoring.lastCheckTime;
@@ -527,12 +546,17 @@
                 
                 // Revisar si hay información del scan por lotes
                 const scanInfo = monitoring.scanInfo || monitoring.batchInfo || null;
+                const totalProducts = monitoring.totalProducts || 0;
+                
+                console.log('🔍 updateScanControls - scanInfo:', scanInfo);
+                console.log('🔍 updateScanControls - totalProducts:', totalProducts);
                 
                 if (scanInfo) {
                     // Mostrar información del scan por lotes
-                    const totalProducts = monitoring.totalProducts || 0;
                     const hasMoreProducts = scanInfo.hasMoreProducts;
                     const scanCompleted = scanInfo.scanCompleted;
+                    
+                    console.log(`🔍 Scan status: completed=${scanCompleted}, hasMore=${hasMoreProducts}, total=${totalProducts}`);
                     
                     if (hasMoreProducts && !scanCompleted) {
                         // Hay más productos disponibles - mostrar botón
@@ -544,6 +568,8 @@
                         scanStatus.style.display = 'block';
                         scanStatusText.textContent = `Tienes ${totalProducts} productos cargados de ~2908 totales. Haz clic en "Obtener más productos" para continuar.`;
                         scanStatus.className = 'alert alert-warning';
+                        
+                        console.log('✅ Mostrando botón de continuar scan');
                     } else if (scanCompleted) {
                         // Scan completado - ocultar botón
                         continueBtn.style.display = 'none';
@@ -554,17 +580,47 @@
                         scanStatus.style.display = 'block';
                         scanStatusText.textContent = `Scan completo: ${totalProducts} productos cargados.`;
                         scanStatus.className = 'alert alert-success';
+                        
+                        console.log('✅ Scan completado - ocultando botón');
                     } else {
-                        // Estado intermedio
+                        // Estado intermedio - probablemente primer scan
+                        if (totalProducts > 0) {
+                            // Mostrar información básica pero sin botón hasta confirmar estado
+                            continueBtn.style.display = 'none';
+                            scanProgress.style.display = 'inline';
+                            scanProgress.textContent = `${totalProducts} productos`;
+                            scanProgress.className = 'badge bg-info';
+                            
+                            scanStatus.style.display = 'block';
+                            scanStatusText.textContent = `${totalProducts} productos cargados. Verificando si hay más disponibles...`;
+                            scanStatus.className = 'alert alert-info';
+                        } else {
+                            // Sin productos aún
+                            continueBtn.style.display = 'none';
+                            scanProgress.style.display = 'none';
+                            scanStatus.style.display = 'none';
+                        }
+                        
+                        console.log('ℹ️ Estado intermedio de scan');
+                    }
+                } else {
+                    // Sin información de scan - posiblemente primer carga
+                    if (totalProducts > 0) {
+                        // Hay productos pero sin info de scan, mostrar info básica
+                        continueBtn.style.display = 'none';
+                        scanProgress.style.display = 'inline';
+                        scanProgress.textContent = `${totalProducts} productos`;
+                        scanProgress.className = 'badge bg-secondary';
+                        
+                        scanStatus.style.display = 'none';
+                        console.log('ℹ️ Productos encontrados sin info de scan');
+                    } else {
+                        // Sin información de scan ni productos - ocultar controles
                         continueBtn.style.display = 'none';
                         scanProgress.style.display = 'none';
                         scanStatus.style.display = 'none';
+                        console.log('ℹ️ Sin información de scan - ocultando controles');
                     }
-                } else {
-                    // Sin información de scan - ocultar controles
-                    continueBtn.style.display = 'none';
-                    scanProgress.style.display = 'none';
-                    scanStatus.style.display = 'none';
                 }
             }
             
@@ -936,14 +992,31 @@
                                   `Scan completado: ${result.scanCompleted ? 'SÍ' : 'NO'}\n` +
                                   `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
                             
-                            // Actualizar el dashboard INMEDIATAMENTE para mostrar los nuevos productos
+                            // MEJORADO: Actualización múltiple y forzada del dashboard
+                            // 1. Actualización inmediata
                             loadStatus(true);
                             
-                            // También actualizar los contadores del resumen rápidamente
+                            // 2. Actualización con delay para asegurar sincronización del backend
                             setTimeout(() => {
+                                console.log('🔄 Segunda actualización para sincronizar backend...');
                                 loadStatus(true);
-                                console.log('🔄 Segunda actualización para asegurar sincronización completa');
-                            }, 2000);
+                            }, 1500);
+                            
+                            // 3. Actualización final para confirmar que todo esté sincronizado
+                            setTimeout(() => {
+                                console.log('🔄 Actualización final para confirmar sincronización...');
+                                loadStatus(true);
+                                
+                                // NUEVO: Verificar que los contadores se actualizaron correctamente
+                                const currentTotal = document.getElementById('total-products').textContent;
+                                const currentLowStock = document.getElementById('low-stock-products').textContent;
+                                console.log(`📊 Contadores después del scan: Total=${currentTotal}, BajoStock=${currentLowStock}`);
+                                
+                                if (parseInt(currentTotal) < totalProducts) {
+                                    console.warn('⚠️ Los contadores no se actualizaron completamente, forzando otra actualización...');
+                                    setTimeout(() => loadStatus(true), 1000);
+                                }
+                            }, 3000);
                             
                             updateSyncStatus('success', `${newProductsCount} productos nuevos obtenidos (total: ${totalProducts})`);
                         } else {

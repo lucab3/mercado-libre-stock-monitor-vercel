@@ -491,27 +491,27 @@ app.post('/api/products/continue-scan', async (req, res) => {
   }
 
   try {
-    const products = require('./api/products');
     const stockMonitor = require('./services/stockMonitor');
     
     logger.info('🔄 API: Continuando scan de productos...');
     
-    const result = await products.continueProductScan();
+    // MEJORADO: Usar el nuevo método optimizado que evita llamadas duplicadas
+    const result = await stockMonitor.continueScanAndRefresh();
     
-    // CRÍTICO: Actualizar stockMonitor con TODOS los productos acumulados
-    logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
+    logger.info(`✅ Scan y monitor actualizados - ${result.totalProducts} productos total, ${result.lowStockProducts} con stock bajo`);
     
-    // Forzar actualización del stockMonitor con los nuevos productos
-    await stockMonitor.refreshProductList();
-    
-    const currentStatus = stockMonitor.getStatus();
-    logger.info(`✅ stockMonitor actualizado - ahora tiene ${currentStatus.totalProducts} productos`);
-    
+    // NUEVO: Respuesta con datos completos y actualizados
     res.json({
       success: true,
-      message: `Scan continuado: ${result.newProducts} productos nuevos obtenidos (total: ${result.total})`,
-      scanResult: result,
-      stockMonitorUpdated: true, // Flag para confirmar sincronización
+      message: `Scan continuado: ${result.scanResult.newProducts} productos nuevos obtenidos (total: ${result.scanResult.total})`,
+      scanResult: result.scanResult,
+      stockResult: result.stockResult,
+      stockMonitorUpdated: true,
+      currentMonitorStatus: {
+        totalProducts: result.totalProducts,
+        lowStockProducts: result.lowStockProducts,
+        scanInfo: result.lastScanInfo
+      },
       timestamp: new Date().toISOString()
     });
     
