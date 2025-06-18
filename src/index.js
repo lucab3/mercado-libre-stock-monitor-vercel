@@ -1043,7 +1043,16 @@ app.get('/auth/callback', async (req, res) => {
   } catch (error) {
     logger.error(`❌ Error en el callback de autenticación: ${error.message}`);
     
-    // Log adicional para debugging
+    // NUEVO: Manejar específicamente usuario no autorizado
+    if (error.message.startsWith('UNAUTHORIZED_USER:')) {
+      const [, userId, nickname] = error.message.split(':');
+      logger.warn(`🚫 Acceso denegado en callback para usuario: ${userId} (${nickname})`);
+      
+      // Redirigir a página de acceso denegado
+      return res.redirect(`/acceso-denegado?userId=${userId}&nickname=${encodeURIComponent(nickname)}`);
+    }
+    
+    // Log adicional para debugging de otros errores
     if (error.response) {
       logger.error(`📄 Respuesta del servidor ML:`, {
         status: error.response.status,
@@ -1052,12 +1061,104 @@ app.get('/auth/callback', async (req, res) => {
       });
     }
     
-    // Respuesta más detallada para debugging
+    // Respuesta más detallada para debugging de otros errores
     const errorMessage = `Error durante la autenticación: ${error.message}`;
     const debugInfo = process.env.NODE_ENV === 'development' ? 
       `\n\nDetalles técnicos:\n- Código recibido: ${code}\n- Error: ${error.stack}` : '';
     
     res.status(500).send(errorMessage + debugInfo);
+  }
+});
+
+// NUEVO: Página de acceso denegado
+app.get('/acceso-denegado', (req, res) => {
+  const { userId, nickname } = req.query;
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso No Autorizado - Monitor de Stock ML</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            body { background-color: #f8f9fa; }
+            .container { margin-top: 5rem; }
+            .error-icon { font-size: 4rem; color: #dc3545; }
+            .user-info { background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-8 col-lg-6">
+                    <div class="card shadow">
+                        <div class="card-body text-center p-5">
+                            <div class="error-icon mb-4">🚫</div>
+                            <h2 class="card-title text-danger mb-4">Acceso No Autorizado</h2>
+                            <p class="card-text mb-4">
+                                Esta aplicación es para uso interno empresarial. Tu cuenta de MercadoLibre no está autorizada para acceder.
+                            </p>
+                            ${userId ? `
+                            <div class="user-info text-start">
+                                <h6>🆔 Información de tu cuenta:</h6>
+                                <strong>Usuario ID:</strong> ${userId}<br>
+                                <strong>Nickname:</strong> ${nickname || 'No disponible'}
+                            </div>
+                            ` : ''}
+                            <p class="card-text text-muted mb-4">
+                                Si necesitas acceso, contacta al administrador del sistema con tu <strong>Usuario ID</strong> mostrado arriba.
+                            </p>
+                            <div class="d-grid gap-2">
+                                <a href="/" class="btn btn-primary">🔙 Volver al inicio</a>
+                                <a href="/auth/logout" class="btn btn-outline-secondary">🚪 Cerrar sesión de ML</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+  `);
+});
+
+// TEMPORAL: Endpoint para obtener tu User ID (eliminar después de configurar ALLOWED_ML_USERS)
+app.get('/debug/mi-user-id', async (req, res) => {
+  try {
+    if (!auth.isAuthenticated()) {
+      return res.json({
+        error: 'No autenticado',
+        message: 'Debes loguearte primero para ver tu User ID',
+        loginUrl: '/auth/login'
+      });
+    }
+
+    const userId = await auth.getCurrentUserId();
+    const userInfo = await auth.getUserInfo();
+    
+    res.json({
+      success: true,
+      userId: userId,
+      nickname: userInfo.nickname,
+      email: userInfo.email,
+      message: 'Guarda este User ID para agregarlo a ALLOWED_ML_USERS en Vercel',
+      instructions: [
+        '1. Ve a tu dashboard de Vercel',
+        '2. Selecciona tu proyecto',
+        '3. Ve a Settings → Environment Variables', 
+        '4. Agrega: ALLOWED_ML_USERS = ' + userId,
+        '5. Redeploy la aplicación'
+      ]
+    });
+    
+  } catch (error) {
+    logger.error(`Error obteniendo User ID: ${error.message}`);
+    res.status(500).json({
+      error: 'Error interno',
+      message: error.message
+    });
   }
 });
 

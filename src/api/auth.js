@@ -212,11 +212,17 @@ class MercadoLibreAuth {
       const userInfo = await this.getUserInfoWithToken(tokens.access_token);
       const userId = userInfo.id.toString();
 
+      // NUEVO: Validar que el usuario esté autorizado para usar la app
+      if (!this.isUserAuthorized(userId, userInfo)) {
+        logger.warn(`🚫 Acceso denegado para usuario ML: ${userId} (${userInfo.nickname})`);
+        throw new Error(`UNAUTHORIZED_USER:${userId}:${userInfo.nickname}`);
+      }
+
       // Crear sesión segura vinculada al usuario Y al navegador
       const newCookieId = sessionManager.createSession(userId, tokens, cookieId);
       this.currentCookieId = newCookieId;
 
-      logger.info(`🔐 Sesión creada para usuario ML: ${userId} en navegador ${newCookieId.substring(0, 8)}...`);
+      logger.info(`🔐 Sesión autorizada y creada para usuario ML: ${userId} (${userInfo.nickname}) en navegador ${newCookieId.substring(0, 8)}...`);
 
       this.saveTokens(tokens);
       return { tokens, cookieId: newCookieId };
@@ -532,6 +538,42 @@ class MercadoLibreAuth {
 
   set currentSessionId(value) {
     this.currentCookieId = value;
+  }
+
+  /**
+   * NUEVO: Verificar si un usuario está autorizado para usar la aplicación
+   */
+  isUserAuthorized(userId, userInfo = null) {
+    // En modo mock, siempre autorizar
+    if (this.mockMode) {
+      return true;
+    }
+
+    try {
+      // Obtener usuarios autorizados desde variable de entorno de Vercel
+      const allowedUsers = process.env.ALLOWED_ML_USERS;
+      
+      if (!allowedUsers) {
+        logger.warn('⚠️ ALLOWED_ML_USERS no configurado - permitiendo acceso a todos (configura en Vercel)');
+        return true; // Si no está configurado, permitir por seguridad de desarrollo
+      }
+
+      // Lista de user IDs separados por comas
+      const allowedUserList = allowedUsers.split(',').map(id => id.trim());
+      const isAuthorized = allowedUserList.includes(userId);
+
+      if (isAuthorized) {
+        logger.info(`✅ Usuario autorizado: ${userId} ${userInfo?.nickname ? `(${userInfo.nickname})` : ''}`);
+      } else {
+        logger.warn(`🚫 Usuario NO autorizado: ${userId} ${userInfo?.nickname ? `(${userInfo.nickname})` : ''}`);
+        logger.info(`📋 Usuarios autorizados: ${allowedUserList.join(', ')}`);
+      }
+
+      return isAuthorized;
+    } catch (error) {
+      logger.error(`Error verificando autorización: ${error.message}`);
+      return false; // En caso de error, denegar acceso
+    }
   }
 }
 
