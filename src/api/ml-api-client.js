@@ -147,6 +147,7 @@ class MLAPIClient {
     let pageCount = 0;
     let duplicatesDetected = 0;
     let totalProcessed = 0;
+    let exitReason = null; // Para rastrear por qué salió del loop
     
     // Intentar continuar desde cache si se solicita
     let previousProductsCount = 0;
@@ -168,9 +169,9 @@ class MLAPIClient {
         logger.info(`🔄 Continuando scan desde cache: ${previousProductsCount} productos ya obtenidos, páginas totales procesadas: ${totalPagesProcessed}`);
         logger.info(`🔄 Iniciando nuevo lote desde scroll_id: ${scrollId ? scrollId.substring(0, 30) + '...' : 'NO_SCROLL_ID'}`);
         
-        // CORREGIDO: Si no hay scroll_id, significa que el scan YA se completó
-        if (!scrollId) {
-          logger.info('🏁 SCAN YA COMPLETADO - no hay scroll_id en cache, devolviendo estado actual');
+        // CORREGIDO: Si no hay scroll_id O está marcado como completado, significa que el scan YA se completó
+        if (!scrollId || cachedState.completed) {
+          logger.info('🏁 DETECCIÓN TEMPRANA: SCAN YA COMPLETADO - no hay scroll_id o marcado como completado en cache');
           return {
             results: null, // null = no cambios, preservar productos existentes
             total: allProducts.length,
@@ -241,6 +242,7 @@ class MLAPIClient {
         // Si no hay productos en esta página, terminamos
         if (response.results.length === 0) {
           logger.info(`📦 [Página ${pageCount}] Sin productos, finalizando scan`);
+          exitReason = 'NO_PRODUCTS';
           break;
         }
         
@@ -262,6 +264,7 @@ class MLAPIClient {
         // Si no hay productos nuevos únicos, probablemente hemos terminado
         if (newProducts.length === 0) {
           logger.info(`📦 [Página ${pageCount}] Solo productos duplicados, probablemente terminamos el scan`);
+          exitReason = 'ONLY_DUPLICATES';
           break;
         }
         
@@ -270,6 +273,7 @@ class MLAPIClient {
         
         if (!newScrollId) {
           logger.info(`📦 [Página ${pageCount}] Sin scroll_id, finalizando scan (última página)`);
+          exitReason = 'NO_SCROLL_ID';
           break;
         }
         
@@ -283,11 +287,16 @@ class MLAPIClient {
       }
       
       const batchCompleted = pageCount >= maxPages;
-      const hasMoreProducts = !!scrollId; // Si hay scroll_id, hay más productos
+      if (batchCompleted) {
+        exitReason = 'MAX_PAGES_REACHED';
+      }
       
-      // CORREGIDO: Determinar si el scan está realmente completo
-      const naturallyCompleted = !hasMoreProducts; // No hay scroll_id = fin natural
+      // CORREGIDO: Determinar si el scan está realmente completo basado en la razón de salida
+      const naturallyCompleted = exitReason === 'NO_PRODUCTS' || exitReason === 'ONLY_DUPLICATES' || exitReason === 'NO_SCROLL_ID';
+      const hasMoreProducts = !naturallyCompleted && !!scrollId; // Solo si no terminó naturalmente Y hay scroll_id
       const scanCompleted = naturallyCompleted || (batchCompleted && !hasMoreProducts);
+      
+      logger.info(`🔍 EXIT_REASON: ${exitReason} → naturallyCompleted=${naturallyCompleted}, hasMoreProducts=${hasMoreProducts}, scanCompleted=${scanCompleted}`);
       
       if (batchCompleted && hasMoreProducts) {
         logger.warn(`⚠️ Alcanzado límite de lote (${maxPages} páginas) para evitar timeout en Vercel`);
@@ -307,9 +316,20 @@ class MLAPIClient {
           logger.info(`💾 Estado guardado en cache: ${allProducts.length} productos, ${updatedTotalPages} páginas totales`);
         }
       } else if (scanCompleted) {
-        // Scan completado naturalmente - NO limpiar cache inmediatamente para evitar reset
+        // Scan completado naturalmente - guardar estado final con scrollId=null para indicar completado
+        if (sessionId) {
+          const updatedTotalPages = totalPagesProcessed + pageCount;
+          scanCache.setScanState(userId, sessionId, {
+            scrollId: null, // IMPORTANTE: null indica que el scan está completo
+            products: allProducts,
+            seenIds: Array.from(seenProductIds),
+            pageCount: updatedTotalPages,
+            duplicatesDetected: duplicatesDetected,
+            completed: true // Flag adicional para indicar completado
+          });
+          logger.info(`💾 Scan completado - estado final guardado en cache: ${allProducts.length} productos`);
+        }
         logger.info('🏁 Scan completo - se obtuvieron todos los productos disponibles');
-        logger.info('💾 Cache mantenido para evitar reset en llamadas subsiguientes');
       }
       
       logger.info(`✅ Lote completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
@@ -323,7 +343,7 @@ class MLAPIClient {
       
       // CORREGIDO: Si no hay productos nuevos y el scan está completo, devolver null
       if (newProductsInThisBatch === 0 && scanCompleted) {
-        logger.info('🏁 Scan completado sin productos nuevos - devolviendo null para preservar estado');
+        logger.info('🏁 FLUJO NORMAL: Scan completado sin productos nuevos - devolviendo null para preservar estado');
         return {
           results: null, // null = no cambios, preservar productos existentes
           total: allProducts.length,
@@ -338,6 +358,8 @@ class MLAPIClient {
           message: 'Scan completado - no hay más productos'
         };
       }
+      
+      logger.info(`🏁 FLUJO NORMAL: Devolviendo resultado - scanCompleted=${scanCompleted}, hasMoreProducts=${hasMoreProducts}, newProducts=${newProductsInThisBatch}`);
       
       return {
         results: allProducts,

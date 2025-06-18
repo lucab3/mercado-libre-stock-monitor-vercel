@@ -498,9 +498,11 @@ app.post('/api/products/continue-scan', async (req, res) => {
     
     const result = await products.continueProductScan();
     
-    // CRÍTICO: Actualizar stockMonitor con TODOS los productos acumulados
+    // CRÍTICO: Actualizar stockMonitor con información del scan (SIEMPRE, incluso si results=null)
     if (result.results === null) {
-      logger.info('🏁 Scan completado sin productos nuevos - stockMonitor mantendrá productos existentes');
+      logger.info('🏁 Scan completado sin productos nuevos - actualizando solo scanInfo en stockMonitor');
+      // IMPORTANTE: Actualizar scanInfo incluso cuando no hay productos nuevos
+      await stockMonitor.refreshProductList(result);
     } else {
       logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
       // Forzar actualización del stockMonitor con los nuevos productos
