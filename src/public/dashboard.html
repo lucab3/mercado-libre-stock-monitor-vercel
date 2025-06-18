@@ -309,8 +309,9 @@
             // Comprobar estado inicial
             loadStatus();
             
-            // Auto-refresh más inteligente cada 15 segundos
-            setInterval(loadStatus, 15000);
+            // Auto-refresh más inteligente cada 15 segundos (pero se pausa durante scans)
+            let autoRefreshInterval = setInterval(loadStatus, 15000);
+            let scanInProgress = false;
             
             // Eventos de botones
             document.getElementById('start-monitoring').addEventListener('click', startMonitoring);
@@ -967,6 +968,11 @@
             window.continueProductScan = function() {
                 console.log('🔄 Continuando scan de productos...');
                 
+                // OPTIMIZADO: Pausar auto-refresh durante scan para evitar conflictos
+                scanInProgress = true;
+                clearInterval(autoRefreshInterval);
+                console.log('⏸️ Auto-refresh pausado durante scan');
+                
                 const button = document.getElementById('continue-scan-btn');
                 const buttonText = document.getElementById('continue-scan-text');
                 const originalText = buttonText.innerHTML;
@@ -1032,6 +1038,11 @@
                     .finally(() => {
                         buttonText.innerHTML = originalText;
                         button.disabled = false;
+                        
+                        // OPTIMIZADO: Reanudar auto-refresh después del scan
+                        scanInProgress = false;
+                        autoRefreshInterval = setInterval(loadStatus, 15000);
+                        console.log('▶️ Auto-refresh reanudado después del scan');
                     });
             };
             

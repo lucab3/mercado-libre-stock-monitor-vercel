@@ -153,14 +153,35 @@ class StockMonitor {
       
       logger.info(`📋 Procesando ${productIds.length} productos únicos...`);
       
-      // MEJORADO: Obtener todos los detalles con validación completa
+      // OPTIMIZADO: Solo procesar productos nuevos para evitar timeout
+      const newProductIds = productIds.filter(id => !this.trackedProducts.has(id));
+      const existingCount = productIds.length - newProductIds.length;
+      
+      if (existingCount > 0) {
+        logger.info(`⚡ OPTIMIZACIÓN: ${existingCount} productos ya procesados, solo obteniendo ${newProductIds.length} nuevos`);
+      }
+      
+      // MEJORADO: Obtener detalles solo de productos nuevos
       const productDetails = [];
       let successCount = 0;
       let errorCount = 0;
       
-      for (const id of productIds) {
+      // Preservar productos ya existentes que siguen en la lista actual
+      const preservedProducts = [];
+      for (const [id, existingProduct] of this.trackedProducts.entries()) {
+        if (productIds.includes(id)) {
+          preservedProducts.push(existingProduct);
+        }
+      }
+      
+      logger.info(`📦 Preservando ${preservedProducts.length} productos ya procesados`);
+      productDetails.push(...preservedProducts);
+      successCount = preservedProducts.length;
+      
+      // Procesar solo productos nuevos
+      for (const id of newProductIds) {
         try {
-          logger.debug(`🔍 Obteniendo detalles de producto ${id}...`);
+          logger.debug(`🔍 Obteniendo detalles de producto NUEVO ${id}...`);
           const productData = await products.getProduct(id);
           
           // NUEVO: Validación de datos críticos
@@ -180,7 +201,7 @@ class StockMonitor {
           successCount++;
           
           // Log detallado para debugging
-          logger.info(`✅ ${productData.id}: "${productData.title ? productData.title.substring(0, 40) + '...' : 'Sin título'}" - ${productData.available_quantity} unidades - SKU: ${productData.seller_sku || 'Sin SKU'}`);
+          logger.info(`✅ NUEVO ${productData.id}: "${productData.title ? productData.title.substring(0, 40) + '...' : 'Sin título'}" - ${productData.available_quantity} unidades - SKU: ${productData.seller_sku || 'Sin SKU'}`);
           
         } catch (error) {
           logger.error(`❌ Error obteniendo producto ${id}: ${error.message}`);
@@ -188,7 +209,7 @@ class StockMonitor {
         }
       }
       
-      logger.info(`📊 Resultados: ${successCount} exitosos, ${errorCount} errores de ${productIds.length} total`);
+      logger.info(`📊 Resultados: ${successCount} exitosos (${newProductIds.length} nuevos + ${existingCount} ya existentes), ${errorCount} errores de ${productIds.length} total`);
       
       // Actualizar both trackedProducts y lastKnownStockState
       this.trackedProducts.clear();
