@@ -119,6 +119,12 @@ class StockMonitor {
         scanResult = await products.getAllProducts();
       }
       
+      // CORREGIDO: Si results es null, significa "sin cambios" - mantener productos existentes
+      if (scanResult.results === null) {
+        logger.info('📋 Scan completado sin cambios - manteniendo productos existentes');
+        return;
+      }
+      
       const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
       
       // NUEVO: Guardar información del scan
@@ -145,10 +151,16 @@ class StockMonitor {
       }
       
       if (productIds.length === 0) {
-        logger.info('No se encontraron productos para monitorear');
-        this.trackedProducts.clear();
-        this.lastKnownStockState.clear();
-        return;
+        logger.warn('⚠️ No se proporcionaron productos para actualizar - probablemente fin del scan');
+        // CORREGIDO: NO limpiar productos existentes cuando se llega al final del scan
+        // Solo limpiar si es el primer scan o si explícitamente se solicita reset
+        if (this.trackedProducts.size === 0) {
+          logger.info('📋 Primera vez - no hay productos previos que preservar');
+          return;
+        } else {
+          logger.info(`📋 Fin del scan alcanzado - preservando ${this.trackedProducts.size} productos existentes`);
+          return; // Mantener los productos que ya tenemos
+        }
       }
       
       logger.info(`📋 Procesando ${productIds.length} productos únicos...`);

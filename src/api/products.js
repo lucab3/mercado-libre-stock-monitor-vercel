@@ -157,13 +157,15 @@ class ProductsService {
   async continueProductScan() {
     if (this.mockMode) {
       logger.info('🎭 En modo MOCK - scan ya está completo');
+      // CORREGIDO: No devolver array vacío, devolver null para indicar "sin cambios"
       return {
-        results: [],
+        results: null, // null = sin cambios, no limpiar productos existentes
         scanCompleted: true,
         batchCompleted: true,
         hasMoreProducts: false,
         total: 0,
-        message: 'Modo mock - no hay más productos'
+        newProducts: 0,
+        message: 'Modo mock - scan completado, no hay más productos'
       };
     }
 

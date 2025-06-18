@@ -285,22 +285,42 @@ class MLAPIClient {
           logger.info(`💾 Estado guardado en cache: ${allProducts.length} productos, ${updatedTotalPages} páginas totales`);
         }
       } else {
-        // Scan completado, limpiar cache
+        // Scan completado naturalmente, limpiar cache
         if (sessionId) {
           scanCache.clearScanState(userId, sessionId);
         }
+        logger.info('🏁 Scan completo - se obtuvieron todos los productos disponibles');
       }
       
       logger.info(`✅ Lote completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
       logger.info(`🔢 Estadísticas: ${duplicatesDetected} productos duplicados detectados y filtrados`);
       
       const newProductsInThisBatch = allProducts.length - previousProductsCount;
+      const scanCompleted = batchCompleted && !hasMoreProducts;
+      
+      // CORREGIDO: Si no hay productos nuevos y el scan está completo, devolver null
+      if (newProductsInThisBatch === 0 && scanCompleted) {
+        logger.info('🏁 Scan completado sin productos nuevos - devolviendo null para preservar estado');
+        return {
+          results: null, // null = no cambios, preservar productos existentes
+          total: allProducts.length,
+          newProductsCount: 0,
+          scanCompleted: true,
+          batchCompleted: true,
+          hasMoreProducts: false,
+          pagesProcessed: totalPagesProcessed + pageCount,
+          duplicatesDetected: duplicatesDetected,
+          uniqueProducts: allProducts.length,
+          scrollId: null,
+          message: 'Scan completado - no hay más productos'
+        };
+      }
       
       return {
         results: allProducts,
         total: allProducts.length,
         newProductsCount: newProductsInThisBatch, // NUEVO: Productos nuevos del lote actual
-        scanCompleted: batchCompleted && !hasMoreProducts, // Verdadero si no hay más productos
+        scanCompleted: scanCompleted, // Verdadero si no hay más productos
         batchCompleted: batchCompleted,
         hasMoreProducts: hasMoreProducts,
         pagesProcessed: totalPagesProcessed + pageCount, // Total de páginas procesadas

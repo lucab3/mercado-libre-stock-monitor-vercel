@@ -991,40 +991,55 @@
                             const result = data.scanResult;
                             const newProductsCount = result.newProducts || 0; // Solo productos nuevos
                             const totalProducts = result.total || 0; // Total acumulado
+                            const scanCompleted = result.scanCompleted || false;
                             
-                            alert(`¡Scan continuado exitosamente!\n\n` +
-                                  `${newProductsCount} productos nuevos obtenidos\n` +
-                                  `Total acumulado: ${totalProducts} productos\n` +
-                                  `Scan completado: ${result.scanCompleted ? 'SÍ' : 'NO'}\n` +
-                                  `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
+                            // CORREGIDO: Mensaje diferente para scan completado vs productos nuevos
+                            if (scanCompleted && newProductsCount === 0) {
+                                alert(`🏁 Scan completado exitosamente!\n\n` +
+                                      `No hay más productos disponibles\n` +
+                                      `Total final: ${totalProducts} productos\n` +
+                                      `Todos los productos están ahora monitoreados`);
+                            } else {
+                                alert(`¡Scan continuado exitosamente!\n\n` +
+                                      `${newProductsCount} productos nuevos obtenidos\n` +
+                                      `Total acumulado: ${totalProducts} productos\n` +
+                                      `Scan completado: ${scanCompleted ? 'SÍ' : 'NO'}\n` +
+                                      `Más productos disponibles: ${result.hasMoreProducts ? 'SÍ' : 'NO'}`);
+                            }
                             
                             // MEJORADO: Actualización múltiple y forzada del dashboard
                             // 1. Actualización inmediata
                             loadStatus(true);
                             
-                            // 2. Actualización con delay para asegurar sincronización del backend
-                            setTimeout(() => {
-                                console.log('🔄 Segunda actualización para sincronizar backend...');
-                                loadStatus(true);
-                            }, 1500);
-                            
-                            // 3. Actualización final para confirmar que todo esté sincronizado
-                            setTimeout(() => {
-                                console.log('🔄 Actualización final para confirmar sincronización...');
-                                loadStatus(true);
+                            // 2. Actualización con delay para asegurar sincronización del backend (solo si hubo productos nuevos)
+                            if (newProductsCount > 0) {
+                                setTimeout(() => {
+                                    console.log('🔄 Segunda actualización para sincronizar backend...');
+                                    loadStatus(true);
+                                }, 1500);
                                 
-                                // NUEVO: Verificar que los contadores se actualizaron correctamente
-                                const currentTotal = document.getElementById('total-products').textContent;
-                                const currentLowStock = document.getElementById('low-stock-products').textContent;
-                                console.log(`📊 Contadores después del scan: Total=${currentTotal}, BajoStock=${currentLowStock}`);
-                                
-                                if (parseInt(currentTotal) < totalProducts) {
-                                    console.warn('⚠️ Los contadores no se actualizaron completamente, forzando otra actualización...');
-                                    setTimeout(() => loadStatus(true), 1000);
-                                }
-                            }, 3000);
+                                // 3. Actualización final para confirmar que todo esté sincronizado
+                                setTimeout(() => {
+                                    console.log('🔄 Actualización final para confirmar sincronización...');
+                                    loadStatus(true);
+                                    
+                                    // NUEVO: Verificar que los contadores se actualizaron correctamente
+                                    const currentTotal = document.getElementById('total-products').textContent;
+                                    const currentLowStock = document.getElementById('low-stock-products').textContent;
+                                    console.log(`📊 Contadores después del scan: Total=${currentTotal}, BajoStock=${currentLowStock}`);
+                                    
+                                    if (parseInt(currentTotal) < totalProducts) {
+                                        console.warn('⚠️ Los contadores no se actualizaron completamente, forzando otra actualización...');
+                                        setTimeout(() => loadStatus(true), 1000);
+                                    }
+                                }, 3000);
+                            }
                             
-                            updateSyncStatus('success', `${newProductsCount} productos nuevos obtenidos (total: ${totalProducts})`);
+                            // CORREGIDO: Mensaje de estado diferente para scan completado
+                            const statusMessage = scanCompleted && newProductsCount === 0 
+                                ? 'Scan completado - todos los productos monitoreados'
+                                : `${newProductsCount} productos nuevos obtenidos (total: ${totalProducts})`;
+                            updateSyncStatus('success', statusMessage);
                         } else {
                             alert('Error continuando scan: ' + (data.message || 'Error desconocido'));
                             updateSyncStatus('error');

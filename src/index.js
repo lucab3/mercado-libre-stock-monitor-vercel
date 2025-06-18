@@ -499,10 +499,13 @@ app.post('/api/products/continue-scan', async (req, res) => {
     const result = await products.continueProductScan();
     
     // CRÍTICO: Actualizar stockMonitor con TODOS los productos acumulados
-    logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
-    
-    // Forzar actualización del stockMonitor con los nuevos productos
-    await stockMonitor.refreshProductList(result);
+    if (result.results === null) {
+      logger.info('🏁 Scan completado sin productos nuevos - stockMonitor mantendrá productos existentes');
+    } else {
+      logger.info(`🔄 SINCRONIZANDO stockMonitor con ${result.results.length} productos acumulados...`);
+      // Forzar actualización del stockMonitor con los nuevos productos
+      await stockMonitor.refreshProductList(result);
+    }
     
     // Forzar checkStock para actualizar contadores de stock bajo inmediatamente
     logger.info('🔄 Forzando verificación de stock para actualizar contadores...');
@@ -512,11 +515,15 @@ app.post('/api/products/continue-scan', async (req, res) => {
     logger.info(`✅ stockMonitor actualizado - ahora tiene ${currentStatus.totalProducts} productos, ${currentStatus.lowStockProducts.length} con stock bajo`);
     
     // NUEVO: Incluir datos actualizados en la respuesta para verificación
+    const message = result.results === null 
+      ? 'Scan completado - no hay más productos disponibles'
+      : `Scan continuado: ${result.newProducts} productos nuevos obtenidos (total: ${result.total})`;
+      
     res.json({
       success: true,
-      message: `Scan continuado: ${result.newProducts} productos nuevos obtenidos (total: ${result.total})`,
+      message: message,
       scanResult: result,
-      stockMonitorUpdated: true, // Flag para confirmar sincronización
+      stockMonitorUpdated: result.results !== null, // Flag para confirmar sincronización
       currentMonitorStatus: {
         totalProducts: currentStatus.totalProducts,
         lowStockProducts: currentStatus.lowStockProducts.length,
