@@ -400,6 +400,7 @@ class MercadoLibreAuth {
 
   /**
    * NUEVO: Validar que la sesión actual pertenece al usuario correcto
+   * CORREGIDO: No hacer llamadas HTTP para evitar logout por timeout durante scans
    */
   async validateCurrentSession() {
     if (this.mockMode) {
@@ -411,10 +412,41 @@ class MercadoLibreAuth {
     }
 
     try {
-      const userInfo = await this.getUserInfo();
-      const userId = userInfo.id.toString();
+      // CORREGIDO: Validar primero si la sesión existe en sessionManager (no requiere HTTP)
+      const session = sessionManager.getSessionByCookie(this.currentCookieId);
+      if (!session) {
+        logger.warn('⚠️ Sesión no encontrada en sessionManager');
+        return false;
+      }
+
+      // CORREGIDO: Solo validar con HTTP si hace más de 5 minutos que no se valida
+      const now = Date.now();
+      const lastValidation = session.lastValidation || 0;
+      const fiveMinutes = 5 * 60 * 1000;
       
-      return sessionManager.validateUserSession(this.currentCookieId, userId);
+      if (now - lastValidation < fiveMinutes) {
+        logger.debug('✅ Sesión validada recientemente, saltando validación HTTP');
+        return true;
+      }
+
+      // CORREGIDO: Intentar validación HTTP, pero NO fallar si hay error (para evitar logout durante scans)
+      try {
+        const userInfo = await this.getUserInfo();
+        const userId = userInfo.id.toString();
+        
+        const isValid = sessionManager.validateUserSession(this.currentCookieId, userId);
+        if (isValid) {
+          // Marcar como validada recientemente
+          session.lastValidation = now;
+          logger.debug('✅ Sesión validada exitosamente con API ML');
+        }
+        return isValid;
+      } catch (httpError) {
+        logger.warn(`⚠️ Error validando con API ML (manteniendo sesión): ${httpError.message}`);
+        // CRÍTICO: NO desloguear por errores HTTP durante scans
+        return true; // Mantener sesión activa si hay problemas de conectividad
+      }
+      
     } catch (error) {
       logger.error(`Error validando sesión: ${error.message}`);
       return false;

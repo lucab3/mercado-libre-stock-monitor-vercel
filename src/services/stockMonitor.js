@@ -119,15 +119,7 @@ class StockMonitor {
         scanResult = await products.getAllProducts();
       }
       
-      // CORREGIDO: Si results es null, significa "sin cambios" - mantener productos existentes
-      if (scanResult.results === null) {
-        logger.info('📋 Scan completado sin cambios - manteniendo productos existentes');
-        return;
-      }
-      
-      const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
-      
-      // NUEVO: Guardar información del scan
+      // NUEVO: Guardar información del scan ANTES de verificar si results es null
       this.lastScanInfo = {
         scanCompleted: scanResult.scanCompleted,
         batchCompleted: scanResult.batchCompleted,
@@ -138,6 +130,15 @@ class StockMonitor {
         error: scanResult.error,
         lastUpdate: Date.now()
       };
+      
+      // CORREGIDO: Si results es null, significa "sin cambios" - mantener productos existentes
+      if (scanResult.results === null) {
+        logger.info('📋 Scan completado sin cambios - manteniendo productos existentes');
+        // IMPORTANTE: lastScanInfo ya se actualizó arriba, así que el frontend sabrá que scanCompleted=true
+        return;
+      }
+      
+      const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
       
       // Log información del scan
       if (scanResult.scanCompleted !== undefined) {

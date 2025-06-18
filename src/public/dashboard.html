@@ -571,18 +571,18 @@
                         scanStatus.className = 'alert alert-warning';
                         
                         console.log('✅ Mostrando botón de continuar scan');
-                    } else if (scanCompleted) {
-                        // Scan completado - ocultar botón
+                    } else if (scanCompleted || (!hasMoreProducts && totalProducts > 0)) {
+                        // Scan completado - ocultar botón y mostrar estado final
                         continueBtn.style.display = 'none';
                         scanProgress.style.display = 'inline';
-                        scanProgress.textContent = 'Scan completo';
+                        scanProgress.textContent = 'Todos los productos obtenidos';
                         scanProgress.className = 'badge bg-success';
                         
                         scanStatus.style.display = 'block';
-                        scanStatusText.textContent = `Scan completo: ${totalProducts} productos cargados.`;
+                        scanStatusText.textContent = `✅ Scan completo: ${totalProducts} productos cargados. No hay más productos disponibles.`;
                         scanStatus.className = 'alert alert-success';
                         
-                        console.log('✅ Scan completado - ocultando botón');
+                        console.log('✅ Scan completado - ocultando botón de continuar');
                     } else {
                         // Estado intermedio - probablemente primer scan
                         if (totalProducts > 0) {
