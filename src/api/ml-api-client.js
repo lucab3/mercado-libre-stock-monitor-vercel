@@ -167,6 +167,24 @@ class MLAPIClient {
         
         logger.info(`🔄 Continuando scan desde cache: ${previousProductsCount} productos ya obtenidos, páginas totales procesadas: ${totalPagesProcessed}`);
         logger.info(`🔄 Iniciando nuevo lote desde scroll_id: ${scrollId ? scrollId.substring(0, 30) + '...' : 'NO_SCROLL_ID'}`);
+        
+        // CORREGIDO: Si no hay scroll_id, significa que el scan YA se completó
+        if (!scrollId) {
+          logger.info('🏁 SCAN YA COMPLETADO - no hay scroll_id en cache, devolviendo estado actual');
+          return {
+            results: null, // null = no cambios, preservar productos existentes
+            total: allProducts.length,
+            newProductsCount: 0,
+            scanCompleted: true,
+            batchCompleted: true,
+            hasMoreProducts: false,
+            pagesProcessed: totalPagesProcessed,
+            duplicatesDetected: duplicatesDetected,
+            uniqueProducts: allProducts.length,
+            scrollId: null,
+            message: 'Scan ya completado anteriormente - no hay más productos disponibles'
+          };
+        }
       }
     }
     
@@ -267,7 +285,11 @@ class MLAPIClient {
       const batchCompleted = pageCount >= maxPages;
       const hasMoreProducts = !!scrollId; // Si hay scroll_id, hay más productos
       
-      if (pageCount >= maxPages) {
+      // CORREGIDO: Determinar si el scan está realmente completo
+      const naturallyCompleted = !hasMoreProducts; // No hay scroll_id = fin natural
+      const scanCompleted = naturallyCompleted || (batchCompleted && !hasMoreProducts);
+      
+      if (batchCompleted && hasMoreProducts) {
         logger.warn(`⚠️ Alcanzado límite de lote (${maxPages} páginas) para evitar timeout en Vercel`);
         logger.info(`📊 Productos obtenidos en este lote: ${allProducts.length - previousProductsCount}`);
         
@@ -284,19 +306,20 @@ class MLAPIClient {
           });
           logger.info(`💾 Estado guardado en cache: ${allProducts.length} productos, ${updatedTotalPages} páginas totales`);
         }
-      } else {
-        // Scan completado naturalmente, limpiar cache
-        if (sessionId) {
-          scanCache.clearScanState(userId, sessionId);
-        }
+      } else if (scanCompleted) {
+        // Scan completado naturalmente - NO limpiar cache inmediatamente para evitar reset
         logger.info('🏁 Scan completo - se obtuvieron todos los productos disponibles');
+        logger.info('💾 Cache mantenido para evitar reset en llamadas subsiguientes');
       }
       
       logger.info(`✅ Lote completado: ${allProducts.length} productos únicos en ${pageCount} páginas`);
       logger.info(`🔢 Estadísticas: ${duplicatesDetected} productos duplicados detectados y filtrados`);
       
       const newProductsInThisBatch = allProducts.length - previousProductsCount;
-      const scanCompleted = batchCompleted && !hasMoreProducts;
+      
+      // DEBUGGING: Log detallado del estado del scan
+      logger.info(`🔍 ESTADO DEL SCAN: naturallyCompleted=${naturallyCompleted}, batchCompleted=${batchCompleted}, hasMoreProducts=${hasMoreProducts}, scanCompleted=${scanCompleted}`);
+      logger.info(`📊 PRODUCTOS: newInBatch=${newProductsInThisBatch}, total=${allProducts.length}, previous=${previousProductsCount}`);
       
       // CORREGIDO: Si no hay productos nuevos y el scan está completo, devolver null
       if (newProductsInThisBatch === 0 && scanCompleted) {

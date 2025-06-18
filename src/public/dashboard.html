@@ -1011,19 +1011,29 @@
                             // 1. Actualización inmediata
                             loadStatus(true);
                             
-                            // 2. Actualización con delay para asegurar sincronización del backend (solo si hubo productos nuevos)
-                            if (newProductsCount > 0) {
-                                setTimeout(() => {
-                                    console.log('🔄 Segunda actualización para sincronizar backend...');
-                                    loadStatus(true);
-                                }, 1500);
+                            // 2. Actualización con delay para asegurar sincronización del backend
+                            setTimeout(() => {
+                                console.log('🔄 Segunda actualización para sincronizar backend...');
+                                loadStatus(true);
+                            }, 1500);
+                            
+                            // 3. Actualización final para confirmar estado (especialmente importante si scan completado)
+                            setTimeout(() => {
+                                console.log('🔄 Actualización final para confirmar estado...');
+                                loadStatus(true);
                                 
-                                // 3. Actualización final para confirmar que todo esté sincronizado
-                                setTimeout(() => {
-                                    console.log('🔄 Actualización final para confirmar sincronización...');
-                                    loadStatus(true);
-                                    
-                                    // NUEVO: Verificar que los contadores se actualizaron correctamente
+                                // NUEVO: Verificar estado del botón cuando scan completado
+                                if (scanCompleted && newProductsCount === 0) {
+                                    console.log('🏁 Scan completado confirmado - verificando que botón esté oculto');
+                                    const btn = document.getElementById('continue-scan-btn');
+                                    if (btn && btn.style.display !== 'none') {
+                                        console.warn('⚠️ Botón aún visible, forzando ocultación...');
+                                        btn.style.display = 'none';
+                                    }
+                                }
+                                
+                                // Verificar contadores solo si hubo productos nuevos
+                                if (newProductsCount > 0) {
                                     const currentTotal = document.getElementById('total-products').textContent;
                                     const currentLowStock = document.getElementById('low-stock-products').textContent;
                                     console.log(`📊 Contadores después del scan: Total=${currentTotal}, BajoStock=${currentLowStock}`);
@@ -1032,8 +1042,8 @@
                                         console.warn('⚠️ Los contadores no se actualizaron completamente, forzando otra actualización...');
                                         setTimeout(() => loadStatus(true), 1000);
                                     }
-                                }, 3000);
-                            }
+                                }
+                            }, 3000);
                             
                             // CORREGIDO: Mensaje de estado diferente para scan completado
                             const statusMessage = scanCompleted && newProductsCount === 0 
