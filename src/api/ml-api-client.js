@@ -106,6 +106,52 @@ class MLAPIClient {
   }
 
   /**
+   * NUEVO: Obtener información de una categoría específica
+   */
+  async getCategory(categoryId) {
+    logger.debug(`🔍 Obteniendo información de categoría ${categoryId}`);
+    return await this.get(`/categories/${categoryId}`);
+  }
+
+  /**
+   * NUEVO: Obtener múltiples categorías en lote
+   */
+  async getMultipleCategories(categoryIds) {
+    if (categoryIds.length === 0) return [];
+    
+    logger.info(`🔍 Obteniendo ${categoryIds.length} categorías`);
+    const results = [];
+    
+    // Procesar en lotes para evitar rate limit
+    const chunks = this.chunkArray(categoryIds, 5); // 5 categorías por lote
+    
+    for (const chunk of chunks) {
+      try {
+        const categoryPromises = chunk.map(categoryId => this.getCategory(categoryId));
+        const categoryResults = await Promise.all(categoryPromises);
+        results.push(...categoryResults);
+        
+        // Pequeña pausa entre lotes
+        if (chunks.length > 1) {
+          await this.sleep(200);
+        }
+      } catch (error) {
+        logger.error(`Error obteniendo lote de categorías: ${error.message}`);
+      }
+    }
+    
+    logger.info(`✅ Obtenidas ${results.length}/${categoryIds.length} categorías exitosamente`);
+    return results;
+  }
+
+  /**
+   * NUEVO: Función auxiliar para pausas
+   */
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Obtener productos del usuario con rate limiting inteligente
    */
   async getUserProducts(userId, options = {}) {

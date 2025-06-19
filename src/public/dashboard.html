@@ -157,8 +157,59 @@
             min-width: 150px;
         }
         
-        #category-filter {
+        .category-filters {
+            max-width: 400px;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            background-color: #f8f9fa;
+            padding: 1rem;
+        }
+        
+        .category-checkboxes {
+            max-height: 300px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem;
+        }
+        
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            background-color: white;
+            border: 1px solid #e9ecef;
+            transition: background-color 0.2s;
+        }
+        
+        .category-item:hover {
+            background-color: #e3f2fd;
+        }
+        
+        .category-item.has-subcategories {
+            border-left: 3px solid #007bff;
+        }
+        
+        .category-checkbox {
+            margin-right: 0.5rem;
+        }
+        
+        .category-name {
             font-size: 0.85rem;
+            flex-grow: 1;
+        }
+        
+        .category-path {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-left: 0.5rem;
+        }
+        
+        .subcategory-item {
+            margin-left: 1rem;
+            border-left: 2px solid #28a745;
+            background-color: #f0f9ff;
         }
         
         @media (max-width: 768px) {
@@ -169,6 +220,14 @@
             
             .filter-group {
                 width: 100%;
+            }
+            
+            .category-checkboxes {
+                grid-template-columns: 1fr;
+            }
+            
+            .category-filters {
+                max-width: 100%;
             }
         }
     </style>
@@ -291,16 +350,26 @@
                     <h2>Productos con stock bajo</h2>
                     <div class="filter-controls">
                         <div class="filter-group me-3">
-                            <label for="category-filter" class="form-label me-2">Filtrar categorías:</label>
-                            <div class="d-flex gap-2">
-                                <select id="category-filter" class="form-select form-select-sm" multiple style="min-width: 200px; height: 80px;">
-                                    <!-- Se cargan dinámicamente -->
-                                </select>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <label class="form-label me-2 mb-0">Filtrar categorías:</label>
                                 <button type="button" id="clear-categories" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros de categorías">
-                                    <i class="bi bi-x-circle"></i>
+                                    <i class="bi bi-x-circle"></i> Limpiar
+                                </button>
+                                <button type="button" id="toggle-categories" class="btn btn-sm btn-outline-info" title="Mostrar/Ocultar filtros">
+                                    <i class="bi bi-funnel"></i> <span id="toggle-text">Mostrar</span>
                                 </button>
                             </div>
-                            <small class="text-muted">Mantén Ctrl/Cmd para seleccionar múltiples</small>
+                            <div id="category-filters" class="category-filters" style="display: none;">
+                                <div id="category-loading" class="text-center p-3">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Cargando categorías...</span>
+                                    </div>
+                                    <div class="mt-2">Obteniendo categorías...</div>
+                                </div>
+                                <div id="category-checkboxes" class="category-checkboxes" style="display: none;">
+                                    <!-- Se cargan dinámicamente -->
+                                </div>
+                            </div>
                         </div>
                         <div class="filter-group">
                             <label for="stock-filter" class="form-label me-2">Ordenar por stock:</label>
@@ -342,7 +411,9 @@
         let lastKnownState = null;
         let isLoading = false;
         let originalProductsData = []; // Para mantener los datos originales sin filtrar
-        let availableCategories = new Map(); // Para mapear category_id a nombre de categoría
+        let availableCategories = new Map(); // Para mapear category_id a información de categoría
+        let categoriesCache = new Map(); // Cache de categorías obtenidas de la API
+        let categoriesLoaded = false;
         
         // Script para interactuar con la API - MEJORADO CON ENLACES A ML
         document.addEventListener('DOMContentLoaded', function() {
@@ -358,7 +429,7 @@
             document.getElementById('stop-monitoring').addEventListener('click', stopMonitoring);
             document.getElementById('refresh-status').addEventListener('click', () => loadStatus(true));
             document.getElementById('stock-filter').addEventListener('change', applyFilters);
-            document.getElementById('category-filter').addEventListener('change', applyFilters);
+            document.getElementById('toggle-categories').addEventListener('click', toggleCategoryFilters);
             document.getElementById('clear-categories').addEventListener('click', clearCategoryFilters);
             
             function updateSyncStatus(status, message = '') {
@@ -656,8 +727,8 @@
                 let filteredProducts = [...originalProductsData];
                 
                 // 1. Aplicar filtro de categorías primero
-                const selectedCategories = Array.from(document.getElementById('category-filter').selectedOptions)
-                    .map(option => option.value);
+                const selectedCheckboxes = document.querySelectorAll('#category-checkboxes .category-checkbox:checked');
+                const selectedCategories = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
                 
                 if (selectedCategories.length > 0) {
                     filteredProducts = filteredProducts.filter(product => 
@@ -688,9 +759,30 @@
             }
             
             function clearCategoryFilters() {
-                const categorySelect = document.getElementById('category-filter');
-                categorySelect.selectedIndex = -1; // Deseleccionar todas las opciones
+                const checkboxes = document.querySelectorAll('#category-checkboxes .category-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
                 applyFilters(); // Reaplicar filtros
+            }
+            
+            function toggleCategoryFilters() {
+                const categoryFilters = document.getElementById('category-filters');
+                const toggleText = document.getElementById('toggle-text');
+                const isVisible = categoryFilters.style.display !== 'none';
+                
+                if (isVisible) {
+                    categoryFilters.style.display = 'none';
+                    toggleText.textContent = 'Mostrar';
+                } else {
+                    categoryFilters.style.display = 'block';
+                    toggleText.textContent = 'Ocultar';
+                    
+                    // Solo cargar categorías la primera vez que se muestran
+                    if (!categoriesLoaded) {
+                        loadCategoriesInfo();
+                    }
+                }
             }
             
             function updateAvailableCategories(products) {
@@ -700,21 +792,116 @@
                 // Extraer categorías únicas de los productos
                 products.forEach(product => {
                     if (product.category_id) {
-                        // Por ahora usamos el category_id como nombre también
-                        // En el futuro se podría hacer una llamada a la API para obtener nombres reales
-                        availableCategories.set(product.category_id, getCategoryDisplayName(product.category_id));
+                        // Solo agregar si no está ya en la cache
+                        if (!categoriesCache.has(product.category_id)) {
+                            availableCategories.set(product.category_id, getCategoryDisplayName(product.category_id));
+                        } else {
+                            // Usar información de la cache si está disponible
+                            const cachedCategory = categoriesCache.get(product.category_id);
+                            availableCategories.set(product.category_id, cachedCategory.name);
+                        }
                     }
                 });
                 
-                // Actualizar el selector de categorías
-                updateCategorySelector();
+                // Si las categorías están visibles y cargadas, actualizar la interfaz
+                if (categoriesLoaded && document.getElementById('category-filters').style.display !== 'none') {
+                    updateCategorySelector();
+                }
+            }
+            
+            async function loadCategoriesInfo() {
+                const categoryLoading = document.getElementById('category-loading');
+                const categoryCheckboxes = document.getElementById('category-checkboxes');
+                
+                categoryLoading.style.display = 'block';
+                categoryCheckboxes.style.display = 'none';
+                
+                try {
+                    // Obtener categorías únicas de los productos actuales
+                    const uniqueCategoryIds = [...new Set(originalProductsData
+                        .map(product => product.category_id)
+                        .filter(id => id)
+                    )];
+                    
+                    if (uniqueCategoryIds.length === 0) {
+                        categoryLoading.innerHTML = '<div class="text-center p-3"><i class="bi bi-info-circle"></i><div class="mt-2">No hay categorías para mostrar</div></div>';
+                        return;
+                    }
+                    
+                    // Filtrar categorías que no están en cache
+                    const categoriesToFetch = uniqueCategoryIds.filter(id => !categoriesCache.has(id));
+                    
+                    if (categoriesToFetch.length > 0) {
+                        console.log(`🔍 Obteniendo información de ${categoriesToFetch.length} categorías desde la API...`);
+                        
+                        const response = await fetch('/api/categories/info', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ categoryIds: categoriesToFetch })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Error HTTP: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (data.success && data.categories) {
+                            // Guardar en cache
+                            data.categories.forEach(category => {
+                                categoriesCache.set(category.id, {
+                                    id: category.id,
+                                    name: category.name,
+                                    path_from_root: category.path_from_root || [],
+                                    children_categories: category.children_categories || []
+                                });
+                            });
+                            
+                            console.log(`✅ Información de ${data.categories.length} categorías guardada en cache`);
+                        } else {
+                            throw new Error(data.message || 'Error en la respuesta del servidor');
+                        }
+                    } else {
+                        console.log('📋 Todas las categorías ya están en cache');
+                    }
+                    
+                    // Actualizar availableCategories con información de la cache
+                    uniqueCategoryIds.forEach(categoryId => {
+                        const cachedCategory = categoriesCache.get(categoryId);
+                        if (cachedCategory) {
+                            availableCategories.set(categoryId, cachedCategory.name);
+                        } else {
+                            availableCategories.set(categoryId, getCategoryDisplayName(categoryId));
+                        }
+                    });
+                    
+                    categoriesLoaded = true;
+                    categoryLoading.style.display = 'none';
+                    categoryCheckboxes.style.display = 'block';
+                    
+                    // Actualizar la interfaz de checkboxes
+                    updateCategorySelector();
+                    
+                } catch (error) {
+                    console.error('❌ Error cargando información de categorías:', error);
+                    categoryLoading.innerHTML = `
+                        <div class="text-center p-3 text-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <div class="mt-2">Error cargando categorías</div>
+                            <small>${error.message}</small>
+                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadCategoriesInfo()">Reintentar</button>
+                        </div>
+                    `;
+                }
             }
             
             function getCategoryDisplayName(categoryId) {
-                // Mapeo básico de algunos category_ids conocidos a nombres amigables
+                // Mapeo básico de algunos category_ids conocidos a nombres amigables (fallback)
                 const categoryNames = {
                     'MLM1055': 'Celulares y Teléfonos',
-                    'MLM1648': 'Computación',
+                    'MLM1648': 'Computación', 
                     'MLM1144': 'Consolas y Videojuegos',
                     'MLM1000': 'Electrónicos',
                     'MLM1403': 'Instrumentos Musicales',
@@ -729,27 +916,94 @@
             }
             
             function updateCategorySelector() {
-                const categorySelect = document.getElementById('category-filter');
-                const currentSelection = Array.from(categorySelect.selectedOptions).map(opt => opt.value);
+                const categoryCheckboxes = document.getElementById('category-checkboxes');
+                const currentSelection = Array.from(document.querySelectorAll('#category-checkboxes .category-checkbox:checked'))
+                    .map(checkbox => checkbox.value);
                 
-                // Limpiar opciones actuales
-                categorySelect.innerHTML = '';
+                // Limpiar checkboxes actuales
+                categoryCheckboxes.innerHTML = '';
                 
                 // Agregar categorías disponibles ordenadas
                 const sortedCategories = Array.from(availableCategories.entries())
                     .sort((a, b) => a[1].localeCompare(b[1])); // Ordenar por nombre
                 
                 sortedCategories.forEach(([categoryId, categoryName]) => {
-                    const option = document.createElement('option');
-                    option.value = categoryId;
-                    option.textContent = categoryName;
+                    const categoryItem = document.createElement('div');
+                    categoryItem.className = 'category-item';
+                    
+                    // Verificar si tiene subcategorías
+                    const cachedCategory = categoriesCache.get(categoryId);
+                    const hasSubcategories = cachedCategory && cachedCategory.children_categories && 
+                                            cachedCategory.children_categories.length > 0;
+                    
+                    if (hasSubcategories) {
+                        categoryItem.classList.add('has-subcategories');
+                    }
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'category-checkbox';
+                    checkbox.value = categoryId;
+                    checkbox.addEventListener('change', applyFilters);
                     
                     // Mantener selección previa si existe
                     if (currentSelection.includes(categoryId)) {
-                        option.selected = true;
+                        checkbox.checked = true;
                     }
                     
-                    categorySelect.appendChild(option);
+                    const label = document.createElement('label');
+                    label.className = 'category-name';
+                    label.textContent = categoryName;
+                    label.addEventListener('click', () => {
+                        checkbox.checked = !checkbox.checked;
+                        applyFilters();
+                    });
+                    
+                    // Mostrar path si está disponible
+                    if (cachedCategory && cachedCategory.path_from_root && cachedCategory.path_from_root.length > 1) {
+                        const pathSpan = document.createElement('span');
+                        pathSpan.className = 'category-path';
+                        const pathNames = cachedCategory.path_from_root.map(cat => cat.name).join(' > ');
+                        pathSpan.textContent = pathNames;
+                        categoryItem.appendChild(checkbox);
+                        categoryItem.appendChild(label);
+                        categoryItem.appendChild(pathSpan);
+                    } else {
+                        categoryItem.appendChild(checkbox);
+                        categoryItem.appendChild(label);
+                    }
+                    
+                    categoryCheckboxes.appendChild(categoryItem);
+                    
+                    // Agregar subcategorías si existen
+                    if (hasSubcategories) {
+                        cachedCategory.children_categories.forEach(subcat => {
+                            const subcategoryItem = document.createElement('div');
+                            subcategoryItem.className = 'category-item subcategory-item';
+                            
+                            const subCheckbox = document.createElement('input');
+                            subCheckbox.type = 'checkbox';
+                            subCheckbox.className = 'category-checkbox';
+                            subCheckbox.value = subcat.id;
+                            subCheckbox.addEventListener('change', applyFilters);
+                            
+                            if (currentSelection.includes(subcat.id)) {
+                                subCheckbox.checked = true;
+                            }
+                            
+                            const subLabel = document.createElement('label');
+                            subLabel.className = 'category-name';
+                            subLabel.textContent = `↳ ${subcat.name}`;
+                            subLabel.addEventListener('click', () => {
+                                subCheckbox.checked = !subCheckbox.checked;
+                                applyFilters();
+                            });
+                            
+                            subcategoryItem.appendChild(subCheckbox);
+                            subcategoryItem.appendChild(subLabel);
+                            categoryCheckboxes.appendChild(subcategoryItem);
+                        });
+                    }
                 });
             }
             
@@ -1217,6 +1471,9 @@
                     });
             };
             
+            // Hacer funciones disponibles globalmente
+            window.loadCategoriesInfo = loadCategoriesInfo;
+            
             // Hacer funciones de debug disponibles globalmente
             console.log('🐛 FUNCIONES DE DEBUG DISPONIBLES:');
             console.log('- debugProductDetails(productId): Debug de un producto específico');
@@ -1224,6 +1481,7 @@
             console.log('- debugAllProducts(): Ver TODOS los productos del usuario');
             console.log('- forceSyncClean(): Sincronización completa con limpieza');
             console.log('- removePhantomProduct(productId): Eliminar producto fantasma');
+            console.log('- loadCategoriesInfo(): Cargar información de categorías desde la API');
             console.log('- Para usar: debugSystem() o debugProductDetails("MLA1234567890")');
         });
     </script>

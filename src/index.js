@@ -543,6 +543,54 @@ app.post('/api/products/continue-scan', async (req, res) => {
   }
 });
 
+// NUEVO: API para obtener información de categorías
+app.post('/api/categories/info', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const { categoryIds } = req.body;
+    
+    if (!categoryIds || !Array.isArray(categoryIds)) {
+      return res.status(400).json({ error: 'Se requiere un array de categoryIds' });
+    }
+
+    logger.info(`🔍 Obteniendo información de ${categoryIds.length} categorías`);
+    
+    const mlApiClient = require('./api/ml-api-client');
+    
+    // Configurar token de acceso
+    const accessToken = await auth.getAccessToken();
+    mlApiClient.setAccessToken(accessToken);
+    
+    // Obtener información de categorías
+    const categories = await mlApiClient.getMultipleCategories(categoryIds);
+    
+    // Procesar y formatear respuesta
+    const categoriesInfo = categories.map(category => ({
+      id: category.id,
+      name: category.name,
+      path_from_root: category.path_from_root || [],
+      children_categories: category.children_categories || [],
+      total_items_in_this_category: category.total_items_in_this_category || 0
+    }));
+
+    res.json({
+      success: true,
+      categories: categoriesInfo,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`Error obteniendo categorías: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener información de categorías',
+      message: error.message 
+    });
+  }
+});
+
 // NUEVO: API para debug detallado del proceso de scan
 app.get('/debug/scan-process', async (req, res) => {
   if (!auth.isAuthenticated()) {
