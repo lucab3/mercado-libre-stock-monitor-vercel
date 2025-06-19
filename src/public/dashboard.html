@@ -142,12 +142,34 @@
         
         .filter-controls {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
         
-        .filter-controls .form-select {
-            min-width: 200px;
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .filter-group .form-select {
+            min-width: 150px;
+        }
+        
+        #category-filter {
+            font-size: 0.85rem;
+        }
+        
+        @media (max-width: 768px) {
+            .filter-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -268,12 +290,26 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>Productos con stock bajo</h2>
                     <div class="filter-controls">
-                        <label for="stock-filter" class="form-label me-2">Ordenar por stock:</label>
-                        <select id="stock-filter" class="form-select form-select-sm" style="width: auto; display: inline-block;">
-                            <option value="default">Sin ordenar</option>
-                            <option value="stock-asc">Menor a mayor stock</option>
-                            <option value="stock-desc">Mayor a menor stock</option>
-                        </select>
+                        <div class="filter-group me-3">
+                            <label for="category-filter" class="form-label me-2">Filtrar categorías:</label>
+                            <div class="d-flex gap-2">
+                                <select id="category-filter" class="form-select form-select-sm" multiple style="min-width: 200px; height: 80px;">
+                                    <!-- Se cargan dinámicamente -->
+                                </select>
+                                <button type="button" id="clear-categories" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros de categorías">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">Mantén Ctrl/Cmd para seleccionar múltiples</small>
+                        </div>
+                        <div class="filter-group">
+                            <label for="stock-filter" class="form-label me-2">Ordenar por stock:</label>
+                            <select id="stock-filter" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                                <option value="default">Sin ordenar</option>
+                                <option value="stock-asc">Menor a mayor stock</option>
+                                <option value="stock-desc">Mayor a menor stock</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -306,6 +342,7 @@
         let lastKnownState = null;
         let isLoading = false;
         let originalProductsData = []; // Para mantener los datos originales sin filtrar
+        let availableCategories = new Map(); // Para mapear category_id a nombre de categoría
         
         // Script para interactuar con la API - MEJORADO CON ENLACES A ML
         document.addEventListener('DOMContentLoaded', function() {
@@ -320,7 +357,9 @@
             document.getElementById('start-monitoring').addEventListener('click', startMonitoring);
             document.getElementById('stop-monitoring').addEventListener('click', stopMonitoring);
             document.getElementById('refresh-status').addEventListener('click', () => loadStatus(true));
-            document.getElementById('stock-filter').addEventListener('change', applyStockFilter);
+            document.getElementById('stock-filter').addEventListener('change', applyFilters);
+            document.getElementById('category-filter').addEventListener('change', applyFilters);
+            document.getElementById('clear-categories').addEventListener('click', clearCategoryFilters);
             
             function updateSyncStatus(status, message = '') {
                 const syncElement = document.getElementById('sync-status');
@@ -613,32 +652,126 @@
                 }
             }
             
-            function applyStockFilter() {
-                const filterValue = document.getElementById('stock-filter').value;
-                let sortedProducts = [...originalProductsData];
+            function applyFilters() {
+                let filteredProducts = [...originalProductsData];
                 
-                switch(filterValue) {
+                // 1. Aplicar filtro de categorías primero
+                const selectedCategories = Array.from(document.getElementById('category-filter').selectedOptions)
+                    .map(option => option.value);
+                
+                if (selectedCategories.length > 0) {
+                    filteredProducts = filteredProducts.filter(product => 
+                        selectedCategories.includes(product.category_id)
+                    );
+                }
+                
+                // 2. Aplicar ordenamiento por stock
+                const stockFilterValue = document.getElementById('stock-filter').value;
+                
+                switch(stockFilterValue) {
                     case 'stock-asc':
-                        sortedProducts.sort((a, b) => a.stock - b.stock);
+                        filteredProducts.sort((a, b) => a.stock - b.stock);
                         break;
                     case 'stock-desc':
-                        sortedProducts.sort((a, b) => b.stock - a.stock);
+                        filteredProducts.sort((a, b) => b.stock - a.stock);
                         break;
                     case 'default':
                     default:
-                        // Mantener orden original
+                        // Mantener orden original (después del filtro de categorías)
                         break;
                 }
                 
-                renderProductTable(sortedProducts);
+                renderProductTable(filteredProducts);
+                
+                // Actualizar contador de productos filtrados
+                updateFilteredCount(filteredProducts.length, originalProductsData.length);
+            }
+            
+            function clearCategoryFilters() {
+                const categorySelect = document.getElementById('category-filter');
+                categorySelect.selectedIndex = -1; // Deseleccionar todas las opciones
+                applyFilters(); // Reaplicar filtros
+            }
+            
+            function updateAvailableCategories(products) {
+                // Limpiar categorías previas
+                availableCategories.clear();
+                
+                // Extraer categorías únicas de los productos
+                products.forEach(product => {
+                    if (product.category_id) {
+                        // Por ahora usamos el category_id como nombre también
+                        // En el futuro se podría hacer una llamada a la API para obtener nombres reales
+                        availableCategories.set(product.category_id, getCategoryDisplayName(product.category_id));
+                    }
+                });
+                
+                // Actualizar el selector de categorías
+                updateCategorySelector();
+            }
+            
+            function getCategoryDisplayName(categoryId) {
+                // Mapeo básico de algunos category_ids conocidos a nombres amigables
+                const categoryNames = {
+                    'MLM1055': 'Celulares y Teléfonos',
+                    'MLM1648': 'Computación',
+                    'MLM1144': 'Consolas y Videojuegos',
+                    'MLM1000': 'Electrónicos',
+                    'MLM1403': 'Instrumentos Musicales',
+                    'MLM1276': 'Deportes y Fitness',
+                    'MLM1430': 'Ropa y Accesorios',
+                    'MLM1132': 'Juegos y Juguetes',
+                    'MLM1367': 'Industrias y Oficinas',
+                    'MLM1039': 'Cámaras y Accesorios'
+                };
+                
+                return categoryNames[categoryId] || `Categoría ${categoryId}`;
+            }
+            
+            function updateCategorySelector() {
+                const categorySelect = document.getElementById('category-filter');
+                const currentSelection = Array.from(categorySelect.selectedOptions).map(opt => opt.value);
+                
+                // Limpiar opciones actuales
+                categorySelect.innerHTML = '';
+                
+                // Agregar categorías disponibles ordenadas
+                const sortedCategories = Array.from(availableCategories.entries())
+                    .sort((a, b) => a[1].localeCompare(b[1])); // Ordenar por nombre
+                
+                sortedCategories.forEach(([categoryId, categoryName]) => {
+                    const option = document.createElement('option');
+                    option.value = categoryId;
+                    option.textContent = categoryName;
+                    
+                    // Mantener selección previa si existe
+                    if (currentSelection.includes(categoryId)) {
+                        option.selected = true;
+                    }
+                    
+                    categorySelect.appendChild(option);
+                });
+            }
+            
+            function updateFilteredCount(filtered, total) {
+                // Actualizar el texto del header para mostrar filtros aplicados
+                const header = document.querySelector('h2');
+                if (filtered === total) {
+                    header.textContent = 'Productos con stock bajo';
+                } else {
+                    header.textContent = `Productos con stock bajo (${filtered} de ${total} mostrados)`;
+                }
             }
             
             function updateProductTable(lowStockProducts) {
                 // Guardar datos originales
                 originalProductsData = lowStockProducts || [];
                 
-                // Aplicar filtro actual
-                applyStockFilter();
+                // Actualizar categorías disponibles
+                updateAvailableCategories(originalProductsData);
+                
+                // Aplicar filtros actuales
+                applyFilters();
             }
             
             function renderProductTable(lowStockProducts) {

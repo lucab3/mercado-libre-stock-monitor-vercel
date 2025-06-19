@@ -489,6 +489,7 @@ class StockMonitor {
           health: trackedProduct.health || null, // NUEVO: Estado de salud
           condition: trackedProduct.condition || null, // NUEVO: Condición
           listing_type_id: trackedProduct.listing_type_id || null, // NUEVO: Tipo de publicación
+          category_id: trackedProduct.category_id || null, // NUEVO: ID de categoría para filtros
           linkType: trackedProduct.linkType || 'unknown', // NUEVO: Tipo de enlace
           productUrl: trackedProduct.getProductUrl()
         };
@@ -503,6 +504,7 @@ class StockMonitor {
         health: p.health || null, // NUEVO: Estado de salud
         condition: p.condition || null, // NUEVO: Condición
         listing_type_id: p.listing_type_id || null, // NUEVO: Tipo de publicación
+        category_id: p.category_id || null, // NUEVO: ID de categoría para filtros
         linkType: p.linkType || 'unknown', // NUEVO: Tipo de enlace
         productUrl: p.productUrl || this.generateProductUrl(p.id)
       };

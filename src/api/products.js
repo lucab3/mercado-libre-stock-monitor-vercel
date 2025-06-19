@@ -463,6 +463,7 @@ class ProductsService {
             'stop_time',        // Fecha de finalización si está pausada
             'health',          // Estado de salud de la publicación
             'catalog_listing', // Si es catálogo
+            'category_id',     // ID de categoría para filtros
             'attributes'       // Atributos adicionales que pueden incluir SKU
           ];
 
