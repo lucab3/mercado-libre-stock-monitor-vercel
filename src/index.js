@@ -1198,10 +1198,26 @@ app.get('/api/auth/status', async (req, res) => {
     
     if (isAuthenticated) {
       try {
+        // Obtener información completa del usuario
+        const userId = await auth.getCurrentUserId();
+        const sessionInfo = auth.getCurrentSessionInfo();
+        
         userInfo = {
-          id: await auth.getCurrentUserId(),
-          sessionInfo: auth.getCurrentSessionInfo()
+          id: userId,
+          sessionInfo: sessionInfo
         };
+        
+        // Intentar obtener el nickname y otros datos del usuario desde ML API
+        try {
+          const userDetails = await auth.getUserInfo();
+          if (userDetails) {
+            userInfo.nickname = userDetails.nickname;
+            userInfo.email = userDetails.email;
+          }
+        } catch (userDetailsError) {
+          // Si no se puede obtener detalles, continuar solo con ID
+          logger.debug(`No se pudieron obtener detalles del usuario: ${userDetailsError.message}`);
+        }
         
         // Validar que la sesión sea legítima
         sessionValid = await auth.validateCurrentSession();

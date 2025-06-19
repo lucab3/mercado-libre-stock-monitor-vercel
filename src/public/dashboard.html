@@ -54,11 +54,6 @@
             padding: 10px;
             margin-bottom: 15px;
         }
-        .logout-btn {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-        }
         .sync-indicator {
             font-size: 0.8rem;
             color: #6c757d;
@@ -144,6 +139,16 @@
             font-size: 0.75rem;
             color: #6c757d;
         }
+        
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .filter-controls .form-select {
+            min-width: 200px;
+        }
     </style>
 </head>
 <body>
@@ -152,10 +157,17 @@
         <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="logout-btn">
-            <a href="/auth/logout" class="btn btn-sm btn-outline-light">
-                <i class="bi bi-box-arrow-right"></i> Cerrar sesión
-            </a>
+        <div class="navbar-nav flex-row">
+            <div class="nav-item text-nowrap me-3">
+                <span class="navbar-text text-light">
+                    <i class="bi bi-person-circle"></i> <span id="current-user">Cargando...</span>
+                </span>
+            </div>
+            <div class="nav-item text-nowrap">
+                <a href="/auth/logout" class="btn btn-sm btn-outline-light">
+                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                </a>
+            </div>
         </div>
     </header>
     
@@ -204,29 +216,9 @@
                             <button type="button" id="stop-monitoring" class="btn btn-sm btn-outline-danger">
                                 <i class="bi bi-stop-fill"></i> Detener monitoreo
                             </button>
-                            <button type="button" id="check-now" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-search"></i> Verificar ahora
-                            </button>
-                        </div>
-                        <div class="btn-group me-2">
-                            <button type="button" id="force-changes" class="btn btn-sm btn-outline-warning">
-                                <i class="bi bi-shuffle"></i> Forzar cambios
-                            </button>
-                            <button type="button" id="view-stats" class="btn btn-sm btn-outline-info">
-                                <i class="bi bi-graph-up"></i> Ver estadísticas
-                            </button>
                         </div>
                         <button type="button" id="refresh-status" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-arrow-repeat"></i> Actualizar estado
-                        </button>
-                        <button type="button" onclick="debugSystem()" class="btn btn-sm btn-outline-warning" title="Debug completo del sistema">
-                            <i class="bi bi-bug"></i> Debug Sistema
-                        </button>
-                        <button type="button" onclick="debugAllProducts()" class="btn btn-sm btn-outline-info" title="Ver todos los productos">
-                            <i class="bi bi-list-check"></i> Todos los Productos
-                        </button>
-                        <button type="button" onclick="forceSyncClean()" class="btn btn-sm btn-outline-danger" title="Limpiar cache y sincronizar">
-                            <i class="bi bi-arrow-clockwise"></i> Sync Completo
                         </button>
                         <button type="button" id="continue-scan-btn" onclick="continueProductScan()" class="btn btn-sm btn-success" title="Obtener siguientes productos" style="display: none;">
                             <i class="bi bi-plus-circle"></i> <span id="continue-scan-text">Obtener más productos</span>
@@ -273,7 +265,17 @@
                     </div>
                 </div>
                 
-                <h2>Productos con stock bajo</h2>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>Productos con stock bajo</h2>
+                    <div class="filter-controls">
+                        <label for="stock-filter" class="form-label me-2">Ordenar por stock:</label>
+                        <select id="stock-filter" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                            <option value="default">Sin ordenar</option>
+                            <option value="stock-asc">Menor a mayor stock</option>
+                            <option value="stock-desc">Mayor a menor stock</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-sm">
                         <thead>
@@ -303,6 +305,7 @@
         // Variables globales para estado
         let lastKnownState = null;
         let isLoading = false;
+        let originalProductsData = []; // Para mantener los datos originales sin filtrar
         
         // Script para interactuar con la API - MEJORADO CON ENLACES A ML
         document.addEventListener('DOMContentLoaded', function() {
@@ -316,10 +319,8 @@
             // Eventos de botones
             document.getElementById('start-monitoring').addEventListener('click', startMonitoring);
             document.getElementById('stop-monitoring').addEventListener('click', stopMonitoring);
-            document.getElementById('check-now').addEventListener('click', checkNow);
             document.getElementById('refresh-status').addEventListener('click', () => loadStatus(true));
-            document.getElementById('force-changes').addEventListener('click', forceStockChanges);
-            document.getElementById('view-stats').addEventListener('click', viewStats);
+            document.getElementById('stock-filter').addEventListener('change', applyStockFilter);
             
             function updateSyncStatus(status, message = '') {
                 const syncElement = document.getElementById('sync-status');
@@ -342,6 +343,29 @@
                     timeElement.textContent = message;
                 } else {
                     timeElement.textContent = 'Última actualización: ' + new Date().toLocaleString();
+                }
+            }
+            
+            function updateUserInfo(userInfo) {
+                const userElement = document.getElementById('current-user');
+                
+                if (userInfo) {
+                    // Preferir nickname si está disponible, sino usar ID
+                    let displayName = '';
+                    
+                    if (userInfo.nickname) {
+                        displayName = userInfo.nickname;
+                    } else if (userInfo.sessionInfo && userInfo.sessionInfo.userId) {
+                        displayName = userInfo.sessionInfo.userId;
+                    } else if (userInfo.id) {
+                        displayName = userInfo.id;
+                    } else {
+                        displayName = 'Usuario desconocido';
+                    }
+                    
+                    userElement.textContent = displayName;
+                } else {
+                    userElement.textContent = 'Usuario desconocido';
                 }
             }
             
@@ -370,6 +394,9 @@
                             updateProductTable(data.monitoring.lowStockProducts || []);
                             lastKnownState = data.monitoring;
                         }
+                        
+                        // Actualizar información del usuario
+                        updateUserInfo(data.user);
                         
                         updateSyncStatus('synced');
                         isLoading = false;
@@ -439,46 +466,7 @@
                     });
             }
             
-            function checkNow() {
-                const button = document.getElementById('check-now');
-                const originalText = button.innerHTML;
-                button.innerHTML = '<i class="bi bi-hourglass-split"></i> Verificando...';
-                button.disabled = true;
-                
-                updateSyncStatus('syncing', 'Verificando stock en tiempo real...');
-                
-                fetch('/api/monitor/check-now', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            const result = data.result || {};
-                            alert(`Verificación completada. ${result.lowStockProducts || 0} productos con stock bajo de ${result.totalProducts || 0} total.`);
-                            
-                            // Actualización inmediata después de verificación
-                            setTimeout(() => loadStatus(true), 500);
-                        } else {
-                            alert('Error en la verificación: ' + (data.error || 'Error desconocido'));
-                            updateSyncStatus('error');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('Error al verificar stock');
-                        updateSyncStatus('error');
-                    })
-                    .finally(() => {
-                        button.innerHTML = originalText;
-                        button.disabled = false;
-                    });
-            }
 
-            function forceStockChanges() {
-                alert('Esta función está disponible solo en modo de desarrollo con datos de prueba.');
-            }
-
-            function viewStats() {
-                alert('Las estadísticas están disponibles en la consola del navegador y en los logs del servidor.');
-            }
             
             function updateMonitoringStatus(monitoring) {
                 const statusElement = document.getElementById('monitoring-status');
@@ -563,11 +551,11 @@
                         // Hay más productos disponibles - mostrar botón
                         continueBtn.style.display = 'inline-block';
                         scanProgress.style.display = 'inline';
-                        scanProgress.textContent = `Lote parcial (${totalProducts}/~2908)`;
+                        scanProgress.textContent = `${totalProducts} productos cargados`;
                         scanProgress.className = 'badge bg-warning';
                         
                         scanStatus.style.display = 'block';
-                        scanStatusText.textContent = `Tienes ${totalProducts} productos cargados de ~2908 totales. Cada click obtiene ~300 productos. Haz clic en "Obtener más productos" para continuar.`;
+                        scanStatusText.textContent = `Tienes ${totalProducts} productos cargados. Cada click obtiene más productos. Haz clic en "Obtener más productos" para continuar.`;
                         scanStatus.className = 'alert alert-warning';
                         
                         console.log('✅ Mostrando botón de continuar scan');
@@ -625,7 +613,35 @@
                 }
             }
             
+            function applyStockFilter() {
+                const filterValue = document.getElementById('stock-filter').value;
+                let sortedProducts = [...originalProductsData];
+                
+                switch(filterValue) {
+                    case 'stock-asc':
+                        sortedProducts.sort((a, b) => a.stock - b.stock);
+                        break;
+                    case 'stock-desc':
+                        sortedProducts.sort((a, b) => b.stock - a.stock);
+                        break;
+                    case 'default':
+                    default:
+                        // Mantener orden original
+                        break;
+                }
+                
+                renderProductTable(sortedProducts);
+            }
+            
             function updateProductTable(lowStockProducts) {
+                // Guardar datos originales
+                originalProductsData = lowStockProducts || [];
+                
+                // Aplicar filtro actual
+                applyStockFilter();
+            }
+            
+            function renderProductTable(lowStockProducts) {
                 const tableBody = document.getElementById('low-stock-table');
                 
                 if (!lowStockProducts || lowStockProducts.length === 0) {
@@ -722,9 +738,6 @@
                                     </a>
                                     <button class="btn btn-sm btn-outline-info" onclick="debugProduct('${product.id}')" title="Ver datos de debug">
                                         <i class="bi bi-bug"></i> Debug
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="removePhantomProduct('${product.id}')" title="Eliminar si es fantasma">
-                                        <i class="bi bi-trash"></i> Limpiar
                                     </button>
                                 </div>
                             </td>
