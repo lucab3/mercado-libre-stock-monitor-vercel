@@ -324,16 +324,24 @@ class StockMonitor {
   async needsApiSync(userId) {
     try {
       // Obtener total de productos de la BD
-      const dbProducts = await databaseService.getProducts(userId, { limit: 1 });
+      const dbProducts = await databaseService.getProducts(userId, {});
+      const currentProductCount = dbProducts.length;
       
       // Si no hay productos en BD, necesitamos sync inicial
-      if (dbProducts.length === 0) {
+      if (currentProductCount === 0) {
         logger.info('📭 Base de datos vacía - sync inicial necesario');
         return true;
       }
       
-      // Si ya hay productos, los webhooks se encargan de las actualizaciones
-      logger.info('✅ Base de datos poblada - usando webhooks para actualizaciones');
+      // Si hay pocos productos (menos de 1000), probablemente el sync está incompleto
+      if (currentProductCount < 1000) {
+        logger.info(`🔄 Sync incompleto detectado - solo ${currentProductCount} productos en BD, esperamos ~2908`);
+        logger.info('🔄 Ejecutando sync para completar productos faltantes...');
+        return true;
+      }
+      
+      // Si ya hay productos suficientes, los webhooks se encargan de las actualizaciones
+      logger.info(`✅ Base de datos completa - ${currentProductCount} productos - usando webhooks para actualizaciones`);
       return false;
       
     } catch (error) {
