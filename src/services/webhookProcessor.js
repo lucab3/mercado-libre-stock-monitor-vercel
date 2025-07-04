@@ -20,7 +20,14 @@ class WebhookProcessor {
     
     this.supportedTopics = [
       'stock-location',
-      'items'
+      'items',
+      'items_prices'
+    ];
+    
+    // Topics que recibimos pero ignoramos (no causan error 400)
+    this.ignoredTopics = [
+      'orders_v2',
+      'shipments'
     ];
   }
 
@@ -80,8 +87,23 @@ class WebhookProcessor {
         };
       }
 
-      // Validar topic soportado
+      // Validar topic soportado o ignorado
       if (!this.supportedTopics.includes(webhookData.topic)) {
+        // Si es un topic ignorado, lo aceptamos pero no lo procesamos
+        if (this.ignoredTopics.includes(webhookData.topic)) {
+          logger.info(`ℹ️ Topic ignorado: ${webhookData.topic} - webhook aceptado pero no procesado`);
+          return {
+            valid: true,
+            ignored: true,
+            extractedData: {
+              productId: null,
+              topic: webhookData.topic,
+              resource: webhookData.resource,
+              userId: webhookData.user_id.toString()
+            }
+          };
+        }
+        
         logger.error(`❌ Topic no soportado: ${webhookData.topic}. Soportados: ${this.supportedTopics.join(', ')}`);
         return {
           valid: false,
@@ -315,6 +337,19 @@ class WebhookProcessor {
           httpCode: 400,
           error: 'Invalid webhook data',
           details: dataValidation,
+          processingTime: Date.now() - startTime
+        };
+      }
+      
+      // Si es un topic ignorado, responder 200 pero no procesar
+      if (dataValidation.ignored) {
+        logger.info(`⏭️ Webhook ignorado: ${webhookData._id} (topic: ${webhookData.topic})`);
+        return {
+          success: true,
+          httpCode: 200,
+          message: 'Webhook received but ignored (topic not relevant for stock monitoring)',
+          webhook_id: webhookData._id,
+          ignored: true,
           processingTime: Date.now() - startTime
         };
       }
