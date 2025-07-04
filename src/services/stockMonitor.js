@@ -222,8 +222,8 @@ class StockMonitor {
       // Obtener productos con stock bajo
       const lowStockProducts = await databaseService.getLowStockProducts(userId, this.stockThreshold);
       
-      // Obtener total de productos activos
-      const allProducts = await databaseService.getProducts(userId, { status: 'active' });
+      // Obtener total de productos (todos los estados)
+      const allProducts = await databaseService.getProducts(userId, {});
       
       this.sessionCache = {
         lowStockProducts: lowStockProducts.map(p => ({

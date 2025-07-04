@@ -72,7 +72,7 @@ class DatabaseService {
             .from(this.tableName)
             .select('*')
             .eq('user_id', userId)
-            .eq('status', 'active')
+            // Removed status filter - show all products regardless of status
             .lte('available_quantity', threshold)
             .order('available_quantity', { ascending: true });
         },
