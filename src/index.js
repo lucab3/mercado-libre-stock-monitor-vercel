@@ -18,6 +18,8 @@ const logger = require('./utils/logger');
 const auth = require('./api/auth');
 const stockMonitor = require('./services/stockMonitor');
 const sessionManager = require('./utils/sessionManager');
+const webhookProcessor = require('./services/webhookProcessor');
+const databaseService = require('./services/databaseService');
 
 // Inicialización de la aplicación Express
 const app = express();
@@ -973,6 +975,276 @@ app.get('/debug/test-ml-connection', async (req, res) => {
         status: error.response.status,
         data: error.response.data
       } : null
+    });
+  }
+});
+
+// ==========================================
+// ENDPOINTS DE WEBHOOKS MERCADOLIBRE
+// ==========================================
+
+/**
+ * Endpoint principal para recibir webhooks de MercadoLibre
+ * CRÍTICO: Debe responder HTTP 200 en <500ms
+ */
+app.post('/api/webhooks/ml', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Obtener IP del cliente (considerando proxies de Vercel)
+    const clientIP = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress ||
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
+                     'unknown';
+
+    const actualIP = typeof clientIP === 'string' ? clientIP.split(',')[0].trim() : 'unknown';
+    
+    logger.info(`🔔 Webhook recibido desde IP: ${actualIP}`);
+    logger.debug(`📋 Headers: ${JSON.stringify(req.headers)}`);
+    logger.debug(`📄 Body: ${JSON.stringify(req.body)}`);
+
+    // Validar que tenemos un body
+    if (!req.body || Object.keys(req.body).length === 0) {
+      const processingTime = Date.now() - startTime;
+      logger.warn(`⚠️ Webhook vacío recibido (${processingTime}ms)`);
+      
+      return res.status(400).json({
+        error: 'Empty webhook body',
+        processingTime
+      });
+    }
+
+    // Procesar webhook
+    const result = await webhookProcessor.handleWebhook(req.body, actualIP, req.headers);
+    
+    // CRÍTICO: Responder inmediatamente con el código apropiado
+    res.status(result.httpCode).json({
+      success: result.success,
+      message: result.message || (result.success ? 'Webhook processed' : 'Webhook failed'),
+      webhook_id: result.webhook_id,
+      processingTime: result.processingTime
+    });
+
+    // Log del resultado
+    if (result.success) {
+      logger.info(`✅ Webhook ${result.webhook_id} procesado exitosamente (${result.processingTime}ms)`);
+    } else {
+      logger.error(`❌ Webhook falló: ${result.error} (${result.processingTime}ms)`);
+    }
+
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    logger.error(`❌ Error crítico en webhook endpoint: ${error.message} (${processingTime}ms)`);
+    
+    // CRÍTICO: Siempre responder, nunca dejar colgado a ML
+    res.status(500).json({
+      error: 'Internal server error',
+      processingTime
+    });
+  }
+});
+
+/**
+ * Endpoint para verificar estado de configuración de webhooks
+ */
+app.get('/api/webhooks/status', async (req, res) => {
+  try {
+    const stats = await webhookProcessor.getWebhookStats();
+    
+    // Verificar configuración
+    const config = {
+      webhooksEnabled: await databaseService.getConfig('webhooks_enabled'),
+      supportedTopics: webhookProcessor.supportedTopics,
+      callbackUrl: `${req.protocol}://${req.get('host')}/api/webhooks/ml`,
+      environment: process.env.NODE_ENV || 'production'
+    };
+
+    res.json({
+      status: 'OK',
+      config,
+      stats,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error obteniendo estado de webhooks: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to get webhook status',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Endpoint para configurar webhooks automáticamente (desarrollo)
+ */
+app.post('/api/webhooks/setup', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({
+      error: 'Setup endpoint only available in development'
+    });
+  }
+
+  try {
+    // TODO: Implementar configuración automática de webhooks en ML
+    // Esto requiere llamadas a ML API para configurar los topics
+    
+    res.json({
+      message: 'Webhook setup endpoint - TODO: implementar configuración automática',
+      callbackUrl: `${req.protocol}://${req.get('host')}/api/webhooks/ml`,
+      topics: webhookProcessor.supportedTopics
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error en setup de webhooks: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to setup webhooks',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Endpoint para obtener webhooks pendientes (debugging)
+ */
+app.get('/api/webhooks/pending', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const pendingWebhooks = await databaseService.getPendingWebhooks(limit);
+    
+    res.json({
+      webhooks: pendingWebhooks,
+      count: pendingWebhooks.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error obteniendo webhooks pendientes: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to get pending webhooks',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Endpoint para procesar webhooks pendientes manualmente
+ */
+app.post('/api/webhooks/process-pending', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const { webhookId } = req.body;
+    
+    if (webhookId) {
+      // Procesar webhook específico
+      await webhookProcessor.processWebhookAsync(webhookId);
+      res.json({
+        message: `Webhook ${webhookId} procesado`,
+        webhook_id: webhookId
+      });
+    } else {
+      // Procesar todos los pendientes
+      const pendingWebhooks = await databaseService.getPendingWebhooks(10);
+      
+      for (const webhook of pendingWebhooks) {
+        try {
+          await webhookProcessor.processWebhookAsync(webhook.webhook_id);
+        } catch (error) {
+          logger.error(`❌ Error procesando webhook ${webhook.webhook_id}: ${error.message}`);
+        }
+      }
+      
+      res.json({
+        message: `${pendingWebhooks.length} webhooks procesados`,
+        processed: pendingWebhooks.length
+      });
+    }
+
+  } catch (error) {
+    logger.error(`❌ Error procesando webhooks pendientes: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to process pending webhooks',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// ENDPOINT LEGACY PARA WEBHOOKS EXISTENTES
+// CRÍTICO: Mantener compatibilidad con URL configurada en ML
+// ==========================================
+
+/**
+ * Endpoint legacy: /webhook/notifications
+ * Para mantener compatibilidad con configuración actual en ML
+ */
+app.post('/webhook/notifications', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    logger.info('🔄 Webhook recibido en endpoint LEGACY (/webhook/notifications)');
+    
+    // Obtener IP del cliente
+    const clientIP = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     'unknown';
+
+    const actualIP = typeof clientIP === 'string' ? clientIP.split(',')[0].trim() : 'unknown';
+    
+    logger.info(`🔔 Webhook legacy desde IP: ${actualIP}`);
+    logger.debug(`📋 Headers: ${JSON.stringify(req.headers)}`);
+    logger.debug(`📄 Body: ${JSON.stringify(req.body)}`);
+
+    // Validar body
+    if (!req.body || Object.keys(req.body).length === 0) {
+      const processingTime = Date.now() - startTime;
+      logger.warn(`⚠️ Webhook legacy vacío (${processingTime}ms)`);
+      
+      return res.status(400).json({
+        error: 'Empty webhook body',
+        processingTime,
+        endpoint: 'legacy'
+      });
+    }
+
+    // Procesar con el mismo handler
+    const result = await webhookProcessor.handleWebhook(req.body, actualIP, req.headers);
+    
+    // CRÍTICO: Responder inmediatamente
+    res.status(result.httpCode).json({
+      success: result.success,
+      message: result.message || (result.success ? 'Webhook processed (legacy)' : 'Webhook failed'),
+      webhook_id: result.webhook_id,
+      processingTime: result.processingTime,
+      endpoint: 'legacy'
+    });
+
+    // Log resultado
+    if (result.success) {
+      logger.info(`✅ Webhook legacy ${result.webhook_id} procesado (${result.processingTime}ms)`);
+    } else {
+      logger.error(`❌ Webhook legacy falló: ${result.error} (${result.processingTime}ms)`);
+    }
+
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    logger.error(`❌ Error crítico en webhook legacy: ${error.message} (${processingTime}ms)`);
+    
+    // CRÍTICO: SIEMPRE responder, nunca dejar colgado
+    res.status(500).json({
+      error: 'Internal server error',
+      processingTime,
+      endpoint: 'legacy'
     });
   }
 });

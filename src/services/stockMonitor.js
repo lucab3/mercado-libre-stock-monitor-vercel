@@ -1,582 +1,259 @@
+/**
+ * Stock Monitor con persistencia en Supabase
+ * Versión migrada desde memoria a base de datos
+ */
+
 const products = require('../api/products');
 const Product = require('../models/product');
 const notifier = require('../utils/notifier');
 const logger = require('../utils/logger');
 const config = require('../../config/config');
+const databaseService = require('./databaseService');
 
 class StockMonitor {
   constructor() {
     this.stockThreshold = config.monitoring.stockThreshold;
     this.checkInterval = config.monitoring.stockCheckInterval;
-    this.trackedProducts = new Map();
     this.monitoringActive = false;
     this.lastCheckTime = null;
     this.lastFullCheckTime = null;
     this.autoCheckTimeout = null;
-    this.lowStockProducts = [];
     
-    // Cache de último estado conocido para consistencia
-    this.lastKnownStockState = new Map();
-    
-    // NUEVO: Información del scan por lotes
-    this.lastScanInfo = null;
+    // Cache temporal para sesión actual (se reconstruye desde BD)
+    this.sessionCache = {
+      lowStockProducts: [],
+      totalProducts: 0,
+      lastScanInfo: null
+    };
   }
 
   /**
-   * Inicia el monitoreo de stock (versión para Vercel serverless)
+   * Obtener configuración desde base de datos
    */
-  async start() {
-    logger.info(`Iniciando monitoreo de stock. Umbral: ${this.stockThreshold} unidades`);
-    
+  async getConfig() {
     try {
-      this.monitoringActive = true;
+      const stockThreshold = await databaseService.getConfig('stock_threshold');
+      if (stockThreshold !== null) {
+        this.stockThreshold = parseInt(stockThreshold);
+      }
       
-      // Realizar una verificación inicial inmediata
-      await this.checkStock();
+      const autoScanInterval = await databaseService.getConfig('auto_scan_interval');
+      if (autoScanInterval !== null) {
+        this.checkInterval = parseInt(autoScanInterval) * 60 * 1000; // Convertir a ms
+      }
       
-      // En Vercel, no podemos mantener procesos corriendo, pero podemos configurar
-      // verificaciones automáticas cuando se accede a la aplicación
-      this.scheduleNextCheck();
+      logger.debug(`📊 Configuración cargada: threshold=${this.stockThreshold}, interval=${this.checkInterval/1000}s`);
       
-      logger.info('Monitoreo iniciado correctamente');
     } catch (error) {
-      logger.error(`Error al iniciar el monitoreo de stock: ${error.message}`);
+      logger.error(`❌ Error cargando configuración: ${error.message}`);
+      // Usar valores por defecto
+    }
+  }
+
+  /**
+   * Obtener usuario actual autenticado
+   */
+  async getCurrentUserId() {
+    const auth = require('../api/auth');
+    
+    if (!auth.isAuthenticated()) {
+      throw new Error('Usuario no autenticado');
+    }
+    
+    return await auth.getCurrentUserId();
+  }
+
+  /**
+   * Cargar productos desde base de datos
+   */
+  async loadProductsFromDatabase(userId, filters = {}) {
+    try {
+      const products = await databaseService.getProducts(userId, filters);
+      
+      logger.info(`📋 Cargados ${products.length} productos desde base de datos`);
+      return products;
+      
+    } catch (error) {
+      logger.error(`❌ Error cargando productos desde BD: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Programa la próxima verificación (solo para entornos que lo soporten)
+   * Sincronizar productos de ML API con base de datos
    */
-  scheduleNextCheck() {
-    if (!process.env.VERCEL && this.monitoringActive) {
-      this.autoCheckTimeout = setTimeout(async () => {
-        if (this.monitoringActive) {
-          try {
-            await this.checkStock();
-            this.scheduleNextCheck();
-          } catch (error) {
-            logger.error(`Error en verificación automática: ${error.message}`);
-          }
-        }
-      }, this.checkInterval);
-    }
-  }
-
-  /**
-   * Detiene el monitoreo de stock
-   */
-  stop() {
-    this.monitoringActive = false;
-    if (this.autoCheckTimeout) {
-      clearTimeout(this.autoCheckTimeout);
-      this.autoCheckTimeout = null;
-    }
-    logger.info('Monitoreo de stock detenido');
-  }
-
-  /**
-   * Verifica si es necesario hacer una nueva verificación automática
-   */
-  async autoCheckIfNeeded() {
-    const now = Date.now();
-    
-    const timeSinceLastCheck = this.lastCheckTime ? now - this.lastCheckTime : Infinity;
-    const shouldCheck = timeSinceLastCheck > this.checkInterval;
-    
-    if (shouldCheck && this.monitoringActive) {
-      logger.info('Ejecutando verificación automática por tiempo transcurrido');
-      try {
-        await this.checkStock();
-      } catch (error) {
-        logger.error(`Error en verificación automática: ${error.message}`);
-      }
-    }
-    
-    return {
-      lastCheck: this.lastCheckTime,
-      timeSinceLastCheck,
-      shouldCheck,
-      nextCheckIn: this.checkInterval - timeSinceLastCheck
-    };
-  }
-
-  /**
-   * CORREGIDO: Actualiza la lista de productos monitoreados con validación de datos
-   * MEJORADO: Ahora acepta scanResult opcional para evitar llamadas duplicadas a la API
-   */
-  async refreshProductList(existingScanResult = null) {
+  async syncProductsWithAPI(userId) {
     try {
-      logger.info('Actualizando lista de productos...');
+      logger.info('🔄 Iniciando sincronización completa con ML API...');
       
-      // NUEVO: Usar scanResult existente si se proporciona (evita llamada duplicada a API)
-      let scanResult;
-      if (existingScanResult) {
-        logger.info('✅ Usando scanResult existente (evitando llamada duplicada a API)');
-        scanResult = existingScanResult;
-      } else {
-        logger.info('🔄 Obteniendo productos desde API...');
-        scanResult = await products.getAllProducts();
-      }
+      // Obtener TODOS los productos progresivamente
+      let allProductIds = [];
+      let scanCompleted = false;
+      let totalBatches = 0;
       
-      // NUEVO: Guardar información del scan ANTES de verificar si results es null
-      this.lastScanInfo = {
-        scanCompleted: scanResult.scanCompleted,
-        batchCompleted: scanResult.batchCompleted,
-        hasMoreProducts: scanResult.hasMoreProducts,
-        pagesProcessed: scanResult.pagesProcessed,
-        duplicatesDetected: scanResult.duplicatesDetected,
-        uniqueProducts: scanResult.uniqueProducts,
-        error: scanResult.error,
-        lastUpdate: Date.now()
-      };
-      
-      // CORREGIDO: Si results es null, significa "sin cambios" - mantener productos existentes
-      if (scanResult.results === null) {
-        logger.info('📋 Scan completado sin cambios - manteniendo productos existentes');
-        // IMPORTANTE: lastScanInfo ya se actualizó arriba, así que el frontend sabrá que scanCompleted=true
-        return;
-      }
-      
-      const productIds = Array.isArray(scanResult) ? scanResult : scanResult.results || [];
-      
-      // Log información del scan
-      if (scanResult.scanCompleted !== undefined) {
-        logger.info(`📊 Scan completado: ${scanResult.scanCompleted ? 'SÍ' : 'NO'} (${scanResult.pagesProcessed || 0} páginas)`);
-        if (scanResult.duplicatesDetected > 0) {
-          logger.info(`🔢 Duplicados filtrados: ${scanResult.duplicatesDetected}`);
+      while (!scanCompleted) {
+        totalBatches++;
+        logger.info(`📊 Ejecutando lote ${totalBatches} de obtención de IDs...`);
+        
+        const apiResult = await products.getAllProducts();
+        
+        if (apiResult.results && apiResult.results.length > 0) {
+          const newIds = apiResult.results.filter(id => !allProductIds.includes(id));
+          allProductIds.push(...newIds);
+          logger.info(`📦 Lote ${totalBatches}: +${apiResult.results.length} IDs (${newIds.length} nuevos) | Total acumulado: ${allProductIds.length}`);
         }
-        if (!scanResult.scanCompleted) {
-          logger.warn(`⚠️ Scan parcial: procesando ${productIds.length} productos de los ~2908 totales`);
+        
+        scanCompleted = apiResult.scanCompleted || false;
+        
+        if (!scanCompleted && apiResult.hasMoreProducts) {
+          logger.info('⏳ Hay más productos por obtener - pausando para rate limiting...');
+          // Rate limiting más conservador para scan completo automatizado
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos entre lotes de IDs
+        } else if (!scanCompleted) {
+          logger.warn('⚠️ Scan no completado pero no hay más productos - terminando');
+          break;
         }
       }
       
-      if (productIds.length === 0) {
-        logger.warn('⚠️ No se proporcionaron productos para actualizar - probablemente fin del scan');
-        // CORREGIDO: NO limpiar productos existentes cuando se llega al final del scan
-        // Solo limpiar si es el primer scan o si explícitamente se solicita reset
-        if (this.trackedProducts.size === 0) {
-          logger.info('📋 Primera vez - no hay productos previos que preservar');
-          return;
-        } else {
-          logger.info(`📋 Fin del scan alcanzado - preservando ${this.trackedProducts.size} productos existentes`);
-          return; // Mantener los productos que ya tenemos
-        }
+      if (allProductIds.length === 0) {
+        logger.warn('⚠️ No se obtuvieron productos de ML API después del scan completo');
+        return { synced: 0, total: 0, scanCompleted: true };
       }
       
-      logger.info(`📋 Procesando ${productIds.length} productos únicos...`);
+      logger.info(`✅ Scan de IDs completado: ${allProductIds.length} productos únicos en ${totalBatches} lotes`);
       
-      // OPTIMIZADO: Solo procesar productos nuevos para evitar timeout
-      const newProductIds = productIds.filter(id => !this.trackedProducts.has(id));
-      const existingCount = productIds.length - newProductIds.length;
+      // Obtener detalles de productos en lotes con rate limiting mejorado
+      const batchSize = 30; // Reducir tamaño de lote para ser más conservador
+      const allProductsData = [];
+      const totalDetailBatches = Math.ceil(allProductIds.length / batchSize);
       
-      if (existingCount > 0) {
-        logger.info(`⚡ OPTIMIZACIÓN: ${existingCount} productos ya procesados, solo obteniendo ${newProductIds.length} nuevos`);
-      }
+      logger.info(`🔍 Iniciando obtención de detalles: ${allProductIds.length} productos en ${totalDetailBatches} lotes de ${batchSize}`);
       
-      // MEJORADO: Obtener detalles solo de productos nuevos
-      const productDetails = [];
-      let successCount = 0;
-      let errorCount = 0;
-      
-      // Preservar productos ya existentes que siguen en la lista actual
-      const preservedProducts = [];
-      for (const [id, existingProduct] of this.trackedProducts.entries()) {
-        if (productIds.includes(id)) {
-          preservedProducts.push(existingProduct);
-        }
-      }
-      
-      logger.info(`📦 Preservando ${preservedProducts.length} productos ya procesados`);
-      productDetails.push(...preservedProducts);
-      successCount = preservedProducts.length;
-      
-      // Procesar solo productos nuevos
-      for (const id of newProductIds) {
+      for (let i = 0; i < allProductIds.length; i += batchSize) {
+        const batch = allProductIds.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i/batchSize) + 1;
+        
         try {
-          logger.debug(`🔍 Obteniendo detalles de producto NUEVO ${id}...`);
-          const productData = await products.getProduct(id);
+          logger.info(`📦 Procesando lote ${batchNumber}/${totalDetailBatches} de detalles (${batch.length} productos)...`);
           
-          // NUEVO: Validación de datos críticos
-          if (!productData.id) {
-            logger.error(`❌ Producto sin ID válido: ${JSON.stringify(productData)}`);
-            errorCount++;
-            continue;
-          }
+          const batchData = await products.getMultipleProducts(batch, false);
+          allProductsData.push(...batchData);
           
-          if (typeof productData.available_quantity !== 'number') {
-            logger.error(`❌ Producto ${productData.id} sin stock válido: ${productData.available_quantity}`);
-            errorCount++;
-            continue;
-          }
-          
-          productDetails.push(productData);
-          successCount++;
-          
-          // Log detallado para debugging
-          logger.info(`✅ NUEVO ${productData.id}: "${productData.title ? productData.title.substring(0, 40) + '...' : 'Sin título'}" - ${productData.available_quantity} unidades - SKU: ${productData.seller_sku || 'Sin SKU'}`);
+          logger.info(`✅ Lote ${batchNumber}/${totalDetailBatches} completado: ${batchData.length} productos obtenidos`);
           
         } catch (error) {
-          logger.error(`❌ Error obteniendo producto ${id}: ${error.message}`);
-          errorCount++;
-        }
-      }
-      
-      logger.info(`📊 Resultados: ${successCount} exitosos (${newProductIds.length} nuevos + ${existingCount} ya existentes), ${errorCount} errores de ${productIds.length} total`);
-      
-      // Actualizar both trackedProducts y lastKnownStockState
-      this.trackedProducts.clear();
-      
-      productDetails.forEach(productData => {
-        const product = Product.fromApiData(productData);
-        
-        // Mantener el producto actual
-        this.trackedProducts.set(product.id, product);
-        
-        // ACTUALIZADO: Estado conocido con SKU incluido
-        this.lastKnownStockState.set(product.id, {
-          stock: product.available_quantity,
-          timestamp: Date.now(),
-          title: product.title,
-          permalink: product.permalink,
-          seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
-          last_sync: new Date().toISOString()
-        });
-        
-        logger.debug(`🔄 Sincronizado: ${product.id} - Stock: ${product.available_quantity} - SKU: ${product.seller_sku || 'Sin SKU'} - Link: ${product.permalink ? 'Sí' : 'Generado'}`);
-      });
-      
-      logger.info(`Lista de productos actualizada. Monitoreando ${this.trackedProducts.size} productos`);
-      this.lastFullCheckTime = Date.now();
-      
-    } catch (error) {
-      logger.error(`Error al actualizar lista de productos: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * NUEVO: Método específico para continuar scan y actualizar inmediatamente
-   */
-  async continueScanAndRefresh() {
-    try {
-      logger.info('🔄 Continuando scan y actualizando monitor...');
-      
-      // 1. Continuar scan para obtener más productos
-      const scanResult = await products.continueProductScan();
-      
-      // 2. Actualizar lista con los resultados del scan (evita llamada duplicada)
-      await this.refreshProductList(scanResult);
-      
-      // 3. Verificar stock inmediatamente para actualizar contadores
-      const stockResult = await this.checkStock();
-      
-      logger.info(`✅ Scan continuado y monitor actualizado: ${stockResult.totalProducts} productos total, ${stockResult.lowStockProducts} con stock bajo`);
-      
-      return {
-        scanResult,
-        stockResult,
-        totalProducts: this.trackedProducts.size,
-        lowStockProducts: this.lowStockProducts.length,
-        lastScanInfo: this.lastScanInfo
-      };
-      
-    } catch (error) {
-      logger.error(`❌ Error en continueScanAndRefresh: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * MEJORADO: Verifica el stock de todos los productos monitoreados con datos sincronizados
-   * OPTIMIZADO: Acepta skipRefresh para evitar llamadas duplicadas
-   */
-  async checkStock(skipRefresh = false) {
-    try {
-      logger.info('🔍 Verificando stock de productos...');
-      
-      this.lastCheckTime = Date.now();
-      
-      // OPTIMIZADO: Solo refrescar datos si no se especifica skipRefresh
-      if (!skipRefresh) {
-        await this.refreshProductList();
-      }
-      
-      let lowStockCount = 0;
-      const alertsToSend = [];
-      const currentLowStockProducts = [];
-      
-      // Verificar cada producto usando datos consistentes
-      for (const [id, product] of this.trackedProducts.entries()) {
-        const hasLowStock = product.hasLowStock(this.stockThreshold);
-        
-        logger.info(`📦 ${product.title} (${id}): ${product.available_quantity} unidades - SKU: ${product.seller_sku || 'Sin SKU'} - ${hasLowStock ? '⚠️ STOCK BAJO' : '✅ OK'}`);
-        
-        if (hasLowStock) {
-          // MEJORADO: Usar datos DIRECTOS del producto con SKU y estado
-          const productInfo = {
-            id: product.id,
-            title: product.title,
-            stock: product.available_quantity, // Dato DIRECTO de la API
-            permalink: product.permalink,
-            seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
-            status: product.status || 'unknown', // NUEVO: Estado de publicación
-            health: product.health || null, // NUEVO: Estado de salud
-            condition: product.condition || null, // NUEVO: Condición
-            listing_type_id: product.listing_type_id || null, // NUEVO: Tipo de publicación
-            linkType: product.linkType || 'unknown', // NUEVO: Tipo de enlace
-            hasLowStock: true,
-            timestamp: Date.now(),
-            productUrl: product.getProductUrl() // NUEVO: URL validada
-          };
+          logger.error(`❌ Error en lote ${batchNumber}/${totalDetailBatches}: ${error.message}`);
           
-          currentLowStockProducts.push(productInfo);
-          
-          // Verificar si debe enviar alerta
-          if (product.shouldSendAlert(this.stockThreshold)) {
-            alertsToSend.push(product);
-            product.markAlertSent();
-            lowStockCount++;
+          // Si hay error, pausa más larga antes del siguiente lote
+          if (i + batchSize < allProductIds.length) {
+            logger.info('⏳ Error detectado - pausa extendida de 5 segundos...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         }
+        
+        // Rate limiting mejorado entre lotes de detalles
+        if (i + batchSize < allProductIds.length) {
+          const pauseTime = 1500; // 1.5 segundos entre lotes
+          logger.debug(`⏳ Pausando ${pauseTime}ms antes del siguiente lote...`);
+          await new Promise(resolve => setTimeout(resolve, pauseTime));
+        }
       }
       
-      // ACTUALIZAR la lista de productos con stock bajo con datos FRESH
-      this.lowStockProducts = currentLowStockProducts;
+      logger.info(`✅ Obtención de detalles completada: ${allProductsData.length}/${allProductIds.length} productos`);
       
-      // Debug: Mostrar estado actual con SKU
-      logger.info(`📊 Estado actual de stock:`);
-      this.lowStockProducts.forEach(p => {
-        logger.info(`   - ${p.title}: ${p.stock} unidades - SKU: ${p.seller_sku || 'Sin SKU'} - ${p.permalink || p.productUrl}`);
-      });
+      // Preparar datos para base de datos
+      const productsToSync = allProductsData.map(productData => ({
+        id: productData.id,
+        user_id: userId,
+        title: productData.title,
+        seller_sku: productData.seller_sku,
+        available_quantity: productData.available_quantity || 0,
+        price: productData.price,
+        status: productData.status,
+        permalink: productData.permalink,
+        category_id: productData.category_id,
+        condition: productData.condition,
+        listing_type_id: productData.listing_type_id,
+        health: productData.health,
+        last_api_sync: new Date().toISOString()
+      }));
       
-      // Enviar alertas en paralelo
-      if (alertsToSend.length > 0) {
-        await Promise.all(
-          alertsToSend.map(product => 
-            notifier.sendLowStockAlert(product).catch(error => 
-              logger.error(`Error enviando alerta para ${product.id}: ${error.message}`)
-            )
-          )
-        );
+      // Guardar en base de datos por lotes
+      if (productsToSync.length > 0) {
+        await databaseService.upsertMultipleProducts(productsToSync);
+        logger.info(`✅ Sincronizados ${productsToSync.length} productos en base de datos`);
       }
       
-      const result = {
-        totalProducts: this.trackedProducts.size,
-        lowStockProducts: this.lowStockProducts.length,
-        newAlerts: lowStockCount,
-        timestamp: this.lastCheckTime,
-        products: Array.from(this.trackedProducts.values()).map(p => ({
+      const finalResult = {
+        synced: productsToSync.length,
+        totalIdsFound: allProductIds.length,
+        totalDetailsObtained: allProductsData.length,
+        scanCompleted: true, // Ahora sí está completo
+        hasMoreProducts: false, // Ya obtuvimos todo
+        batchesProcessed: totalBatches,
+        detailBatchesProcessed: totalDetailBatches
+      };
+      
+      logger.info(`🎉 Sincronización completa finalizada:`);
+      logger.info(`   📊 IDs encontrados: ${finalResult.totalIdsFound}`);
+      logger.info(`   📋 Detalles obtenidos: ${finalResult.totalDetailsObtained}`);
+      logger.info(`   💾 Guardados en BD: ${finalResult.synced}`);
+      logger.info(`   🔄 Lotes de IDs: ${finalResult.batchesProcessed}`);
+      logger.info(`   🔍 Lotes de detalles: ${finalResult.detailBatchesProcessed}`);
+      
+      return finalResult;
+      
+    } catch (error) {
+      logger.error(`❌ Error sincronizando productos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar cache de sesión desde base de datos
+   */
+  async updateSessionCache(userId) {
+    try {
+      // Obtener productos con stock bajo
+      const lowStockProducts = await databaseService.getLowStockProducts(userId, this.stockThreshold);
+      
+      // Obtener total de productos activos
+      const allProducts = await databaseService.getProducts(userId, { status: 'active' });
+      
+      this.sessionCache = {
+        lowStockProducts: lowStockProducts.map(p => ({
           id: p.id,
           title: p.title,
+          seller_sku: p.seller_sku,
           stock: p.available_quantity,
+          status: p.status,
           permalink: p.permalink,
-          seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
-          hasLowStock: p.hasLowStock(this.stockThreshold),
-          productUrl: p.getProductUrl() // NUEVO: URL validada
-        }))
+          productUrl: this.generateProductUrl(p.id),
+          lastUpdated: p.updated_at
+        })),
+        totalProducts: allProducts.length,
+        lastScanInfo: {
+          lastSync: new Date().toISOString(),
+          source: 'database'
+        }
       };
       
-      logger.info(`✅ Verificación completada. ${result.lowStockProducts} productos con stock bajo, ${lowStockCount} nuevas alertas enviadas`);
+      logger.debug(`📊 Cache actualizado: ${this.sessionCache.totalProducts} productos, ${this.sessionCache.lowStockProducts.length} con stock bajo`);
       
-      return result;
     } catch (error) {
-      logger.error(`❌ Error al verificar stock: ${error.message}`);
+      logger.error(`❌ Error actualizando cache: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * MEJORADO: Verifica el stock de un producto específico con sincronización completa
-   */
-  async checkProductStock(productId) {
-    try {
-      logger.info(`🔍 Verificando stock del producto ${productId}...`);
-      
-      // Obtener datos FRESH directamente de la API
-      const productData = await products.getProduct(productId);
-      const product = Product.fromApiData(productData);
-      
-      // NUEVO: Log detallado para debugging
-      logger.info(`🔍 DATOS OBTENIDOS:`);
-      logger.info(`   ID: ${product.id}`);
-      logger.info(`   Título: ${product.title}`);
-      logger.info(`   Stock: ${product.available_quantity}`);
-      logger.info(`   SKU: ${product.seller_sku || 'Sin SKU'}`);
-      logger.info(`   Permalink: ${product.permalink || 'Sin permalink'}`);
-      logger.info(`   URL generada: ${product.getProductUrl()}`);
-      
-      // Actualizar inmediatamente en trackedProducts
-      this.trackedProducts.set(product.id, product);
-      
-      // Actualizar estado conocido con SKU
-      this.lastKnownStockState.set(product.id, {
-        stock: product.available_quantity,
-        timestamp: Date.now(),
-        title: product.title,
-        permalink: product.permalink,
-        seller_sku: product.seller_sku || null,
-        last_sync: new Date().toISOString()
-      });
-      
-      // Actualizar lista de productos con stock bajo
-      const existingIndex = this.lowStockProducts.findIndex(p => p.id === productId);
-      
-      if (product.hasLowStock(this.stockThreshold)) {
-        const productInfo = {
-          id: product.id,
-          title: product.title,
-          stock: product.available_quantity, // Dato FRESCO
-          permalink: product.permalink,
-          seller_sku: product.seller_sku || null, // NUEVO: Incluir SKU
-          status: product.status || 'unknown', // NUEVO: Estado de publicación
-          health: product.health || null, // NUEVO: Estado de salud
-          condition: product.condition || null, // NUEVO: Condición
-          listing_type_id: product.listing_type_id || null, // NUEVO: Tipo de publicación
-          linkType: product.linkType || 'unknown', // NUEVO: Tipo de enlace
-          hasLowStock: true,
-          timestamp: Date.now(),
-          productUrl: product.getProductUrl()
-        };
-        
-        if (existingIndex >= 0) {
-          // Actualizar producto existente
-          this.lowStockProducts[existingIndex] = productInfo;
-        } else {
-          // Agregar nuevo producto
-          this.lowStockProducts.push(productInfo);
-        }
-        
-        // Enviar alerta si es necesario
-        if (product.shouldSendAlert(this.stockThreshold)) {
-          await notifier.sendLowStockAlert(product);
-          product.markAlertSent();
-          logger.info(`📧 Alerta enviada para ${productId}: ${product.available_quantity} unidades`);
-        }
-        
-        logger.info(`⚠️ ${product.title}: ${product.available_quantity} unidades (STOCK BAJO) - SKU: ${product.seller_sku || 'Sin SKU'} - ${product.permalink || product.getProductUrl()}`);
-      } else {
-        // Remover de lista de stock bajo si ya no aplica
-        if (existingIndex >= 0) {
-          this.lowStockProducts.splice(existingIndex, 1);
-        }
-        logger.info(`✅ ${product.title}: ${product.available_quantity} unidades (STOCK SUFICIENTE) - SKU: ${product.seller_sku || 'Sin SKU'} - ${product.permalink || product.getProductUrl()}`);
-      }
-      
-      return product;
-    } catch (error) {
-      logger.error(`❌ Error al verificar stock del producto ${productId}: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * MEJORADO: Obtiene el estado actual del monitoreo con datos sincronizados y SKU
-   */
-  getStatus() {
-    // Asegurar que lowStockProducts tiene datos actualizados con SKU
-    const syncedLowStockProducts = this.lowStockProducts.map(p => {
-      // Buscar datos más recientes en trackedProducts
-      const trackedProduct = this.trackedProducts.get(p.id);
-      if (trackedProduct) {
-        return {
-          id: trackedProduct.id,
-          title: trackedProduct.title,
-          stock: trackedProduct.available_quantity, // Dato sincronizado
-          permalink: trackedProduct.permalink,
-          seller_sku: trackedProduct.seller_sku || null, // NUEVO: SKU sincronizado
-          status: trackedProduct.status || 'unknown', // NUEVO: Estado sincronizado
-          health: trackedProduct.health || null, // NUEVO: Estado de salud
-          condition: trackedProduct.condition || null, // NUEVO: Condición
-          listing_type_id: trackedProduct.listing_type_id || null, // NUEVO: Tipo de publicación
-          category_id: trackedProduct.category_id || null, // NUEVO: ID de categoría para filtros
-          linkType: trackedProduct.linkType || 'unknown', // NUEVO: Tipo de enlace
-          productUrl: trackedProduct.getProductUrl()
-        };
-      }
-      return {
-        id: p.id,
-        title: p.title,
-        stock: p.stock,
-        permalink: p.permalink,
-        seller_sku: p.seller_sku || null, // NUEVO: Incluir SKU
-        status: p.status || 'unknown', // NUEVO: Estado
-        health: p.health || null, // NUEVO: Estado de salud
-        condition: p.condition || null, // NUEVO: Condición
-        listing_type_id: p.listing_type_id || null, // NUEVO: Tipo de publicación
-        category_id: p.category_id || null, // NUEVO: ID de categoría para filtros
-        linkType: p.linkType || 'unknown', // NUEVO: Tipo de enlace
-        productUrl: p.productUrl || this.generateProductUrl(p.id)
-      };
-    });
-    
-    return {
-      active: this.monitoringActive,
-      lastCheckTime: this.lastCheckTime,
-      lastFullCheckTime: this.lastFullCheckTime,
-      totalProducts: this.trackedProducts.size,
-      threshold: this.stockThreshold,
-      checkInterval: this.checkInterval,
-      lowStockProducts: syncedLowStockProducts,
-      scanInfo: this.lastScanInfo // NUEVO: Información del scan por lotes
-    };
-  }
-
-  /**
-   * MEJORADO: Método para debugging - mostrar estado interno con SKU y enlaces
-   */
-  debugCurrentState() {
-    logger.info('🐛 DEBUG - Estado interno del monitor:');
-    logger.info(`   Productos rastreados: ${this.trackedProducts.size}`);
-    logger.info(`   Productos con stock bajo: ${this.lowStockProducts.length}`);
-    
-    // Mostrar cada producto con detalles completos
-    this.trackedProducts.forEach((product, id) => {
-      const inLowStock = this.lowStockProducts.find(p => p.id === id);
-      const status = inLowStock ? '(EN LISTA STOCK BAJO)' : '';
-      const sku = product.seller_sku ? `SKU: ${product.seller_sku}` : 'Sin SKU';
-      const link = product.permalink || product.getProductUrl();
-      
-      logger.info(`   - ${product.title}: ${product.available_quantity} unidades - ${sku} ${status}`);
-      logger.info(`     URL: ${link}`);
-      
-      // Validar consistencia de enlaces
-      if (product.permalink) {
-        const generated = product.getProductUrl();
-        if (product.permalink !== generated) {
-          logger.warn(`     ⚠️ DIFERENCIA: Real: ${product.permalink}, Generado: ${generated}`);
-        }
-      }
-    });
-    
-    // Mostrar lista de stock bajo con detalles
-    logger.info('📋 Lista actual de stock bajo:');
-    this.lowStockProducts.forEach(p => {
-      logger.info(`   - ${p.title}: ${p.stock} unidades - SKU: ${p.seller_sku || 'Sin SKU'}`);
-      logger.info(`     URL: ${p.permalink || p.productUrl}`);
-    });
-    
-    // Estadísticas de calidad de datos
-    const withPermalink = Array.from(this.trackedProducts.values()).filter(p => p.permalink).length;
-    const withSKU = Array.from(this.trackedProducts.values()).filter(p => p.seller_sku).length;
-    const total = this.trackedProducts.size;
-    
-    logger.info(`📊 Calidad de datos:`);
-    logger.info(`   Con Permalink: ${withPermalink}/${total} (${Math.round(withPermalink/total*100)}%)`);
-    logger.info(`   Con SKU: ${withSKU}/${total} (${Math.round(withSKU/total*100)}%)`);
-  }
-
-  /**
-   * NUEVO: Genera URL de producto correcta basada en ID
+   * Generar URL de producto
    */
   generateProductUrl(productId) {
-    if (!productId) {
-      return 'https://mercadolibre.com.ar';
-    }
-
-    // Extraer código de país y número de producto
+    if (!productId) return 'https://mercadolibre.com.ar';
+    
     const countryCode = productId.substring(0, 3);
-    const productNumber = productId.substring(3); // Todo después de MLA/MLM etc.
+    const productNumber = productId.substring(3);
     
     const countryDomains = {
       'MLA': 'com.ar',
@@ -587,40 +264,253 @@ class StockMonitor {
     };
     
     const domain = countryDomains[countryCode] || 'com.ar';
-    
-    // CORREGIDO: Formato correcto de URL con guión
     return `https://articulo.mercadolibre.${domain}/${countryCode}-${productNumber}`;
   }
 
   /**
-   * NUEVO: Función para debuggear datos específicos de productos
+   * Inicia el monitoreo (versión webhook-driven con Supabase)
    */
-  async debugProductData() {
+  async start() {
     try {
-      logger.info('🐛 Iniciando debugging detallado de datos de productos...');
+      logger.info('🚀 Iniciando monitoreo webhook-driven con persistencia Supabase...');
       
-      const debugResult = await products.debugProductsData();
+      // Cargar configuración desde BD
+      await this.getConfig();
       
-      // Log local adicional
-      logger.info('🔍 ANÁLISIS LOCAL DE PRODUCTOS TRACKEADOS:');
+      // Obtener usuario actual
+      const userId = await this.getCurrentUserId();
       
-      this.trackedProducts.forEach((product, id) => {
-        logger.info(`📦 ${id}:`);
-        logger.info(`   Título: ${product.title}`);
-        logger.info(`   Stock: ${product.available_quantity}`);
-        logger.info(`   SKU: ${product.seller_sku || 'Sin SKU'}`);
-        logger.info(`   Permalink: ${product.permalink || 'No disponible'}`);
-        logger.info(`   URL generada: ${product.getProductUrl()}`);
-        logger.info(`   Enlaces coinciden: ${product.permalink === product.getProductUrl()}`);
-      });
+      this.monitoringActive = true;
       
-      return debugResult;
+      // Actualizar cache desde base de datos
+      await this.updateSessionCache(userId);
+      
+      // Verificar si necesitamos sincronización inicial (solo primera vez)
+      const needsSync = await this.needsApiSync(userId);
+      if (needsSync) {
+        logger.info('🔄 Sincronización inicial con ML API - primera vez...');
+        await this.syncProductsWithAPI(userId);
+        await this.updateSessionCache(userId);
+        logger.info('✅ Sincronización inicial completada - de ahora en adelante solo webhooks');
+      }
+      
+      this.lastCheckTime = new Date();
+      this.scheduleNextCheck();
+      
+      logger.info(`✅ Monitoreo iniciado: ${this.sessionCache.totalProducts} productos, ${this.sessionCache.lowStockProducts.length} con stock bajo`);
       
     } catch (error) {
-      logger.error(`❌ Error en debugging de datos: ${error.message}`);
+      logger.error(`❌ Error iniciando monitoreo: ${error.message}`);
+      this.monitoringActive = false;
       throw error;
     }
   }
+
+  /**
+   * Verificar si necesitamos sincronización inicial con ML API
+   * Solo retorna true si la BD está completamente vacía (primera vez)
+   */
+  async needsApiSync(userId) {
+    try {
+      // Obtener total de productos de la BD
+      const dbProducts = await databaseService.getProducts(userId, { limit: 1 });
+      
+      // Si no hay productos en BD, necesitamos sync inicial
+      if (dbProducts.length === 0) {
+        logger.info('📭 Base de datos vacía - sync inicial necesario');
+        return true;
+      }
+      
+      // Si ya hay productos, los webhooks se encargan de las actualizaciones
+      logger.info('✅ Base de datos poblada - usando webhooks para actualizaciones');
+      return false;
+      
+    } catch (error) {
+      logger.error(`❌ Error verificando necesidad de sync: ${error.message}`);
+      return true; // En caso de error, hacer sync para estar seguro
+    }
+  }
+
+  /**
+   * Verificar stock (solo lee BD actualizada por webhooks)
+   */
+  async checkStock(skipRefresh = false) {
+    try {
+      logger.info('🔍 Iniciando verificación de stock desde BD...');
+      
+      const userId = await this.getCurrentUserId();
+      
+      if (!skipRefresh) {
+        // Solo actualizar cache desde BD (los webhooks ya actualizaron los datos)
+        await this.updateSessionCache(userId);
+      }
+      
+      this.lastCheckTime = new Date();
+      
+      // Enviar notificaciones para productos con stock bajo
+      for (const product of this.sessionCache.lowStockProducts) {
+        try {
+          await notifier.sendLowStockAlert(product);
+        } catch (notifyError) {
+          logger.error(`❌ Error enviando notificación para ${product.id}: ${notifyError.message}`);
+        }
+      }
+      
+      const result = {
+        totalProducts: this.sessionCache.totalProducts,
+        lowStockProducts: this.sessionCache.lowStockProducts,
+        lowStockCount: this.sessionCache.lowStockProducts.length,
+        threshold: this.stockThreshold,
+        timestamp: this.lastCheckTime.toISOString(),
+        source: 'webhook_updated_database'
+      };
+      
+      logger.info(`✅ Verificación completada: ${result.totalProducts} productos, ${result.lowStockCount} con stock bajo`);
+      
+      return result;
+      
+    } catch (error) {
+      logger.error(`❌ Error verificando stock: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estado actual del monitoreo
+   */
+  getStatus() {
+    return {
+      active: this.monitoringActive,
+      totalProducts: this.sessionCache.totalProducts,
+      lowStockProducts: this.sessionCache.lowStockProducts,
+      lowStockCount: this.sessionCache.lowStockProducts.length,
+      threshold: this.stockThreshold,
+      lastCheckTime: this.lastCheckTime,
+      scanInfo: this.sessionCache.lastScanInfo,
+      source: 'supabase_persistent'
+    };
+  }
+
+  /**
+   * Programar próxima verificación (limitado en Vercel)
+   */
+  scheduleNextCheck() {
+    // En Vercel serverless, no podemos mantener timers
+    // Esta función existe para compatibilidad
+    if (process.env.NODE_ENV === 'development') {
+      if (this.autoCheckTimeout) {
+        clearTimeout(this.autoCheckTimeout);
+      }
+      
+      this.autoCheckTimeout = setTimeout(async () => {
+        if (this.monitoringActive) {
+          try {
+            await this.checkStock();
+            this.scheduleNextCheck();
+          } catch (error) {
+            logger.error(`❌ Error en verificación automática: ${error.message}`);
+          }
+        }
+      }, this.checkInterval);
+      
+      logger.debug(`⏰ Próxima verificación en ${this.checkInterval / 1000}s`);
+    }
+  }
+
+  /**
+   * Detener monitoreo
+   */
+  stop() {
+    this.monitoringActive = false;
+    
+    if (this.autoCheckTimeout) {
+      clearTimeout(this.autoCheckTimeout);
+      this.autoCheckTimeout = null;
+    }
+    
+    logger.info('⏹️ Monitoreo detenido');
+  }
+
+  /**
+   * Verificación automática si es necesaria (para middleware)
+   */
+  async autoCheckIfNeeded() {
+    if (!this.monitoringActive) return;
+    
+    try {
+      // Solo hacer auto-check si la última verificación fue hace más de 5 minutos
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      if (!this.lastCheckTime || this.lastCheckTime < fiveMinutesAgo) {
+        logger.debug('🔄 Auto-verificación necesaria...');
+        await this.checkStock();
+      }
+      
+    } catch (error) {
+      logger.error(`❌ Error en auto-verificación: ${error.message}`);
+    }
+  }
+
+  /**
+   * Procesar producto específico desde webhook
+   */
+  async processProductFromWebhook(productId, userId) {
+    try {
+      logger.info(`🔔 Procesando producto desde webhook: ${productId}`);
+      
+      // Obtener datos actualizados de ML API
+      const productData = await products.getProduct(productId);
+      
+      // Actualizar en base de datos
+      const productToUpdate = {
+        id: productData.id,
+        user_id: userId,
+        title: productData.title,
+        seller_sku: productData.seller_sku,
+        available_quantity: productData.available_quantity || 0,
+        price: productData.price,
+        status: productData.status,
+        permalink: productData.permalink,
+        category_id: productData.category_id,
+        condition: productData.condition,
+        listing_type_id: productData.listing_type_id,
+        health: productData.health,
+        last_webhook_sync: new Date().toISOString(),
+        webhook_source: 'ml_webhook'
+      };
+      
+      await databaseService.upsertProduct(productToUpdate);
+      
+      // Actualizar cache si es necesario
+      if (this.monitoringActive) {
+        await this.updateSessionCache(userId);
+      }
+      
+      logger.info(`✅ Producto ${productId} actualizado desde webhook`);
+      
+      return productToUpdate;
+      
+    } catch (error) {
+      logger.error(`❌ Error procesando producto desde webhook: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Debug del estado actual
+   */
+  debugCurrentState() {
+    logger.debug('🔍 ESTADO ACTUAL DEL MONITOR (SUPABASE):');
+    logger.debug(`   Activo: ${this.monitoringActive}`);
+    logger.debug(`   Total productos: ${this.sessionCache.totalProducts}`);
+    logger.debug(`   Stock bajo: ${this.sessionCache.lowStockProducts.length}`);
+    logger.debug(`   Umbral: ${this.stockThreshold}`);
+    logger.debug(`   Última verificación: ${this.lastCheckTime}`);
+    logger.debug(`   Cache source: ${this.sessionCache.lastScanInfo?.source || 'unknown'}`);
+  }
 }
 
-module.exports = new StockMonitor();
+// Exportar instancia singleton
+const stockMonitor = new StockMonitor();
+
+module.exports = stockMonitor;
