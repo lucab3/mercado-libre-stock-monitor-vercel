@@ -419,9 +419,13 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Comprobar estado inicial
             loadStatus();
+            checkSessionStatus(); // Verificar sesión ML por separado
             
-            // Auto-refresh más inteligente cada 15 segundos (pero se pausa durante scans)
-            let autoRefreshInterval = setInterval(loadStatus, 15000);
+            // Auto-refresh desde BD cada 30 segundos (sin validaciones de sesión)
+            let autoRefreshInterval = setInterval(loadStatus, 30000); // 30 segundos
+            
+            // Verificar sesión ML cada 2 minutos (menos frecuente)
+            let sessionCheckInterval = setInterval(checkSessionStatus, 120000); // 2 minutos
             let scanInProgress = false;
             
             // Eventos de botones
@@ -485,11 +489,13 @@
                 isLoading = true;
                 updateSyncStatus('syncing');
                 
-                fetch('/api/auth/status')
+                // Usar nuevo endpoint que lee solo BD sin validar sesión
+                fetch('/api/monitor/status-db')
                     .then(response => response.json())
                     .then(data => {
-                        if (!data.authenticated) {
-                            window.location.href = '/';
+                        // Solo actualizar si hay datos de monitoreo
+                        if (!data.monitoring) {
+                            console.warn('⚠️ No hay datos de monitoreo disponibles');
                             return;
                         }
                         
@@ -499,14 +505,11 @@
                                           JSON.stringify(lastKnownState.lowStockProducts);
                         
                         if (dataChanged || forceRefresh) {
-                            console.log('📊 Datos actualizados:', data.monitoring);
+                            console.log('📊 Datos actualizados desde BD:', data.monitoring);
                             updateMonitoringStatus(data.monitoring);
                             updateProductTable(data.monitoring.lowStockProducts || []);
                             lastKnownState = data.monitoring;
                         }
-                        
-                        // Actualizar información del usuario
-                        updateUserInfo(data.user);
                         
                         updateSyncStatus('synced');
                         isLoading = false;
@@ -522,6 +525,28 @@
                         }
                         
                         isLoading = false;
+                    });
+            }
+            
+            // Función separada para verificar solo el estado de sesión ML
+            function checkSessionStatus() {
+                fetch('/api/auth/session-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.authenticated) {
+                            // Redirigir a login si no está autenticado
+                            window.location.href = '/';
+                            return;
+                        }
+                        
+                        // Actualizar info del usuario si está disponible
+                        if (data.user) {
+                            updateUserInfo(data.user);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error verificando sesión ML:', error);
+                        // No hacer nada crítico aquí para no interrumpir la UI
                     });
             }
             

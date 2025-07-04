@@ -192,21 +192,22 @@ class WebhookProcessor {
       }
 
       logger.info(`🔄 Procesando stock webhook: ${productId} para usuario ${userId}`);
+      logger.info(`📍 Recurso ML: ${webhookData.resource}`);
 
-      // Hacer GET al recurso indicado para obtener datos actualizados
-      const stockUrl = `https://api.mercadolibre.com${webhookData.resource}`;
+      // Llamar al stock monitor para procesar el producto
+      const stockMonitor = require('./stockMonitor');
+      const result = await stockMonitor.processProductFromWebhook(productId, userId);
       
-      // TODO: Aquí necesitaríamos el access token del usuario
-      // Por ahora solo guardamos el evento, el procesamiento real lo haremos en siguiente fase
-      
-      logger.info(`📊 Stock webhook para ${productId} marcado para procesamiento posterior`);
+      logger.info(`✅ Stock webhook procesado exitosamente para ${productId}`);
       
       return {
         success: true,
-        action: 'queued_for_processing',
+        action: 'product_updated',
         productId,
         userId,
-        resource: webhookData.resource
+        resource: webhookData.resource,
+        finalStock: result.available_quantity,
+        updatedFields: Object.keys(result)
       };
 
     } catch (error) {
@@ -223,14 +224,22 @@ class WebhookProcessor {
       const { productId, userId } = extractedData;
       
       logger.info(`📦 Procesando items webhook: ${productId} para usuario ${userId}`);
+      logger.info(`📍 Recurso ML: ${webhookData.resource}`);
       
-      // Para webhooks de items, el recurso contiene el item completo
+      // Llamar al stock monitor para procesar el producto
+      const stockMonitor = require('./stockMonitor');
+      const result = await stockMonitor.processProductFromWebhook(productId, userId);
+      
+      logger.info(`✅ Items webhook procesado exitosamente para ${productId}`);
+      
       return {
         success: true,
-        action: 'queued_for_processing', 
+        action: 'product_updated',
         productId,
         userId,
-        resource: webhookData.resource
+        resource: webhookData.resource,
+        finalStock: result.available_quantity,
+        updatedFields: Object.keys(result)
       };
 
     } catch (error) {
@@ -255,6 +264,7 @@ class WebhookProcessor {
         return;
       }
 
+      logger.info(`📋 Procesando webhook - Topic: ${webhook.topic}, Producto: ${webhook.product_id}, Usuario: ${webhook.user_id}`);
       let result = null;
       
       // Procesar según topic

@@ -1675,6 +1675,58 @@ app.post('/api/monitor/check-now', async (req, res) => {
   }
 });
 
+// API para obtener estado de monitoreo SIN validación de sesión (solo BD)
+app.get('/api/monitor/status-db', async (req, res) => {
+  try {
+    // Leer estado directamente desde BD sin validar sesión
+    const monitorStatus = stockMonitor.getStatus();
+    
+    res.json({
+      monitoring: {
+        ...monitorStatus,
+        responseTime: Date.now(),
+        source: 'database_only' // Indicar que viene solo de BD
+      },
+      lastSyncTime: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`Error en /api/monitor/status-db: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener estado desde BD',
+      monitoring: { active: false, error: error.message }
+    });
+  }
+});
+
+// API ligera para verificar SOLO estado de sesión ML (sin datos de productos)
+app.get('/api/auth/session-status', async (req, res) => {
+  try {
+    const isAuthenticated = auth.isAuthenticated();
+    let userInfo = null;
+    
+    if (isAuthenticated) {
+      try {
+        userInfo = await auth.getCurrentUserInfo();
+      } catch (error) {
+        logger.warn(`⚠️ Error obteniendo info de usuario: ${error.message}`);
+      }
+    }
+    
+    res.json({
+      authenticated: isAuthenticated,
+      user: userInfo,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`Error en /api/auth/session-status: ${error.message}`);
+    res.json({
+      authenticated: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // API para verificar stock de producto específico con debug completo
 app.get('/api/products/:id/stock', async (req, res) => {
   if (!auth.isAuthenticated()) {
