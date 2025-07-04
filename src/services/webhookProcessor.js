@@ -27,7 +27,8 @@ class WebhookProcessor {
     // Topics que recibimos pero ignoramos (no causan error 400)
     this.ignoredTopics = [
       'orders_v2',
-      'shipments'
+      'shipments',
+      'messages'
     ];
   }
 
