@@ -106,6 +106,11 @@ class StockMonitor {
         scanCompleted = apiResult.scanCompleted || false;
         
         if (!scanCompleted && apiResult.hasMoreProducts) {
+          // TEMPORAL: Limitar a primeros lotes para evitar pérdida de sesión
+          if (totalBatches >= 1) {
+            logger.warn('🚧 TEMPORAL: Limitando sync a primer lote para evitar pérdida de sesión');
+            break;
+          }
           logger.info('⏳ Hay más productos por obtener - pausando para rate limiting...');
           // Rate limiting más conservador para scan completo automatizado
           await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos entre lotes de IDs
