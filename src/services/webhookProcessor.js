@@ -28,7 +28,8 @@ class WebhookProcessor {
     this.ignoredTopics = [
       'orders_v2',
       'shipments',
-      'messages'
+      'messages',
+      'price_suggestion'
     ];
   }
 
