@@ -21,11 +21,16 @@ class SupabaseClient {
    */
   init() {
     try {
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_ANON_KEY;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      // Usar variables automáticas de Vercel-Supabase integration
+      const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_JWT_SECRET;
 
       if (!supabaseUrl || !supabaseKey) {
+        logger.error(`❌ Variables Supabase faltantes:`);
+        logger.error(`   SUPABASE_URL: ${supabaseUrl ? '✅' : '❌'}`);
+        logger.error(`   SUPABASE_ANON_KEY: ${supabaseKey ? '✅' : '❌'}`);
+        logger.error(`   Available env vars: ${Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', ')}`);
         throw new Error('Variables de entorno de Supabase no configuradas');
       }
 
