@@ -95,7 +95,10 @@ class StockMonitor {
         totalBatches++;
         logger.info(`📊 Ejecutando lote ${totalBatches} de obtención de IDs...`);
         
-        const apiResult = await products.getAllProducts();
+        // Usar getAllProducts() solo para el primer lote, continueProductScan() para los siguientes
+        const apiResult = totalBatches === 1 
+          ? await products.getAllProducts()
+          : await products.continueProductScan();
         
         if (apiResult.results && apiResult.results.length > 0) {
           const newIds = apiResult.results.filter(id => !allProductIds.includes(id));
@@ -106,11 +109,6 @@ class StockMonitor {
         scanCompleted = apiResult.scanCompleted || false;
         
         if (!scanCompleted && apiResult.hasMoreProducts) {
-          // TEMPORAL: Limitar a primeros lotes para evitar pérdida de sesión
-          if (totalBatches >= 1) {
-            logger.warn('🚧 TEMPORAL: Limitando sync a primer lote para evitar pérdida de sesión');
-            break;
-          }
           logger.info('⏳ Hay más productos por obtener - pausando para rate limiting...');
           // Rate limiting más conservador para scan completo automatizado
           await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos entre lotes de IDs
@@ -461,12 +459,58 @@ class StockMonitor {
    */
   async processProductFromWebhook(productId, userId) {
     try {
-      logger.info(`🔔 Procesando producto desde webhook: ${productId}`);
+      logger.info(`🔔 Procesando producto desde webhook: ${productId} para usuario ${userId}`);
       
-      // Obtener datos actualizados de ML API
+      // 1. Obtener datos ANTERIORES de la BD para comparación
+      let previousData = null;
+      try {
+        const existingProducts = await databaseService.getProducts(userId, {});
+        previousData = existingProducts.find(p => p.id === productId);
+        if (previousData) {
+          logger.info(`📋 Datos anteriores - Stock: ${previousData.available_quantity}, Precio: ${previousData.price}, Estado: ${previousData.status}`);
+        } else {
+          logger.info(`🆕 Producto nuevo - no existe en BD`);
+        }
+      } catch (dbError) {
+        logger.warn(`⚠️ No se pudieron obtener datos anteriores: ${dbError.message}`);
+      }
+      
+      // 2. Obtener datos NUEVOS de ML API
+      logger.info(`🌐 Consultando ML API para producto ${productId}...`);
       const productData = await products.getProduct(productId);
       
-      // Actualizar en base de datos
+      logger.info(`📦 Datos recibidos de ML API:`, {
+        id: productData.id,
+        title: productData.title?.substring(0, 50) + '...',
+        stock: productData.available_quantity,
+        price: productData.price,
+        status: productData.status,
+        seller_sku: productData.seller_sku,
+        health: productData.health
+      });
+      
+      // 3. Detectar y mostrar CAMBIOS específicos
+      if (previousData) {
+        const changes = [];
+        if (previousData.available_quantity !== productData.available_quantity) {
+          changes.push(`Stock: ${previousData.available_quantity} → ${productData.available_quantity || 0} (${(productData.available_quantity || 0) - previousData.available_quantity >= 0 ? '+' : ''}${(productData.available_quantity || 0) - previousData.available_quantity})`);
+        }
+        if (previousData.price !== productData.price) {
+          changes.push(`Precio: $${previousData.price} → $${productData.price}`);
+        }
+        if (previousData.status !== productData.status) {
+          changes.push(`Estado: ${previousData.status} → ${productData.status}`);
+        }
+        
+        if (changes.length > 0) {
+          logger.info(`🔄 CAMBIOS DETECTADOS en ${productId}:`);
+          changes.forEach(change => logger.info(`   • ${change}`));
+        } else {
+          logger.info(`📊 Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
+        }
+      }
+      
+      // 4. Preparar datos para actualizar en BD
       const productToUpdate = {
         id: productData.id,
         user_id: userId,
@@ -484,14 +528,22 @@ class StockMonitor {
         webhook_source: 'ml_webhook'
       };
       
+      // 5. Actualizar en base de datos
+      logger.info(`💾 Actualizando producto ${productId} en base de datos...`);
       await databaseService.upsertProduct(productToUpdate);
+      logger.info(`✅ Producto ${productId} guardado en BD exitosamente`);
       
-      // Actualizar cache si es necesario
+      // 6. Actualizar cache si es necesario
       if (this.monitoringActive) {
+        logger.info(`🔄 Actualizando cache de sesión...`);
         await this.updateSessionCache(userId);
+        logger.info(`✅ Cache actualizado`);
       }
       
-      logger.info(`✅ Producto ${productId} actualizado desde webhook`);
+      // 7. Log final con resumen
+      const finalStock = productData.available_quantity || 0;
+      const stockStatus = finalStock <= this.stockThreshold ? '🔴 STOCK BAJO' : '✅ Stock OK';
+      logger.info(`🎉 WEBHOOK PROCESADO EXITOSAMENTE: ${productId} | Stock: ${finalStock} ${stockStatus}`);
       
       return productToUpdate;
       
