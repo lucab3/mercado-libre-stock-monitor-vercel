@@ -20,6 +20,7 @@ class WebhookProcessor {
     
     this.supportedTopics = [
       'stock-location',
+      'stock-locations', // ML envía ambas versiones
       'items',
       'items_prices'
     ];
@@ -259,6 +260,7 @@ class WebhookProcessor {
       // Procesar según topic
       switch (webhook.topic) {
         case 'stock-location':
+        case 'stock-locations': // Manejar ambas versiones
           result = await this.processStockLocationWebhook(
             { 
               _id: webhook.webhook_id,
