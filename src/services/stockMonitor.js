@@ -96,9 +96,17 @@ class StockMonitor {
         logger.info(`📊 Ejecutando lote ${totalBatches} de obtención de IDs...`);
         
         // Usar getAllProducts() solo para el primer lote, continueProductScan() para los siguientes
+        logger.info(`🔧 Llamando ${totalBatches === 1 ? 'getAllProducts()' : 'continueProductScan()'} para lote ${totalBatches}`);
         const apiResult = totalBatches === 1 
           ? await products.getAllProducts()
           : await products.continueProductScan();
+        
+        logger.info(`📊 Resultado lote ${totalBatches}:`, {
+          productsInBatch: apiResult.results?.length || 0,
+          scanCompleted: apiResult.scanCompleted,
+          hasMoreProducts: apiResult.hasMoreProducts,
+          batchCompleted: apiResult.batchCompleted
+        });
         
         if (apiResult.results && apiResult.results.length > 0) {
           const newIds = apiResult.results.filter(id => !allProductIds.includes(id));

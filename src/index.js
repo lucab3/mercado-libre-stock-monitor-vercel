@@ -1706,7 +1706,7 @@ app.get('/api/auth/session-status', async (req, res) => {
     
     if (isAuthenticated) {
       try {
-        userInfo = await auth.getCurrentUserInfo();
+        userInfo = await auth.getUserInfo();
       } catch (error) {
         logger.warn(`⚠️ Error obteniendo info de usuario: ${error.message}`);
       }
