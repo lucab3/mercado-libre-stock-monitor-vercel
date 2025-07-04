@@ -65,10 +65,14 @@ class WebhookProcessor {
    */
   validateWebhookData(webhookData) {
     try {
+      // Debug: Log de los datos recibidos
+      logger.info(`🔍 Webhook data recibido: ${JSON.stringify(webhookData, null, 2)}`);
+      
       const required = ['_id', 'topic', 'resource', 'user_id', 'application_id'];
       const missing = required.filter(field => !webhookData[field]);
       
       if (missing.length > 0) {
+        logger.error(`❌ Campos faltantes en webhook: ${missing.join(', ')}`);
         return {
           valid: false,
           reason: 'missing_required_fields',
@@ -78,6 +82,7 @@ class WebhookProcessor {
 
       // Validar topic soportado
       if (!this.supportedTopics.includes(webhookData.topic)) {
+        logger.error(`❌ Topic no soportado: ${webhookData.topic}. Soportados: ${this.supportedTopics.join(', ')}`);
         return {
           valid: false,
           reason: 'unsupported_topic',
