@@ -95,34 +95,49 @@ class StockMonitor {
         totalBatches++;
         logger.info(`📊 Ejecutando lote ${totalBatches} de obtención de IDs...`);
         
-        // Usar getAllProducts() solo para el primer lote, continueProductScan() para los siguientes
-        logger.info(`🔧 Llamando ${totalBatches === 1 ? 'getAllProducts()' : 'continueProductScan()'} para lote ${totalBatches}`);
-        const apiResult = totalBatches === 1 
-          ? await products.getAllProducts()
-          : await products.continueProductScan();
-        
-        logger.info(`📊 Resultado lote ${totalBatches}:`, {
-          productsInBatch: apiResult.results?.length || 0,
-          scanCompleted: apiResult.scanCompleted,
-          hasMoreProducts: apiResult.hasMoreProducts,
-          batchCompleted: apiResult.batchCompleted
-        });
-        
-        if (apiResult.results && apiResult.results.length > 0) {
-          const newIds = apiResult.results.filter(id => !allProductIds.includes(id));
-          allProductIds.push(...newIds);
-          logger.info(`📦 Lote ${totalBatches}: +${apiResult.results.length} IDs (${newIds.length} nuevos) | Total acumulado: ${allProductIds.length}`);
-        }
-        
-        scanCompleted = apiResult.scanCompleted || false;
-        
-        if (!scanCompleted && apiResult.hasMoreProducts) {
-          logger.info('⏳ Hay más productos por obtener - pausando para rate limiting...');
-          // Rate limiting más conservador para scan completo automatizado
-          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos entre lotes de IDs
-        } else if (!scanCompleted) {
-          logger.warn('⚠️ Scan no completado pero no hay más productos - terminando');
-          break;
+        try {
+          // Usar getAllProducts() solo para el primer lote, continueProductScan() para los siguientes
+          logger.info(`🔧 Llamando ${totalBatches === 1 ? 'getAllProducts()' : 'continueProductScan()'} para lote ${totalBatches}`);
+          const apiResult = totalBatches === 1 
+            ? await products.getAllProducts()
+            : await products.continueProductScan();
+          
+          logger.info(`📊 Resultado lote ${totalBatches}:`, {
+            productsInBatch: apiResult.results?.length || 0,
+            scanCompleted: apiResult.scanCompleted,
+            hasMoreProducts: apiResult.hasMoreProducts,
+            batchCompleted: apiResult.batchCompleted
+          });
+          
+          if (apiResult.results && apiResult.results.length > 0) {
+            const newIds = apiResult.results.filter(id => !allProductIds.includes(id));
+            allProductIds.push(...newIds);
+            logger.info(`📦 Lote ${totalBatches}: +${apiResult.results.length} IDs (${newIds.length} nuevos) | Total acumulado: ${allProductIds.length}`);
+          }
+          
+          scanCompleted = apiResult.scanCompleted || false;
+          
+          if (!scanCompleted && apiResult.hasMoreProducts) {
+            logger.info('⏳ Hay más productos por obtener - pausando para rate limiting...');
+            // Rate limiting más conservador para scan completo automatizado
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos entre lotes de IDs
+          } else if (!scanCompleted) {
+            logger.warn('⚠️ Scan no completado pero no hay más productos - terminando');
+            break;
+          }
+          
+        } catch (error) {
+          logger.error(`❌ Error en lote ${totalBatches} de IDs: ${error.message}`);
+          
+          // Si tenemos IDs recolectados, procesar lo que tenemos
+          if (allProductIds.length > 0) {
+            logger.warn(`⚠️ Error de autenticación en lote ${totalBatches}, pero tenemos ${allProductIds.length} IDs recolectados`);
+            logger.info('🔄 Procesando productos recolectados antes del fallo...');
+            break; // Salir del loop y procesar lo que tenemos
+          } else {
+            // Si no tenemos IDs, re-lanzar el error
+            throw error;
+          }
         }
       }
       
