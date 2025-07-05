@@ -230,7 +230,27 @@ class ProductsService {
       await this.ensureAuthentication();
 
       logger.debug(`🔍 Obteniendo producto ${productId} con rate limiting`);
-      const productData = await mlApiClient.getProduct(productId);
+      
+      // Especificar atributos para incluir seller_sku y otros campos importantes
+      const attributes = [
+        'id', 
+        'title', 
+        'available_quantity', 
+        'price', 
+        'currency_id', 
+        'status',
+        'permalink', 
+        'seller_sku',       // SKU del vendedor - CRÍTICO
+        'last_updated',
+        'listing_type_id',
+        'condition',
+        'health',
+        'catalog_listing',
+        'category_id',
+        'attributes'        // Atributos adicionales que pueden incluir SKU
+      ];
+      
+      const productData = await mlApiClient.getProduct(productId, attributes);
       
       // NUEVO: Validación y logging detallado de datos
       this.validateAndLogProductData(productData);
