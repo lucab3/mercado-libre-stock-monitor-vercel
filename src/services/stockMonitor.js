@@ -236,6 +236,131 @@ class StockMonitor {
   }
 
   /**
+   * NUEVO: Sincronizar una lista específica de productos (para background processing)
+   */
+  async syncProducts(productIds, userId, options = {}) {
+    const {
+      maxRetries = 3,
+      retryDelay = 1000,
+      batchSize = 20 // Lotes pequeños para background
+    } = options;
+
+    try {
+      logger.info(`🔄 Sincronizando ${productIds.length} productos específicos para usuario ${userId}`);
+      
+      if (!productIds || productIds.length === 0) {
+        return { processed: 0, errors: 0, message: 'No hay productos para sincronizar' };
+      }
+
+      let processed = 0;
+      let errors = 0;
+      const errorDetails = [];
+
+      // Procesar en lotes pequeños
+      const chunks = this.chunkArray(productIds, batchSize);
+      logger.info(`📦 Procesando ${chunks.length} lotes de hasta ${batchSize} productos`);
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        logger.info(`📋 Procesando lote ${i + 1}/${chunks.length}: ${chunk.length} productos`);
+
+        let retryCount = 0;
+        let chunkSuccess = false;
+
+        while (retryCount < maxRetries && !chunkSuccess) {
+          try {
+            // Obtener detalles del lote
+            const productsData = await products.getMultipleProducts(chunk, false, userId);
+            
+            if (productsData && productsData.length > 0) {
+              // Preparar productos para base de datos
+              const productsToSync = productsData.map(productData => ({
+                id: productData.id,
+                user_id: userId,
+                title: productData.title,
+                seller_sku: productData.seller_sku,
+                available_quantity: productData.available_quantity,
+                price: productData.price,
+                currency_id: productData.currency_id,
+                status: productData.status,
+                permalink: productData.permalink,
+                category_id: productData.category_id,
+                condition: productData.condition,
+                listing_type_id: productData.listing_type_id,
+                health: productData.health,
+                last_api_sync: new Date().toISOString()
+              }));
+
+              // Guardar en base de datos
+              await databaseService.upsertMultipleProducts(productsToSync);
+              processed += productsToSync.length;
+              
+              logger.info(`✅ Lote ${i + 1} completado: ${productsToSync.length} productos sincronizados`);
+              chunkSuccess = true;
+            } else {
+              logger.warn(`⚠️ Lote ${i + 1}: Sin datos de productos obtenidos`);
+              chunkSuccess = true; // No reintentar si no hay datos
+            }
+
+          } catch (chunkError) {
+            retryCount++;
+            logger.error(`❌ Error en lote ${i + 1}, intento ${retryCount}/${maxRetries}: ${chunkError.message}`);
+            
+            if (retryCount < maxRetries) {
+              logger.info(`⏳ Reintentando lote ${i + 1} en ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+            } else {
+              logger.error(`💀 Lote ${i + 1} falló después de ${maxRetries} intentos`);
+              errors += chunk.length;
+              errorDetails.push({
+                lote: i + 1,
+                productos: chunk.length,
+                error: chunkError.message
+              });
+            }
+          }
+        }
+
+        // Pequeña pausa entre lotes
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      const result = {
+        processed,
+        errors,
+        total: productIds.length,
+        successRate: ((processed / productIds.length) * 100).toFixed(1),
+        errorDetails: errorDetails.length > 0 ? errorDetails : undefined
+      };
+
+      logger.info(`🎯 Sincronización específica completada: ${processed}/${productIds.length} productos (${result.successRate}%)`);
+      
+      if (errors > 0) {
+        logger.warn(`⚠️ ${errors} productos fallaron durante la sincronización`);
+      }
+
+      return result;
+
+    } catch (error) {
+      logger.error(`❌ Error en sincronización específica: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Función auxiliar para dividir arrays en chunks
+   */
+  chunkArray(array, size) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  /**
    * Actualizar cache de sesión desde base de datos
    */
   async updateSessionCache(userId) {

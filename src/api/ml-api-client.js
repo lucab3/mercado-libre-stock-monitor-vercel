@@ -180,8 +180,8 @@ class MLAPIClient {
    */
   async getAllUserProducts(userId, options = {}) {
     const { 
-      limit = 100, 
-      maxProductsPerBatch = 1000, // Límite por lote para evitar timeout
+      limit = 50, // REDUCIDO de 100 a 50 para evitar timeout
+      maxProductsPerBatch = 200, // REDUCIDO de 1000 a 200 para evitar timeout en Vercel
       continueFromCache = false,
       sessionId = null
     } = options;
@@ -269,6 +269,29 @@ class MLAPIClient {
           }
         } catch (apiError) {
           logger.error(`❌ Error en API call página ${pageCount}: ${apiError.message}`);
+          
+          // Si es error de autenticación (401), intentar renovar token
+          if (apiError.response && apiError.response.status === 401) {
+            logger.warn('🔄 Token expirado durante scan, intentando renovar...');
+            try {
+              const auth = require('./auth');
+              
+              // Intentar renovar token
+              const newTokens = await auth.refreshAccessToken();
+              if (newTokens) {
+                logger.info('✅ Token renovado exitosamente durante scan');
+                this.setAccessToken(newTokens.access_token);
+                
+                // Reintentar la misma página
+                pageCount--;
+                continue;
+              }
+            } catch (refreshError) {
+              logger.error(`❌ Error renovando token durante scan: ${refreshError.message}`);
+              throw new Error(`Token expirado y no se pudo renovar: ${refreshError.message}`);
+            }
+          }
+          
           // Si es error de scroll_id expirado, reintentar sin scroll_id
           if (apiError.message.includes('scroll_id') || apiError.message.includes('expired')) {
             logger.warn('🔄 scroll_id expirado, reiniciando scan...');
@@ -276,6 +299,7 @@ class MLAPIClient {
             pageCount--; // Reintentar esta página
             continue;
           }
+          
           throw apiError;
         }
         

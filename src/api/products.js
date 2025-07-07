@@ -124,8 +124,8 @@ class ProductsService {
       
       // CORREGIDO: Usar el método scan por lotes para obtener productos (compatible con Vercel serverless)
       const response = await mlApiClient.getAllUserProducts(user.id, {
-        limit: 100, // Máximo para scan según ML API
-        maxProductsPerBatch: 300, // REDUCIDO: Límite por lote para evitar timeout en Vercel
+        limit: 50, // REDUCIDO: Límite por página para evitar timeout
+        maxProductsPerBatch: 200, // REDUCIDO: Límite por lote para evitar timeout en Vercel
         continueFromCache: false, // Primera llamada
         sessionId: user.id // Usar user ID como session ID
       });
@@ -194,8 +194,8 @@ class ProductsService {
       
       // Continuar desde cache - OPTIMIZADO: lotes más pequeños para evitar timeout
       const response = await mlApiClient.getAllUserProducts(user.id, {
-        limit: 100,
-        maxProductsPerBatch: 300, // REDUCIDO de 1000 a 300 para evitar timeout en Vercel
+        limit: 50, // REDUCIDO: Límite por página para evitar timeout
+        maxProductsPerBatch: 200, // REDUCIDO: Límite por lote para evitar timeout en Vercel
         continueFromCache: true, // Continuar desde donde se quedó
         sessionId: user.id
       });
