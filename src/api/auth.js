@@ -4,6 +4,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const storage = require('../utils/storage');
 const sessionManager = require('../utils/sessionManager');
+const tokenManager = require('../utils/tokenManager');
 
 class MercadoLibreAuth {
   constructor() {
@@ -97,7 +98,38 @@ class MercadoLibreAuth {
     }
 
     const session = sessionManager.getSessionByCookie(this.currentCookieId);
-    return session ? session.tokens : null;
+    if (!session || !session.userId) {
+      return null;
+    }
+
+    // NUEVO: Intentar obtener desde tokenManager primero
+    const tokenManagerTokens = tokenManager.getTokens(session.userId);
+    if (tokenManagerTokens) {
+      logger.debug(`🔑 Tokens obtenidos desde tokenManager para usuario ${session.userId}`);
+      
+      // Sincronizar con la sesión si están desactualizados
+      if (!session.tokens || session.tokens.access_token !== tokenManagerTokens.access_token) {
+        session.tokens = tokenManagerTokens;
+        logger.debug('🔄 Tokens sincronizados con sesión');
+      }
+      
+      return tokenManagerTokens;
+    }
+
+    // Fallback: usar tokens de la sesión
+    if (session.tokens) {
+      logger.debug(`🔄 Tokens obtenidos desde sesión para usuario ${session.userId} (fallback)`);
+      
+      // Guardar en tokenManager para próxima vez
+      const metadata = {
+        cookieId: this.currentCookieId,
+        userAgent: session.userAgent || 'unknown',
+        sessionCreated: session.createdAt
+      };
+      tokenManager.saveTokens(session.userId, session.tokens, metadata);
+    }
+    
+    return session.tokens || null;
   }
 
   /**
@@ -105,6 +137,22 @@ class MercadoLibreAuth {
    */
   get tokens() {
     return this.getCurrentTokens();
+  }
+
+  /**
+   * NUEVO: Obtener el ID del usuario actual
+   */
+  getCurrentUserId() {
+    if (this.mockMode) {
+      return 'mock_user_123';
+    }
+
+    if (!this.currentCookieId) {
+      return null;
+    }
+
+    const session = sessionManager.getSessionByCookie(this.currentCookieId);
+    return session ? session.userId : null;
   }
 
   /**
@@ -124,17 +172,34 @@ class MercadoLibreAuth {
    */
   saveTokens(tokens) {
     try {
-      // Mantener compatibilidad con storage
-      storage.saveTokens(tokens);
-      
-      // Si hay sesión activa, actualizar tokens en la sesión
+      // NUEVO: Guardar en tokenManager por usuario
       if (this.currentCookieId) {
         const session = sessionManager.getSessionByCookie(this.currentCookieId);
-        if (session) {
+        if (session && session.userId) {
+          // Guardar en tokenManager con metadata de la sesión
+          const metadata = {
+            cookieId: this.currentCookieId,
+            userAgent: session.userAgent || 'unknown',
+            sessionCreated: session.createdAt
+          };
+          
+          const success = tokenManager.saveTokens(session.userId, tokens, metadata);
+          if (success) {
+            logger.info(`🔑 Tokens guardados para usuario ${session.userId} (tokenManager)`);
+          }
+          
+          // También actualizar en la sesión para compatibilidad
           session.tokens = tokens;
           logger.info('🔄 Tokens actualizados en sesión activa');
+        } else {
+          logger.warn('⚠️ No se encontró sesión válida para guardar tokens');
         }
+      } else {
+        logger.warn('⚠️ No hay cookieId activo para guardar tokens');
       }
+      
+      // Mantener compatibilidad con storage legacy (deprecado)
+      storage.saveTokens(tokens);
       
       logger.info('Tokens guardados correctamente');
     } catch (error) {

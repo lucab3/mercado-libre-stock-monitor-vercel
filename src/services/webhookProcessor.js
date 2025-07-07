@@ -31,7 +31,8 @@ class WebhookProcessor {
       'shipments',
       'messages',
       'price_suggestion',
-      'fbm_stock_operations'
+      'fbm_stock_operations',
+      'questions'
     ];
   }
 

@@ -10,19 +10,31 @@ const logger = require('./logger');
 // Ruta del archivo de tokens (solo para desarrollo local)
 const TOKENS_FILE_PATH = path.join(__dirname, '../../.tokens.json');
 
-// NUEVO: Almacenamiento temporal en memoria para Vercel
-let memoryTokenStorage = null;
+// DEPRECADO: Usar tokenManager en lugar de este sistema
+const tokenManager = require('./tokenManager');
 
 /**
+ * @deprecated Usar tokenManager.saveTokens(userId, tokens) en su lugar
  * Guarda los tokens en almacenamiento persistente
  * ARREGLADO: En Vercel usa memoria, en desarrollo local usa archivos
  * @param {Object} tokens - Tokens a guardar
+ * @param {string} userId - ID del usuario (requerido para nuevo sistema)
  */
-function saveTokens(tokens) {
+function saveTokens(tokens, userId = null) {
   try {
-    // En Vercel, guardar en memoria (temporal durante la sesión)
+    // NUEVO: Usar tokenManager si se proporciona userId
+    if (userId) {
+      return tokenManager.saveTokens(userId, tokens);
+    }
+    
+    // DEPRECADO: Sistema antiguo para compatibilidad
+    logger.warn('⚠️ saveTokens() sin userId está deprecado. Usar tokenManager.saveTokens(userId, tokens)');
+    
+    // En Vercel, guardar en memoria (temporal durante la sesión) - SOLO para compatibilidad
     if (process.env.VERCEL) {
-      memoryTokenStorage = tokens;
+      // Sistema legacy compartido (problemático)
+      logger.warn('🚨 Usando almacenamiento legacy compartido - puede causar conflictos entre usuarios');
+      tokenManager.saveTokens('legacy', tokens, { isLegacy: true });
       logger.info('Tokens guardados en memoria (Vercel)');
       
       // Mostrar mensaje informativo para producción
@@ -55,12 +67,22 @@ function saveTokens(tokens) {
 }
 
 /**
+ * @deprecated Usar tokenManager.getTokens(userId) en su lugar
  * Carga los tokens desde almacenamiento persistente
  * ARREGLADO: Prioriza variables de entorno, luego memoria, luego archivos
+ * @param {string} userId - ID del usuario (requerido para nuevo sistema)
  * @returns {Object|null} Tokens cargados o null si no existen
  */
-function loadTokens() {
+function loadTokens(userId = null) {
   try {
+    // NUEVO: Usar tokenManager si se proporciona userId
+    if (userId) {
+      return tokenManager.getTokens(userId);
+    }
+    
+    // DEPRECADO: Sistema antiguo para compatibilidad
+    logger.warn('⚠️ loadTokens() sin userId está deprecado. Usar tokenManager.getTokens(userId)');
+    
     // 1. PRIMERO: Intentar cargar desde variables de entorno (para persistencia en Vercel)
     if (process.env.ML_ACCESS_TOKEN && process.env.ML_REFRESH_TOKEN && process.env.ML_TOKEN_EXPIRES_AT) {
       logger.info('Tokens cargados desde variables de entorno');
@@ -71,10 +93,11 @@ function loadTokens() {
       };
     }
     
-    // 2. SEGUNDO: En Vercel, intentar cargar desde memoria
-    if (process.env.VERCEL && memoryTokenStorage) {
-      logger.info('Tokens cargados desde memoria (Vercel)');
-      return memoryTokenStorage;
+    // 2. SEGUNDO: Intentar desde tokenManager legacy
+    const legacyTokens = tokenManager.getTokens('legacy');
+    if (legacyTokens) {
+      logger.info('Tokens cargados desde tokenManager legacy');
+      return legacyTokens;
     }
     
     // 3. TERCERO: En desarrollo local, intentar cargar desde archivo

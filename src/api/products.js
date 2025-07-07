@@ -32,13 +32,28 @@ class ProductsService {
 
   /**
    * Método auxiliar para verificar y configurar autenticación
+   * @param {string} userId - ID del usuario específico (opcional)
    */
-  async ensureAuthentication() {
+  async ensureAuthentication(userId = null) {
     if (this.mockMode) {
       return true; // En modo mock siempre está "autenticado"
     }
 
-    // Verificar que estamos autenticados
+    // NUEVO: Si se especifica userId, usar tokens específicos de ese usuario
+    if (userId) {
+      const tokenManager = require('../utils/tokenManager');
+      const userTokens = tokenManager.getTokens(userId);
+      
+      if (userTokens && userTokens.access_token) {
+        logger.debug(`🔑 Configurando access token para usuario específico: ${userId}`);
+        this.setAccessToken(userTokens.access_token);
+        return true;
+      } else {
+        throw new Error(`No hay tokens válidos para el usuario ${userId}`);
+      }
+    }
+
+    // Método original: usar usuario actualmente logueado
     if (!auth.isAuthenticated()) {
       throw new Error('No autenticado - necesitas iniciar sesión primero con Mercado Libre');
     }
@@ -64,8 +79,9 @@ class ProductsService {
 
   /**
    * CORREGIDO: Obtiene TODOS los productos del usuario (activos, pausados, cerrados) usando scan
+   * @param {string} userId - ID del usuario específico (opcional)
    */
-  async getAllProducts() {
+  async getAllProducts(userId = null) {
     if (this.mockMode) {
       logger.info('🎭 Obteniendo productos en modo MOCK');
       try {
@@ -97,7 +113,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       const user = await mlApiClient.getUser();
       logger.info(`👤 Obteniendo TODOS los productos para usuario: ${user.nickname} (${user.id})`);
@@ -153,8 +169,9 @@ class ProductsService {
 
   /**
    * NUEVO: Continuar scan desde donde se quedó (para obtener todos los productos)
+   * @param {string} userId - ID del usuario específico (opcional)
    */
-  async continueProductScan() {
+  async continueProductScan(userId = null) {
     if (this.mockMode) {
       logger.info('🎭 En modo MOCK - scan ya está completo');
       // CORREGIDO: No devolver array vacío, devolver null para indicar "sin cambios"
@@ -170,7 +187,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       const user = await mlApiClient.getUser();
       logger.info(`🔄 Continuando scan para usuario: ${user.nickname} (${user.id})`);
@@ -214,8 +231,9 @@ class ProductsService {
 
   /**
    * CORREGIDO: Obtiene un producto específico con validación completa de datos
+   * @param {string} userId - ID del usuario específico (opcional)
    */
-  async getProduct(productId) {
+  async getProduct(productId, userId = null) {
     if (this.mockMode) {
       logger.debug(`🎭 Obteniendo producto ${productId} en modo MOCK`);
       try {
@@ -227,7 +245,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       logger.debug(`🔍 Obteniendo producto ${productId} con rate limiting`);
       
@@ -441,8 +459,9 @@ class ProductsService {
 
   /**
    * Obtiene múltiples productos de forma eficiente con rate limiting
+   * @param {string} userId - ID del usuario específico (opcional)
    */
-  async getMultipleProducts(productIds, includeFullDetails = false) {
+  async getMultipleProducts(productIds, includeFullDetails = false, userId = null) {
     if (this.mockMode) {
       logger.info(`🎭 Obteniendo ${productIds.length} productos en modo MOCK`);
       const results = [];
@@ -462,7 +481,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       // MEJORADO: Incluir más atributos para debugging completo
       const attributes = includeFullDetails 
@@ -525,7 +544,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       logger.info(`📝 Actualizando stock de ${productId} a ${quantity} unidades`);
       return await mlApiClient.updateProductStock(productId, quantity);
@@ -680,7 +699,7 @@ class ProductsService {
     const { batchSize = 10, pauseBetweenBatches = 1000 } = options;
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       return await mlApiClient.processBatch(
         productIds,
@@ -747,7 +766,7 @@ class ProductsService {
     }
 
     try {
-      await this.ensureAuthentication();
+      await this.ensureAuthentication(userId);
 
       return await mlApiClient.healthCheck();
     } catch (error) {

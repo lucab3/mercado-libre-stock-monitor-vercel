@@ -97,10 +97,10 @@ class StockMonitor {
         
         try {
           // Usar getAllProducts() solo para el primer lote, continueProductScan() para los siguientes
-          logger.info(`🔧 Llamando ${totalBatches === 1 ? 'getAllProducts()' : 'continueProductScan()'} para lote ${totalBatches}`);
+          logger.info(`🔧 Llamando ${totalBatches === 1 ? 'getAllProducts()' : 'continueProductScan()'} para lote ${totalBatches} con userId: ${userId}`);
           const apiResult = totalBatches === 1 
-            ? await products.getAllProducts()
-            : await products.continueProductScan();
+            ? await products.getAllProducts(userId)
+            : await products.continueProductScan(userId);
           
           logger.info(`📊 Resultado lote ${totalBatches}:`, {
             productsInBatch: apiResult.results?.length || 0,
@@ -160,9 +160,9 @@ class StockMonitor {
         const batchNumber = Math.floor(i/batchSize) + 1;
         
         try {
-          logger.info(`📦 Procesando lote ${batchNumber}/${totalDetailBatches} de detalles (${batch.length} productos)...`);
+          logger.info(`📦 Procesando lote ${batchNumber}/${totalDetailBatches} de detalles (${batch.length} productos) para userId: ${userId}...`);
           
-          const batchData = await products.getMultipleProducts(batch, false);
+          const batchData = await products.getMultipleProducts(batch, false, userId);
           allProductsData.push(...batchData);
           
           logger.info(`✅ Lote ${batchNumber}/${totalDetailBatches} completado: ${batchData.length} productos obtenidos`);
@@ -507,8 +507,8 @@ class StockMonitor {
       }
       
       // 2. Obtener datos NUEVOS de ML API
-      logger.info(`🌐 Consultando ML API para producto ${productId}...`);
-      const productData = await products.getProduct(productId);
+      logger.info(`🌐 Consultando ML API para producto ${productId} con userId: ${userId}...`);
+      const productData = await products.getProduct(productId, userId);
       
       logger.info(`📦 Datos recibidos de ML API:`, {
         id: productData.id,
