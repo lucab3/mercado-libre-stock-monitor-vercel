@@ -240,6 +240,11 @@
         </button>
         <div class="navbar-nav flex-row">
             <div class="nav-item text-nowrap me-3">
+                <button id="sync-btn" class="btn btn-sm btn-warning" onclick="startBackgroundSync()">
+                    <i class="bi bi-arrow-clockwise"></i> <span id="sync-text">Sincronizar</span>
+                </button>
+            </div>
+            <div class="nav-item text-nowrap me-3">
                 <span class="navbar-text text-light">
                     <i class="bi bi-person-circle"></i> <span id="current-user">Cargando...</span>
                 </span>
@@ -1508,6 +1513,96 @@
             console.log('- removePhantomProduct(productId): Eliminar producto fantasma');
             console.log('- loadCategoriesInfo(): Cargar información de categorías desde la API');
             console.log('- Para usar: debugSystem() o debugProductDetails("MLA1234567890")');
+            
+            // ===== BACKGROUND SYNC FUNCTIONALITY =====
+            window.startBackgroundSync = async function() {
+                const syncBtn = document.getElementById('sync-btn');
+                const syncText = document.getElementById('sync-text');
+                const originalText = syncText.textContent;
+                
+                try {
+                    // Deshabilitar botón y mostrar progreso
+                    syncBtn.disabled = true;
+                    syncBtn.className = 'btn btn-sm btn-info';
+                    syncText.textContent = 'Sincronizando...';
+                    
+                    console.log('🔄 Iniciando sincronización background...');
+                    
+                    let continueSync = true;
+                    let totalBatches = 0;
+                    let totalProcessed = 0;
+                    
+                    while (continueSync) {
+                        totalBatches++;
+                        syncText.textContent = `Lote ${totalBatches}...`;
+                        
+                        const url = totalBatches === 1 
+                            ? '/api/sync-background' 
+                            : '/api/sync-background?continue=true';
+                        
+                        console.log(`📦 Ejecutando lote ${totalBatches}: ${url}`);
+                        
+                        const response = await fetch(url);
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Error en sincronización');
+                        }
+                        
+                        console.log(`✅ Lote ${totalBatches} completado:`, result);
+                        
+                        totalProcessed += result.totalProcessed || 0;
+                        continueSync = result.needsContinuation;
+                        
+                        // Actualizar UI con progreso
+                        syncText.textContent = `${totalProcessed} productos`;
+                        
+                        // Si necesita continuar, pequeña pausa
+                        if (continueSync) {
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
+                    }
+                    
+                    // Sincronización completada
+                    console.log('🎉 Sincronización background completada!');
+                    console.log(`📊 Total procesado: ${totalProcessed} productos en ${totalBatches} lotes`);
+                    
+                    syncBtn.className = 'btn btn-sm btn-success';
+                    syncText.textContent = `✅ ${totalProcessed} productos`;
+                    
+                    // Recargar dashboard después de completar
+                    setTimeout(() => {
+                        console.log('🔄 Recargando dashboard...');
+                        loadDashboard();
+                        
+                        // Restaurar botón después de recargar
+                        setTimeout(() => {
+                            syncBtn.disabled = false;
+                            syncBtn.className = 'btn btn-sm btn-warning';
+                            syncText.textContent = originalText;
+                        }, 3000);
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('❌ Error en sincronización background:', error);
+                    
+                    // Mostrar error en botón
+                    syncBtn.className = 'btn btn-sm btn-danger';
+                    syncText.textContent = 'Error';
+                    
+                    alert(`Error en sincronización: ${error.message}`);
+                    
+                    // Restaurar botón después de error
+                    setTimeout(() => {
+                        syncBtn.disabled = false;
+                        syncBtn.className = 'btn btn-sm btn-warning';
+                        syncText.textContent = originalText;
+                    }, 3000);
+                }
+            };
+            
+            console.log('🔄 Función de sincronización background agregada');
+            console.log('- startBackgroundSync(): Iniciar sincronización por lotes');
         });
     </script>
 </body>
