@@ -1253,14 +1253,9 @@ app.post('/webhook/notifications', async (req, res) => {
 app.get('/', async (req, res) => {
   try {
     if (auth.isAuthenticated()) {
-      // Si está autenticado, asegurar que el monitoreo esté activo
-      if (!stockMonitor.monitoringActive) {
-        try {
-          await stockMonitor.start();
-        } catch (error) {
-          logger.error(`Error al iniciar monitoreo automático: ${error.message}`);
-        }
-      }
+      // DESACTIVADO: No auto-iniciar sync en dashboard para evitar timeout
+      // El usuario debe usar /api/sync-background manualmente
+      logger.debug('📋 Dashboard cargado - usar /api/sync-background para sincronizar productos');
       res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
     } else {
       res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -1347,15 +1342,10 @@ app.get('/auth/callback', async (req, res) => {
       logger.info(`🔐 Sesión creada: ${sessionInfo.sessionId} para usuario ${sessionInfo.userId}`);
     }
 
-    // Iniciar el monitoreo automáticamente después de la autenticación
-    try {
-      logger.info('🔄 Iniciando monitoreo después de autenticación...');
-      await stockMonitor.start();
-      logger.info('✅ Monitoreo iniciado después de autenticación exitosa');
-    } catch (monitorError) {
-      logger.error(`❌ Error al iniciar monitoreo: ${monitorError.message}`);
-      // No bloquear el flujo de autenticación por errores de monitoreo
-    }
+    // DESACTIVADO: No iniciar sync automático en callback para evitar timeout 504
+    // El usuario debe usar /api/sync-background manualmente después de autenticarse
+    logger.info('✅ Autenticación completada - usar /api/sync-background para sincronizar productos');
+    logger.info('📋 La sincronización automática está desactivada para evitar timeouts en el callback');
 
     // Redirigir al dashboard
     res.redirect('/');
