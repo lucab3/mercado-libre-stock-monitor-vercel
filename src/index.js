@@ -1767,6 +1767,12 @@ app.get('/api/products/:id/stock', async (req, res) => {
   }
 });
 
+// Sincronización en background para grandes datasets
+app.get('/api/sync-background', async (req, res) => {
+  const handleBackgroundSync = require('../api/sync-background');
+  await handleBackgroundSync(req, res);
+});
+
 // API para debug (solo en desarrollo)
 app.get('/api/debug/stock-state', (req, res) => {
   if (!auth.isAuthenticated()) {
