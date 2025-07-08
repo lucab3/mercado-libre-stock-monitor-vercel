@@ -239,6 +239,8 @@ class MLAPIClient {
     logger.info(`🔍 Scan por lotes: máximo ${maxProductsPerBatch} productos por lote (${maxPages} páginas en este lote)`);
     
     try {
+      let consecutiveDuplicatePages = 0;
+      
       while (pageCount < maxPages) {
         pageCount++;
         
@@ -331,11 +333,20 @@ class MLAPIClient {
         allProducts.push(...newProducts);
         logger.info(`📦 [Página ${pageCount}] Obtenidos ${response.results.length} productos (${newProducts.length} nuevos, ${response.results.length - newProducts.length} duplicados). Total acumulado: ${allProducts.length}`);
         
-        // Si no hay productos nuevos únicos, probablemente hemos terminado
+        // Si no hay productos nuevos únicos, contar páginas consecutivas con duplicados
         if (newProducts.length === 0) {
-          logger.info(`📦 [Página ${pageCount}] Solo productos duplicados, probablemente terminamos el scan`);
-          exitReason = 'ONLY_DUPLICATES';
-          break;
+          consecutiveDuplicatePages = (consecutiveDuplicatePages || 0) + 1;
+          logger.info(`📦 [Página ${pageCount}] Solo productos duplicados (${consecutiveDuplicatePages} páginas consecutivas)`);
+          
+          // Solo terminar después de varias páginas consecutivas con duplicados
+          if (consecutiveDuplicatePages >= 3) {
+            logger.info(`📦 [Página ${pageCount}] Terminando scan: ${consecutiveDuplicatePages} páginas consecutivas con solo duplicados`);
+            exitReason = 'ONLY_DUPLICATES';
+            break;
+          }
+        } else {
+          // Reset contador si encontramos productos nuevos
+          consecutiveDuplicatePages = 0;
         }
         
         // Obtener scroll_id para la siguiente página
