@@ -418,6 +418,127 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES SCAN CONTROL
+  // ==========================================
+
+  /**
+   * Inicializar o resetear scan para un usuario
+   */
+  async initUserScan(userId) {
+    try {
+      await supabaseClient.executeQuery(
+        async (client) => {
+          return await client.rpc('init_user_scan', { p_user_id: userId });
+        },
+        'init_user_scan'
+      );
+      
+      logger.info(`✅ Scan inicializado para usuario: ${userId}`);
+      
+    } catch (error) {
+      logger.error(`❌ Error inicializando scan para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estado actual del scan
+   */
+  async getScanState(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client.rpc('get_scan_state', { p_user_id: userId });
+        },
+        'get_scan_state'
+      );
+      
+      return result.data && result.data.length > 0 ? result.data[0] : null;
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo estado de scan para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar progreso del scan
+   */
+  async updateScanProgress(userId, scrollId, totalProducts, processedProducts, status = 'active') {
+    try {
+      await supabaseClient.executeQuery(
+        async (client) => {
+          return await client.rpc('update_scan_progress', {
+            p_user_id: userId,
+            p_scroll_id: scrollId,
+            p_total_products: totalProducts,
+            p_processed_products: processedProducts,
+            p_status: status
+          });
+        },
+        'update_scan_progress'
+      );
+      
+      logger.debug(`📊 Progreso actualizado para usuario ${userId}: ${processedProducts}/${totalProducts}`);
+      
+    } catch (error) {
+      logger.error(`❌ Error actualizando progreso de scan para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener productos por IDs (para filtrar existentes)
+   */
+  async getProductsByIds(productIds, userId) {
+    try {
+      if (!productIds || productIds.length === 0) {
+        return [];
+      }
+
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('id')
+            .eq('user_id', userId)
+            .in('id', productIds);
+        },
+        'get_products_by_ids'
+      );
+      
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos por IDs para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener conteo total de productos por usuario
+   */
+  async getProductCount(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+        },
+        'get_product_count'
+      );
+      
+      return result.count || 0;
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo conteo de productos para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton

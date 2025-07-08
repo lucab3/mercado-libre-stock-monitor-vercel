@@ -1536,9 +1536,7 @@
                         totalBatches++;
                         syncText.textContent = `Lote ${totalBatches}...`;
                         
-                        const url = totalBatches === 1 
-                            ? '/api/sync-background' 
-                            : '/api/sync-background?continue=true';
+                        const url = '/api/sync-next';
                         
                         console.log(`📦 Ejecutando lote ${totalBatches}: ${url}`);
                         
@@ -1551,15 +1549,18 @@
                         
                         console.log(`✅ Lote ${totalBatches} completado:`, result);
                         
-                        totalProcessed += result.totalProcessed || 0;
-                        continueSync = result.needsContinuation;
+                        totalProcessed += result.progress?.newInThisBatch || 0;
+                        continueSync = result.hasMore || false;
                         
                         // Actualizar UI con progreso
-                        syncText.textContent = `${totalProcessed} productos`;
+                        if (result.progress) {
+                            const percentage = result.progress.percentage || 0;
+                            syncText.textContent = `${percentage}% (${result.progress.current}/${result.progress.total})`;
+                        }
                         
                         // Si necesita continuar, pequeña pausa
                         if (continueSync) {
-                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            await new Promise(resolve => setTimeout(resolve, 500));
                         }
                     }
                     
@@ -1568,7 +1569,7 @@
                     console.log(`📊 Total procesado: ${totalProcessed} productos en ${totalBatches} lotes`);
                     
                     syncBtn.className = 'btn btn-sm btn-success';
-                    syncText.textContent = `✅ ${totalProcessed} productos`;
+                    syncText.textContent = `✅ ${totalProcessed} nuevos`;
                     
                     // Recargar dashboard después de completar
                     setTimeout(() => {

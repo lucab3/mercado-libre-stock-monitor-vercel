@@ -1665,6 +1665,33 @@ app.post('/api/monitor/check-now', async (req, res) => {
   }
 });
 
+// API para obtener estado de monitoreo (general)
+app.get('/api/monitor/status', async (req, res) => {
+  if (!auth.isAuthenticated()) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  try {
+    const monitorStatus = stockMonitor.getStatus();
+    
+    res.json({
+      success: true,
+      monitoring: {
+        ...monitorStatus,
+        responseTime: Date.now(),
+        source: 'general_status'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`Error en /api/monitor/status: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener estado del monitor',
+      monitoring: { active: false, error: error.message }
+    });
+  }
+});
+
 // API para obtener estado de monitoreo CON validación de sesión (filtrado por usuario)
 app.get('/api/monitor/status-db', async (req, res) => {
   try {
@@ -1789,10 +1816,10 @@ app.get('/api/products/:id/stock', async (req, res) => {
   }
 });
 
-// Sincronización en background para grandes datasets
-app.get('/api/sync-background', async (req, res) => {
-  const handleBackgroundSync = require('../api/sync-background');
-  await handleBackgroundSync(req, res);
+// Sincronización simple y rápida (nuevo sistema)
+app.get('/api/sync-next', async (req, res) => {
+  const handleSyncNext = require('../api/sync-next');
+  await handleSyncNext(req, res);
 });
 
 // API para debug (solo en desarrollo)
