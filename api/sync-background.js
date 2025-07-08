@@ -16,13 +16,17 @@ async function handleBackgroundSync(req, res) {
   logger.info('🔄 Iniciando sincronización en background');
 
   try {
-    // Validar autenticación
-    const cookieId = req.headers.cookie?.match(/session_id=([^;]+)/)?.[1];
+    // Validar autenticación usando el mismo sistema que la app principal
+    const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
     if (!cookieId) {
       return res.status(401).json({
         success: false,
-        error: 'No hay sesión activa',
-        needsAuth: true
+        error: 'No hay sesión activa - cookie ml-session no encontrada',
+        needsAuth: true,
+        debug: {
+          cookies: req.headers.cookie || 'Sin cookies',
+          headers: Object.keys(req.headers)
+        }
       });
     }
 

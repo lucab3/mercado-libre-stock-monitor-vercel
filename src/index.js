@@ -1665,17 +1665,39 @@ app.post('/api/monitor/check-now', async (req, res) => {
   }
 });
 
-// API para obtener estado de monitoreo SIN validación de sesión (solo BD)
+// API para obtener estado de monitoreo CON validación de sesión (filtrado por usuario)
 app.get('/api/monitor/status-db', async (req, res) => {
   try {
-    // Leer estado directamente desde BD sin validar sesión
+    // Validar autenticación usando el sistema de sesiones
+    const cookieId = req.sessionCookie; // Ya establecido por middleware
+    if (!cookieId) {
+      return res.status(401).json({
+        error: 'No hay sesión activa',
+        monitoring: { active: false, error: 'Sin autenticación' }
+      });
+    }
+
+    const session = sessionManager.getSessionByCookie(cookieId);
+    if (!session || !session.userId) {
+      return res.status(401).json({
+        error: 'Sesión inválida',
+        monitoring: { active: false, error: 'Sesión expirada' }
+      });
+    }
+
+    const userId = session.userId;
+    logger.debug(`📊 Status-DB para usuario: ${userId}`);
+
+    // Obtener estado específico del usuario
+    await stockMonitor.updateSessionCache(userId);
     const monitorStatus = stockMonitor.getStatus();
     
     res.json({
       monitoring: {
         ...monitorStatus,
+        userId: userId,
         responseTime: Date.now(),
-        source: 'database_only' // Indicar que viene solo de BD
+        source: 'database_filtered' // Indicar que viene filtrado por usuario
       },
       lastSyncTime: new Date().toISOString()
     });
