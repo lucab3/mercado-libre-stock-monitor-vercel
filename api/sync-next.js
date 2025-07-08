@@ -107,7 +107,6 @@ async function handleSyncNext(req, res) {
           seller_sku: productData.seller_sku,
           available_quantity: productData.available_quantity || 0,
           price: productData.price,
-          currency_id: productData.currency_id,
           status: productData.status,
           permalink: productData.permalink,
           category_id: productData.category_id,
