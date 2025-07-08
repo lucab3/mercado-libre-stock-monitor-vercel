@@ -1698,17 +1698,37 @@ app.get('/api/monitor/status-db', async (req, res) => {
     // Validar autenticación usando el sistema de sesiones
     const cookieId = req.sessionCookie; // Ya establecido por middleware
     if (!cookieId) {
-      return res.status(401).json({
+      logger.warn('📊 Status-DB: No cookie - intentando devolver datos básicos');
+      // En lugar de 401, devolver datos básicos sin filtrar por usuario
+      return res.json({
+        success: false,
         error: 'No hay sesión activa',
-        monitoring: { active: false, error: 'Sin autenticación' }
+        monitoring: { 
+          active: false, 
+          totalProducts: 0,
+          lowStockProducts: [],
+          lowStockCount: 0,
+          error: 'Sin autenticación' 
+        },
+        timestamp: new Date().toISOString()
       });
     }
 
     const session = sessionManager.getSessionByCookie(cookieId);
     if (!session || !session.userId) {
-      return res.status(401).json({
+      logger.warn('📊 Status-DB: Sesión inválida - intentando devolver datos básicos');
+      // En lugar de 401, devolver datos básicos
+      return res.json({
+        success: false,
         error: 'Sesión inválida',
-        monitoring: { active: false, error: 'Sesión expirada' }
+        monitoring: { 
+          active: false, 
+          totalProducts: 0,
+          lowStockProducts: [],
+          lowStockCount: 0,
+          error: 'Sesión expirada' 
+        },
+        timestamp: new Date().toISOString()
       });
     }
 
@@ -1730,9 +1750,18 @@ app.get('/api/monitor/status-db', async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error en /api/monitor/status-db: ${error.message}`);
-    res.status(500).json({ 
+    // Devolver datos básicos en lugar de 500
+    res.json({ 
+      success: false,
       error: 'Error al obtener estado desde BD',
-      monitoring: { active: false, error: error.message }
+      monitoring: { 
+        active: false, 
+        totalProducts: 0,
+        lowStockProducts: [],
+        lowStockCount: 0,
+        error: error.message 
+      },
+      timestamp: new Date().toISOString()
     });
   }
 });
