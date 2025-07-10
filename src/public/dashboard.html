@@ -674,15 +674,15 @@
                 const scanStatusText = document.getElementById('scan-status-text');
                 
                 // Revisar si hay información del scan por lotes
-                const scanInfo = monitoring.scanInfo || monitoring.batchInfo || null;
+                const scanInfo = monitoring.scanInfo || monitoring.batchInfo || monitoring;
                 const totalProducts = monitoring.totalProducts || 0;
                 
                 console.log('🔍 updateScanControls - scanInfo:', scanInfo);
                 console.log('🔍 updateScanControls - totalProducts:', totalProducts);
                 
-                if (scanInfo) {
+                if (scanInfo && (scanInfo.hasMore !== undefined || scanInfo.scanCompleted !== undefined)) {
                     // Mostrar información del scan por lotes
-                    const hasMoreProducts = scanInfo.hasMoreProducts;
+                    const hasMoreProducts = scanInfo.hasMoreProducts || scanInfo.hasMore;
                     const scanCompleted = scanInfo.scanCompleted;
                     
                     console.log(`🔍 Scan status: completed=${scanCompleted}, hasMore=${hasMoreProducts}, total=${totalProducts}`);
