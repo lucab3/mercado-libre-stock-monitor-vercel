@@ -161,7 +161,7 @@ class ProductsService {
         uniqueProducts: response.uniqueProducts,
         error: response.error,
         total: allProductIds.length,
-        scrollId: response.scrollId // AÑADIDO: Pasar scrollId
+        scroll_id: response.scrollId // CORREGIDO: Usar scroll_id para consistencia
       };
       
     } catch (error) {
@@ -226,7 +226,7 @@ class ProductsService {
         uniqueProducts: response.uniqueProducts,
         error: response.error,
         total: totalProducts, // Total acumulado
-        scrollId: response.scrollId // AÑADIDO: Pasar scrollId
+        scroll_id: response.scrollId // CORREGIDO: Usar scroll_id para consistencia
       };
       
     } catch (error) {

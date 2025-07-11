@@ -125,7 +125,7 @@ async function handleSyncNext(req, res) {
     // 7. Actualizar progreso en scan_control
     const newTotal = mlResult.total || (scanState.total_products + productIds.length);
     const newProcessed = (scanState.processed_products || 0) + productIds.length;
-    const newScrollId = mlResult.scrollId || null;
+    const newScrollId = mlResult.scroll_id || null;
     const hasMore = !mlResult.scanCompleted && mlResult.hasMoreProducts && newScrollId !== null;
 
     await databaseService.updateScanProgress(

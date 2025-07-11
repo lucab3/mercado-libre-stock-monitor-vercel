@@ -491,6 +491,7 @@ class DatabaseService {
 
   /**
    * Obtener productos por IDs (para filtrar existentes)
+   * OPTIMIZADO: Procesa en lotes para evitar límites de Supabase
    */
   async getProductsByIds(productIds, userId) {
     try {
@@ -498,6 +499,41 @@ class DatabaseService {
         return [];
       }
 
+      // Si hay muchos productos, dividir en lotes
+      const BATCH_SIZE = 500; // Límite seguro para Supabase IN clause
+      if (productIds.length > BATCH_SIZE) {
+        logger.info(`🔄 Procesando ${productIds.length} productos en lotes de ${BATCH_SIZE}`);
+        const batches = [];
+        for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+          batches.push(productIds.slice(i, i + BATCH_SIZE));
+        }
+        
+        const allResults = [];
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          logger.debug(`📦 Procesando lote ${i + 1}/${batches.length} (${batch.length} productos)`);
+          
+          const result = await supabaseClient.executeQuery(
+            async (client) => {
+              return await client
+                .from(this.tableName)
+                .select('id')
+                .eq('user_id', userId)
+                .in('id', batch);
+            },
+            `get_products_by_ids_batch_${i + 1}`
+          );
+          
+          if (result.data) {
+            allResults.push(...result.data);
+          }
+        }
+        
+        logger.info(`✅ Procesados ${batches.length} lotes, encontrados ${allResults.length} productos existentes`);
+        return allResults;
+      }
+
+      // Para lotes pequeños, usar consulta directa
       const result = await supabaseClient.executeQuery(
         async (client) => {
           return await client
