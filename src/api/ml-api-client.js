@@ -181,7 +181,7 @@ class MLAPIClient {
   async getAllUserProducts(userId, options = {}) {
     const { 
       limit = 50, // REDUCIDO de 100 a 50 para evitar timeout
-      maxProductsPerBatch = 200, // REDUCIDO de 1000 a 200 para evitar timeout en Vercel
+      maxProductsPerBatch = 500, // AUMENTADO de 200 a 500 para obtener más productos
       continueFromCache = false,
       sessionId = null
     } = options;
@@ -269,6 +269,17 @@ class MLAPIClient {
           } else {
             response = await this.get(`/users/${userId}/items/search`, { params });
           }
+          
+          // DEBUG: Log completo de la respuesta de ML API para verificar formato
+          logger.info(`🔍 [DEBUG] Respuesta ML API página ${pageCount}:`);
+          logger.info(`  - results.length: ${response.results?.length || 0}`);
+          logger.info(`  - scroll_id: ${response.scroll_id || 'NO_SCROLL_ID'}`);
+          logger.info(`  - scrollId: ${response.scrollId || 'NO_SCROLLID'}`);
+          logger.info(`  - paging: ${JSON.stringify(response.paging || {})}`);
+          if (response.scroll_id) {
+            logger.info(`  - scroll_id preview: ${response.scroll_id.substring(0, 50)}...`);
+          }
+          
         } catch (apiError) {
           logger.error(`❌ Error en API call página ${pageCount}: ${apiError.message}`);
           
@@ -349,8 +360,10 @@ class MLAPIClient {
           consecutiveDuplicatePages = 0;
         }
         
-        // Obtener scroll_id para la siguiente página
-        const newScrollId = response.scroll_id;
+        // Obtener scroll_id para la siguiente página (verificar ambos formatos)
+        const newScrollId = response.scroll_id || response.scrollId;
+        
+        logger.info(`🔍 [DEBUG] Procesando scroll_id: ${newScrollId ? newScrollId.substring(0, 30) + '...' : 'NULL'}`);
         
         if (!newScrollId) {
           logger.info(`📦 [Página ${pageCount}] Sin scroll_id, finalizando scan (última página)`);

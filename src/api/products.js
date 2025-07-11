@@ -125,7 +125,7 @@ class ProductsService {
       // CORREGIDO: Usar el método scan por lotes para obtener productos (compatible con Vercel serverless)
       const response = await mlApiClient.getAllUserProducts(user.id, {
         limit: 50, // REDUCIDO: Límite por página para evitar timeout
-        maxProductsPerBatch: 200, // REDUCIDO: Límite por lote para evitar timeout en Vercel
+        maxProductsPerBatch: 500, // AUMENTADO: Límite por lote para obtener más productos
         continueFromCache: false, // Primera llamada
         sessionId: user.id // Usar user ID como session ID
       });
@@ -149,6 +149,8 @@ class ProductsService {
       }
       
       // CORREGIDO: Retornar objeto completo con información del scan por lotes
+      logger.info(`🔍 ScrollId obtenido: ${response.scrollId ? response.scrollId.substring(0, 30) + '...' : 'NULL'}`);
+      
       return {
         results: allProductIds,
         scanCompleted: response.scanCompleted,
@@ -158,7 +160,8 @@ class ProductsService {
         duplicatesDetected: response.duplicatesDetected,
         uniqueProducts: response.uniqueProducts,
         error: response.error,
-        total: allProductIds.length
+        total: allProductIds.length,
+        scrollId: response.scrollId // AÑADIDO: Pasar scrollId
       };
       
     } catch (error) {
@@ -195,7 +198,7 @@ class ProductsService {
       // Continuar desde cache - OPTIMIZADO: lotes más pequeños para evitar timeout
       const response = await mlApiClient.getAllUserProducts(user.id, {
         limit: 50, // REDUCIDO: Límite por página para evitar timeout
-        maxProductsPerBatch: 200, // REDUCIDO: Límite por lote para evitar timeout en Vercel
+        maxProductsPerBatch: 500, // AUMENTADO: Límite por lote para obtener más productos
         continueFromCache: true, // Continuar desde donde se quedó
         sessionId: user.id
       });
@@ -210,6 +213,8 @@ class ProductsService {
       logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'}`);
       logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
       
+      logger.info(`🔍 ScrollId obtenido en continuación: ${response.scrollId ? response.scrollId.substring(0, 30) + '...' : 'NULL'}`);
+      
       return {
         results: allProductIds, // TODOS los productos acumulados para el stockMonitor
         newProducts: newProductsCount, // Solo los productos nuevos del lote
@@ -220,7 +225,8 @@ class ProductsService {
         duplicatesDetected: response.duplicatesDetected,
         uniqueProducts: response.uniqueProducts,
         error: response.error,
-        total: totalProducts // Total acumulado
+        total: totalProducts, // Total acumulado
+        scrollId: response.scrollId // AÑADIDO: Pasar scrollId
       };
       
     } catch (error) {
