@@ -100,6 +100,12 @@ async function handleSyncNext(req, res) {
       const productsData = await products.getMultipleProducts(newProductIds, false, userId);
       
       if (productsData.length > 0) {
+        // DEBUG: Log para verificar SKUs antes del mapeo
+        logger.info(`🔍 DEBUG SKU - Productos obtenidos: ${productsData.length}`);
+        productsData.slice(0, 3).forEach((product, index) => {
+          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU=${product.seller_sku || 'SIN_SKU'}`);
+        });
+        
         const productsToSave = productsData.map(productData => ({
           id: productData.id,
           user_id: userId,
@@ -115,6 +121,12 @@ async function handleSyncNext(req, res) {
           health: productData.health,
           last_api_sync: new Date().toISOString()
         }));
+
+        // DEBUG: Log para verificar SKUs después del mapeo
+        logger.info(`🔍 DEBUG SKU - Productos mapeados para guardar: ${productsToSave.length}`);
+        productsToSave.slice(0, 3).forEach((product, index) => {
+          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU=${product.seller_sku || 'SIN_SKU'}`);
+        });
 
         await databaseService.upsertMultipleProducts(productsToSave);
         savedCount = productsToSave.length;

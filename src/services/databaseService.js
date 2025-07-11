@@ -136,6 +136,12 @@ class DatabaseService {
       for (let i = 0; i < productsData.length; i += batchSize) {
         const batch = productsData.slice(i, i + batchSize);
         
+        // DEBUG: Log para verificar SKUs en el lote antes de guardar
+        logger.info(`🔍 DEBUG SKU - Lote ${i / batchSize + 1}: ${batch.length} productos`);
+        batch.slice(0, 2).forEach((product, index) => {
+          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU=${product.seller_sku || 'SIN_SKU'}`);
+        });
+        
         // Preparar lote con timestamps
         const batchWithTimestamps = batch.map(product => ({
           ...product,
