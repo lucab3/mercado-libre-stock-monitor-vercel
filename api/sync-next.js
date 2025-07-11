@@ -8,6 +8,30 @@ const logger = require('../src/utils/logger');
 const sessionManager = require('../src/utils/sessionManager');
 const databaseService = require('../src/services/databaseService');
 
+// Función auxiliar para extraer SKU de múltiples fuentes
+function extractSKUFromProduct(productData) {
+  // 1. Verificar seller_sku directo
+  if (productData.seller_sku) {
+    return productData.seller_sku;
+  }
+
+  // 2. Buscar en attributes si existe
+  if (productData.attributes && Array.isArray(productData.attributes)) {
+    const skuAttribute = productData.attributes.find(attr => 
+      attr.id === 'SELLER_SKU' || 
+      attr.id === 'SKU' || 
+      (attr.name && attr.name.toLowerCase().includes('sku'))
+    );
+    
+    if (skuAttribute && skuAttribute.value_name) {
+      return skuAttribute.value_name;
+    }
+  }
+
+  // 3. Si no se encuentra, retornar null
+  return null;
+}
+
 /**
  * Sync simple: obtener siguiente lote de productos, guardar solo nuevos
  */
@@ -103,24 +127,28 @@ async function handleSyncNext(req, res) {
         // DEBUG: Log para verificar SKUs antes del mapeo
         logger.info(`🔍 DEBUG SKU - Productos obtenidos: ${productsData.length}`);
         productsData.slice(0, 3).forEach((product, index) => {
-          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU=${product.seller_sku || 'SIN_SKU'}`);
+          const extractedSKU = extractSKUFromProduct(product);
+          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU_original=${product.seller_sku || 'SIN_SKU'}, SKU_extraido=${extractedSKU || 'SIN_SKU'}`);
         });
         
-        const productsToSave = productsData.map(productData => ({
-          id: productData.id,
-          user_id: userId,
-          title: productData.title,
-          seller_sku: productData.seller_sku,
-          available_quantity: productData.available_quantity || 0,
-          price: productData.price,
-          status: productData.status,
-          permalink: productData.permalink,
-          category_id: productData.category_id,
-          condition: productData.condition,
-          listing_type_id: productData.listing_type_id,
-          health: productData.health,
-          last_api_sync: new Date().toISOString()
-        }));
+        const productsToSave = productsData.map(productData => {
+          const extractedSKU = extractSKUFromProduct(productData);
+          return {
+            id: productData.id,
+            user_id: userId,
+            title: productData.title,
+            seller_sku: extractedSKU, // CORREGIDO: Usar SKU extraído
+            available_quantity: productData.available_quantity || 0,
+            price: productData.price,
+            status: productData.status,
+            permalink: productData.permalink,
+            category_id: productData.category_id,
+            condition: productData.condition,
+            listing_type_id: productData.listing_type_id,
+            health: productData.health,
+            last_api_sync: new Date().toISOString()
+          };
+        });
 
         // DEBUG: Log para verificar SKUs después del mapeo
         logger.info(`🔍 DEBUG SKU - Productos mapeados para guardar: ${productsToSave.length}`);
