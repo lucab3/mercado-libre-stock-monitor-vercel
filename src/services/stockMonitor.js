@@ -380,7 +380,8 @@ class StockMonitor {
           status: p.status,
           permalink: p.permalink,
           productUrl: this.generateProductUrl(p.id),
-          lastUpdated: p.updated_at
+          lastUpdated: p.updated_at,
+          category_id: p.category_id
         })),
         totalProducts: allProducts.length,
         lastScanInfo: {
