@@ -581,6 +581,101 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES ALERTAS DE STOCK
+  // ==========================================
+
+  /**
+   * Guardar alerta de cambio de stock
+   */
+  async saveStockAlert(alertData) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('stock_alerts')
+            .insert([alertData])
+            .select('id');
+        },
+        'save_stock_alert'
+      );
+      
+      logger.info(`🚨 Alerta de stock guardada: ${alertData.alert_type} - ${alertData.product_id}`);
+      return result.data?.[0];
+      
+    } catch (error) {
+      logger.error(`❌ Error guardando alerta de stock: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener alertas de stock por usuario
+   */
+  async getStockAlerts(userId, filters = {}) {
+    try {
+      const { limit = 50, offset = 0, alertType } = filters;
+      
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          let query = client
+            .from('stock_alerts')
+            .select('*')
+            .eq('user_id', userId);
+          
+          if (alertType) {
+            query = query.eq('alert_type', alertType);
+          }
+          
+          query = query
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+          
+          return await query;
+        },
+        'get_stock_alerts'
+      );
+      
+      logger.info(`📋 Obtenidas ${result.data?.length || 0} alertas para usuario ${userId}`);
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo alertas de stock: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener conteo de alertas por tipo
+   */
+  async getAlertsCount(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('stock_alerts')
+            .select('alert_type')
+            .eq('user_id', userId);
+        },
+        'get_alerts_count'
+      );
+      
+      const alerts = result.data || [];
+      const count = {
+        total: alerts.length,
+        LOW_STOCK: alerts.filter(a => a.alert_type === 'LOW_STOCK').length,
+        STOCK_DECREASE: alerts.filter(a => a.alert_type === 'STOCK_DECREASE').length,
+        STOCK_INCREASE: alerts.filter(a => a.alert_type === 'STOCK_INCREASE').length
+      };
+      
+      return count;
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo conteo de alertas: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton

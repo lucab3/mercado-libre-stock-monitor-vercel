@@ -662,6 +662,9 @@ class StockMonitor {
         if (changes.length > 0) {
           logger.info(`🔄 CAMBIOS DETECTADOS en ${productId}:`);
           changes.forEach(change => logger.info(`   • ${change}`));
+          
+          // 3.1. Generar alertas de cambio de stock
+          await this.generateStockAlerts(userId, productId, previousData, productData);
         } else {
           logger.info(`📊 Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
         }
@@ -707,6 +710,66 @@ class StockMonitor {
     } catch (error) {
       logger.error(`❌ Error procesando producto desde webhook: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Generar alertas basadas en cambios de stock detectados
+   */
+  async generateStockAlerts(userId, productId, previousData, currentData) {
+    try {
+      const previousStock = previousData?.available_quantity || 0;
+      const currentStock = currentData?.available_quantity || 0;
+      
+      // Solo procesar si hay cambio de stock
+      if (previousStock === currentStock) {
+        return;
+      }
+      
+      let alertType = null;
+      
+      // Determinar tipo de alerta
+      if (currentStock < previousStock) {
+        // Stock disminuyó
+        if (currentStock <= this.stockThreshold) {
+          alertType = 'LOW_STOCK'; // Stock bajo (crítico)
+        } else {
+          alertType = 'STOCK_DECREASE'; // Solo disminución
+        }
+      } else if (currentStock > previousStock) {
+        // Stock aumentó
+        alertType = 'STOCK_INCREASE';
+      }
+      
+      if (alertType) {
+        const alert = {
+          user_id: userId,
+          product_id: productId,
+          alert_type: alertType,
+          previous_stock: previousStock,
+          new_stock: currentStock,
+          product_title: currentData.title,
+          seller_sku: currentData.seller_sku,
+          created_at: new Date().toISOString()
+        };
+        
+        // Guardar en base de datos
+        await databaseService.saveStockAlert(alert);
+        
+        // Log de la alerta generada
+        const alertEmoji = alertType === 'LOW_STOCK' ? '🚨' : 
+                          alertType === 'STOCK_DECREASE' ? '📉' : '📈';
+        
+        logger.info(`${alertEmoji} ALERTA GENERADA: ${alertType} - ${productId}`);
+        logger.info(`   Stock: ${previousStock} → ${currentStock}`);
+        logger.info(`   Producto: ${currentData.title?.substring(0, 50) || 'Sin título'}`);
+        
+        // TODO: Aquí se podrían agregar notificaciones inmediatas (email, telegram, etc.)
+        // await this.sendImmediateNotification(alert);
+      }
+      
+    } catch (error) {
+      logger.error(`❌ Error generando alertas para ${productId}: ${error.message}`);
     }
   }
 

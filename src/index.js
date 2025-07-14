@@ -593,6 +593,97 @@ app.post('/api/categories/info', async (req, res) => {
   }
 });
 
+// ==========================================
+// ENDPOINTS DE ALERTAS DE STOCK
+// ==========================================
+
+// Obtener alertas de stock del usuario
+app.get('/api/stock-alerts', async (req, res) => {
+  try {
+    // Validar autenticación usando el sistema de sesiones
+    const cookieId = req.sessionCookie;
+    if (!cookieId) {
+      return res.status(401).json({ error: 'No hay sesión activa' });
+    }
+
+    const session = sessionManager.getSessionByCookie(cookieId);
+    if (!session || !session.userId) {
+      return res.status(401).json({ error: 'Sesión inválida' });
+    }
+
+    const userId = session.userId;
+    const { limit = 50, offset = 0, alertType } = req.query;
+    
+    logger.info(`📋 Obteniendo alertas de stock para usuario: ${userId}`);
+    
+    const filters = { 
+      limit: parseInt(limit), 
+      offset: parseInt(offset) 
+    };
+    
+    if (alertType) {
+      filters.alertType = alertType;
+    }
+    
+    const alerts = await databaseService.getStockAlerts(userId, filters);
+    const alertsCount = await databaseService.getAlertsCount(userId);
+    
+    res.json({
+      success: true,
+      alerts,
+      count: alertsCount,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        total: alertsCount.total
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`❌ Error obteniendo alertas de stock: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener alertas de stock',
+      message: error.message 
+    });
+  }
+});
+
+// Obtener estadísticas de alertas
+app.get('/api/stock-alerts/stats', async (req, res) => {
+  try {
+    // Validar autenticación usando el sistema de sesiones
+    const cookieId = req.sessionCookie;
+    if (!cookieId) {
+      return res.status(401).json({ error: 'No hay sesión activa' });
+    }
+
+    const session = sessionManager.getSessionByCookie(cookieId);
+    if (!session || !session.userId) {
+      return res.status(401).json({ error: 'Sesión inválida' });
+    }
+
+    const userId = session.userId;
+    
+    logger.info(`📊 Obteniendo estadísticas de alertas para usuario: ${userId}`);
+    
+    const alertsCount = await databaseService.getAlertsCount(userId);
+    
+    res.json({
+      success: true,
+      stats: alertsCount,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error(`❌ Error obteniendo estadísticas de alertas: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Error al obtener estadísticas de alertas',
+      message: error.message 
+    });
+  }
+});
+
 // NUEVO: API para debug detallado del proceso de scan
 app.get('/debug/scan-process', async (req, res) => {
   if (!auth.isAuthenticated()) {
