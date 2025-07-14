@@ -225,14 +225,30 @@ class WebhookProcessor {
     try {
       const { productId, userId } = extractedData;
       
-      logger.info(`📦 Procesando items webhook: ${productId} para usuario ${userId}`);
-      logger.info(`📍 Recurso ML: ${webhookData.resource}`);
+      logger.info(`📦 PROCESS ITEMS WEBHOOK START: ${productId}`);
+      logger.info(`   • Product ID: ${productId}`);
+      logger.info(`   • User ID: ${userId}`);
+      logger.info(`   • Resource: ${webhookData.resource}`);
+      logger.info(`   • Topic: ${webhookData.topic}`);
+      logger.info(`   • Timestamp: ${new Date().toISOString()}`);
+      
+      // Validar que tenemos los datos necesarios
+      if (!productId) {
+        throw new Error('Product ID no disponible en webhook');
+      }
+      
+      if (!userId) {
+        throw new Error('User ID no disponible en webhook');
+      }
       
       // Llamar al stock monitor para procesar el producto
+      logger.info(`🔄 Llamando a stockMonitor.processProductFromWebhook...`);
       const stockMonitor = require('./stockMonitor');
       const result = await stockMonitor.processProductFromWebhook(productId, userId);
       
-      logger.info(`✅ Items webhook procesado exitosamente para ${productId}`);
+      logger.info(`✅ PROCESS ITEMS WEBHOOK SUCCESS: ${productId}`);
+      logger.info(`   • Final stock: ${result.available_quantity}`);
+      logger.info(`   • Updated fields: ${Object.keys(result).join(', ')}`);
       
       return {
         success: true,
@@ -245,7 +261,10 @@ class WebhookProcessor {
       };
 
     } catch (error) {
-      logger.error(`❌ Error procesando items webhook: ${error.message}`);
+      logger.error(`❌ PROCESS ITEMS WEBHOOK FAILED: ${error.message}`);
+      logger.error(`   • Product ID: ${extractedData?.productId || 'unknown'}`);
+      logger.error(`   • User ID: ${extractedData?.userId || 'unknown'}`);
+      logger.error(`   • Error stack: ${error.stack}`);
       throw error;
     }
   }
@@ -254,25 +273,60 @@ class WebhookProcessor {
    * Procesar webhook de forma asíncrona (llamar después de responder HTTP 200)
    */
   async processWebhookAsync(webhookId) {
+    const startTime = Date.now();
+    
     try {
-      logger.info(`🔄 Iniciando procesamiento asíncrono: ${webhookId}`);
+      logger.info(`🔄 ASYNC PROCESSING START: ${webhookId}`);
+      logger.info(`   • Timestamp: ${new Date().toISOString()}`);
+      logger.info(`   • Process ID: ${process.pid}`);
 
-      // Obtener webhook de la base de datos
-      const webhooks = await databaseService.getPendingWebhooks(1);
+      // STEP 1: Obtener webhook de la base de datos
+      logger.info(`📋 STEP 1: Buscando webhook ${webhookId} en BD...`);
+      const webhooks = await databaseService.getPendingWebhooks(50); // Buscar en más webhooks
+      logger.info(`   • Webhooks pendientes encontrados: ${webhooks.length}`);
+      
+      if (webhooks.length > 0) {
+        logger.info(`   • Primeros 3 webhooks pendientes:`);
+        webhooks.slice(0, 3).forEach((w, i) => {
+          logger.info(`     ${i + 1}. ${w.webhook_id} - ${w.topic} - ${w.received_at}`);
+        });
+      }
+      
       const webhook = webhooks.find(w => w.webhook_id === webhookId);
       
       if (!webhook) {
-        logger.warn(`⚠️ Webhook ${webhookId} no encontrado o ya procesado`);
-        return;
+        logger.error(`❌ STEP 1 FAILED: Webhook ${webhookId} no encontrado`);
+        logger.info(`🔍 Buscando webhook por ID exacto...`);
+        
+        // Buscar todos los webhooks para debug
+        const allWebhooks = await databaseService.getPendingWebhooks(100);
+        logger.info(`   • Total webhooks pendientes: ${allWebhooks.length}`);
+        
+        const exactMatch = allWebhooks.find(w => w.webhook_id === webhookId);
+        if (exactMatch) {
+          logger.info(`✅ Webhook encontrado en lista extendida: ${exactMatch.webhook_id}`);
+        } else {
+          logger.error(`❌ Webhook ${webhookId} no existe en BD o ya fue procesado`);
+          return;
+        }
       }
 
-      logger.info(`📋 Procesando webhook - Topic: ${webhook.topic}, Producto: ${webhook.product_id}, Usuario: ${webhook.user_id}`);
+      logger.info(`✅ STEP 1 SUCCESS: Webhook encontrado`);
+      logger.info(`   • Topic: ${webhook.topic}`);
+      logger.info(`   • Resource: ${webhook.resource}`);
+      logger.info(`   • Product ID: ${webhook.product_id}`);
+      logger.info(`   • User ID: ${webhook.user_id}`);
+      logger.info(`   • Received at: ${webhook.received_at}`);
+
+      // STEP 2: Procesar según topic
+      logger.info(`🔄 STEP 2: Procesando según topic '${webhook.topic}'...`);
       let result = null;
       
       // Procesar según topic
       switch (webhook.topic) {
         case 'stock-location':
         case 'stock-locations': // Manejar ambas versiones
+          logger.info(`📦 STEP 2A: Procesando stock-location webhook...`);
           result = await this.processStockLocationWebhook(
             { 
               _id: webhook.webhook_id,
@@ -285,9 +339,13 @@ class WebhookProcessor {
               userId: webhook.user_id.toString()
             }
           );
+          logger.info(`✅ STEP 2A SUCCESS: Stock-location procesado`);
           break;
           
         case 'items':
+          logger.info(`📦 STEP 2B: Procesando items webhook...`);
+          logger.info(`   • Product ID: ${webhook.product_id}`);
+          logger.info(`   • User ID: ${webhook.user_id}`);
           result = await this.processItemsWebhook(
             {
               _id: webhook.webhook_id,
@@ -300,28 +358,44 @@ class WebhookProcessor {
               userId: webhook.user_id.toString()
             }
           );
+          logger.info(`✅ STEP 2B SUCCESS: Items webhook procesado`);
           break;
           
         default:
+          logger.error(`❌ STEP 2 FAILED: Topic no soportado: ${webhook.topic}`);
           throw new Error(`Topic no soportado: ${webhook.topic}`);
       }
 
-      // Marcar como procesado
+      // STEP 3: Marcar como procesado
+      logger.info(`💾 STEP 3: Marcando webhook como procesado...`);
+      logger.info(`   • Webhook ID: ${webhookId}`);
+      logger.info(`   • Result: ${JSON.stringify(result, null, 2)}`);
+      
       await databaseService.markWebhookProcessed(webhookId, true, result);
       
-      logger.info(`✅ Webhook ${webhookId} procesado exitosamente`);
+      const processingTime = Date.now() - startTime;
+      logger.info(`✅ STEP 3 SUCCESS: Webhook marcado como procesado`);
+      logger.info(`🎉 ASYNC PROCESSING COMPLETE: ${webhookId} (${processingTime}ms)`);
 
     } catch (error) {
-      logger.error(`❌ Error en procesamiento asíncrono ${webhookId}: ${error.message}`);
+      const processingTime = Date.now() - startTime;
+      logger.error(`❌ ASYNC PROCESSING FAILED: ${webhookId} (${processingTime}ms)`);
+      logger.error(`   • Error: ${error.message}`);
+      logger.error(`   • Stack: ${error.stack}`);
       
       // Marcar como fallido
       try {
+        logger.info(`💾 Marcando webhook como fallido...`);
         await databaseService.markWebhookProcessed(webhookId, false, {
           error: error.message,
-          timestamp: new Date().toISOString()
+          stack: error.stack,
+          timestamp: new Date().toISOString(),
+          processingTime
         });
+        logger.info(`✅ Webhook marcado como fallido en BD`);
       } catch (dbError) {
         logger.error(`❌ Error marcando webhook como fallido: ${dbError.message}`);
+        logger.error(`   • DB Error Stack: ${dbError.stack}`);
       }
     }
   }
