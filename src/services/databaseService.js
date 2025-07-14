@@ -285,7 +285,7 @@ class DatabaseService {
             .from(this.webhookTableName)
             .select('*')
             .eq('processed', false)
-            .order('received_at', { ascending: true })
+            .order('received_at', { ascending: false })
             .limit(limit);
         },
         'get_pending_webhooks'
