@@ -265,6 +265,34 @@ class SessionManager {
   generateSessionId() {
     return this.generateCookieId();
   }
+
+  /**
+   * NUEVO: Crear sesión temporal para refresh de tokens en webhooks
+   */
+  createTemporarySession(userId, tokens) {
+    const tempCookieId = this.generateCookieId();
+    
+    const sessionData = {
+      cookieId: tempCookieId,
+      userId,
+      tokens,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + (5 * 60 * 1000), // 5 minutos
+      lastActivity: Date.now(),
+      userAgent: 'webhook-temp-session',
+      isTemporary: true
+    };
+    
+    this.sessions.set(tempCookieId, sessionData);
+    
+    // NO agregar a userSessions porque es temporal
+    logger.debug(`🔄 Sesión temporal creada para usuario ${userId}: ${tempCookieId.substring(0, 8)}...`);
+    
+    return {
+      cookieId: tempCookieId,
+      session: sessionData
+    };
+  }
 }
 
 module.exports = new SessionManager();

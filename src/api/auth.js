@@ -541,6 +541,74 @@ class MercadoLibreAuth {
   }
 
   /**
+   * NUEVO: Obtener tokens directamente por userId (para webhooks)
+   */
+  getTokensByUserId(userId) {
+    if (this.mockMode) {
+      return { 
+        access_token: 'mock-access-token',
+        refresh_token: 'mock-refresh-token',
+        expires_at: Date.now() + 6 * 60 * 60 * 1000
+      };
+    }
+
+    if (!userId) {
+      return null;
+    }
+
+    // Obtener tokens directamente del tokenManager
+    const tokens = tokenManager.getTokens(userId);
+    if (tokens) {
+      logger.debug(`🔑 Tokens obtenidos para webhook - Usuario: ${userId}`);
+      return tokens;
+    }
+
+    logger.warn(`⚠️ No hay tokens válidos para usuario ${userId} en webhook`);
+    return null;
+  }
+
+  /**
+   * NUEVO: Obtener access token para webhooks (sin cookies)
+   */
+  async getAccessTokenForWebhook(userId) {
+    if (this.mockMode) {
+      return 'mock-access-token';
+    }
+
+    const tokens = this.getTokensByUserId(userId);
+    if (!tokens || !tokens.access_token) {
+      throw new Error(`No hay tokens válidos para el usuario ${userId}`);
+    }
+
+    // Si el token está a punto de expirar, intentar refrescar
+    if (tokens.expires_at && tokens.expires_at - Date.now() < 300000) {
+      logger.info(`Token expirado para usuario ${userId}, intentando refrescar...`);
+      try {
+        // Temporalmente establecer usuario para refresh
+        const originalCookieId = this.currentCookieId;
+        
+        // Crear sesión temporal para refresh
+        const tempSession = sessionManager.createTemporarySession(userId, tokens);
+        this.currentCookieId = tempSession.cookieId;
+        
+        await this.refreshAccessToken();
+        const refreshedTokens = this.getTokensByUserId(userId);
+        
+        // Limpiar sesión temporal
+        sessionManager.invalidateSession(tempSession.cookieId);
+        this.currentCookieId = originalCookieId;
+        
+        return refreshedTokens.access_token;
+      } catch (error) {
+        logger.error(`Error refrescando token para usuario ${userId}: ${error.message}`);
+        throw new Error(`Token expirado para usuario ${userId} y no se pudo refrescar`);
+      }
+    }
+
+    return tokens.access_token;
+  }
+
+  /**
    * NUEVO: Obtener información de la sesión actual
    */
   getCurrentSessionInfo() {

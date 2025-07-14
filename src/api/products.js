@@ -39,16 +39,17 @@ class ProductsService {
       return true; // En modo mock siempre está "autenticado"
     }
 
-    // NUEVO: Si se especifica userId, usar tokens específicos de ese usuario
+    // NUEVO: Si se especifica userId, usar tokens específicos de ese usuario (para webhooks)
     if (userId) {
-      const tokenManager = require('../utils/tokenManager');
-      const userTokens = tokenManager.getTokens(userId);
-      
-      if (userTokens && userTokens.access_token) {
-        logger.debug(`🔑 Configurando access token para usuario específico: ${userId}`);
-        this.setAccessToken(userTokens.access_token);
+      try {
+        logger.debug(`🔑 Obteniendo access token para webhook - Usuario: ${userId}`);
+        const accessToken = await auth.getAccessTokenForWebhook(userId);
+        
+        logger.debug(`✅ Access token obtenido para usuario ${userId}`);
+        this.setAccessToken(accessToken);
         return true;
-      } else {
+      } catch (error) {
+        logger.error(`❌ Error obteniendo token para usuario ${userId}: ${error.message}`);
         throw new Error(`No hay tokens válidos para el usuario ${userId}`);
       }
     }
