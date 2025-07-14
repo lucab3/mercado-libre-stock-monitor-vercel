@@ -616,47 +616,68 @@ class StockMonitor {
    */
   async processProductFromWebhook(productId, userId) {
     try {
-      logger.info(`🔔 Procesando producto desde webhook: ${productId} para usuario ${userId}`);
+      logger.info(`🔔 WEBHOOK PROCESSING START: Procesando producto ${productId} para usuario ${userId}`);
+      logger.info(`📍 Timestamp: ${new Date().toISOString()}`);
       
       // 1. Obtener datos ANTERIORES de la BD para comparación
       let previousData = null;
       try {
+        logger.info(`📋 STEP 1: Obteniendo datos anteriores de BD para producto ${productId}...`);
         const existingProducts = await databaseService.getProducts(userId, {});
         previousData = existingProducts.find(p => p.id === productId);
         if (previousData) {
-          logger.info(`📋 Datos anteriores - Stock: ${previousData.available_quantity}, Precio: ${previousData.price}, Estado: ${previousData.status}`);
+          logger.info(`✅ DATOS ANTERIORES ENCONTRADOS:`);
+          logger.info(`   • Stock anterior: ${previousData.available_quantity}`);
+          logger.info(`   • Precio anterior: ${previousData.price}`);
+          logger.info(`   • Estado anterior: ${previousData.status}`);
+          logger.info(`   • Última actualización: ${previousData.updated_at}`);
         } else {
-          logger.info(`🆕 Producto nuevo - no existe en BD`);
+          logger.info(`🆕 PRODUCTO NUEVO - No existe en BD`);
         }
       } catch (dbError) {
-        logger.warn(`⚠️ No se pudieron obtener datos anteriores: ${dbError.message}`);
+        logger.error(`❌ ERROR obteniendo datos anteriores: ${dbError.message}`);
+        logger.error(`   Stack: ${dbError.stack}`);
       }
       
       // 2. Obtener datos NUEVOS de ML API
-      logger.info(`🌐 Consultando ML API para producto ${productId} con userId: ${userId}...`);
+      logger.info(`🌐 STEP 2: Consultando ML API para producto ${productId}...`);
+      logger.info(`   • User ID: ${userId}`);
+      logger.info(`   • Timestamp consulta: ${new Date().toISOString()}`);
+      
       const productData = await products.getProduct(productId, userId);
       
-      logger.info(`📦 Datos recibidos de ML API:`, {
-        id: productData.id,
-        title: productData.title?.substring(0, 50) + '...',
-        stock: productData.available_quantity,
-        price: productData.price,
-        status: productData.status,
-        seller_sku: productData.seller_sku,
-        health: productData.health
-      });
+      logger.info(`📦 DATOS RECIBIDOS DE ML API:`);
+      logger.info(`   • ID: ${productData.id}`);
+      logger.info(`   • Título: ${productData.title?.substring(0, 50) || 'Sin título'}...`);
+      logger.info(`   • Stock actual: ${productData.available_quantity}`);
+      logger.info(`   • Precio actual: ${productData.price}`);
+      logger.info(`   • Estado actual: ${productData.status}`);
+      logger.info(`   • SKU: ${productData.seller_sku || 'Sin SKU'}`);
+      logger.info(`   • Salud: ${productData.health || 'Sin health'}`);
+      logger.info(`   • Timestamp respuesta: ${new Date().toISOString()}`);
       
       // 3. Detectar y mostrar CAMBIOS específicos
+      logger.info(`🔍 STEP 3: Comparando datos anteriores vs nuevos...`);
       if (previousData) {
         const changes = [];
+        
+        // Comparar stock
         if (previousData.available_quantity !== productData.available_quantity) {
-          changes.push(`Stock: ${previousData.available_quantity} → ${productData.available_quantity || 0} (${(productData.available_quantity || 0) - previousData.available_quantity >= 0 ? '+' : ''}${(productData.available_quantity || 0) - previousData.available_quantity})`);
+          const stockChange = (productData.available_quantity || 0) - previousData.available_quantity;
+          changes.push(`Stock: ${previousData.available_quantity} → ${productData.available_quantity || 0} (${stockChange >= 0 ? '+' : ''}${stockChange})`);
+          logger.info(`📊 CAMBIO DE STOCK DETECTADO: ${previousData.available_quantity} → ${productData.available_quantity || 0}`);
         }
+        
+        // Comparar precio
         if (previousData.price !== productData.price) {
           changes.push(`Precio: $${previousData.price} → $${productData.price}`);
+          logger.info(`💰 CAMBIO DE PRECIO DETECTADO: $${previousData.price} → $${productData.price}`);
         }
+        
+        // Comparar estado
         if (previousData.status !== productData.status) {
           changes.push(`Estado: ${previousData.status} → ${productData.status}`);
+          logger.info(`📋 CAMBIO DE ESTADO DETECTADO: ${previousData.status} → ${productData.status}`);
         }
         
         if (changes.length > 0) {
@@ -664,10 +685,14 @@ class StockMonitor {
           changes.forEach(change => logger.info(`   • ${change}`));
           
           // 3.1. Generar alertas de cambio de stock
+          logger.info(`🚨 STEP 3.1: Generando alertas de stock...`);
           await this.generateStockAlerts(userId, productId, previousData, productData);
+          logger.info(`✅ ALERTAS DE STOCK PROCESADAS`);
         } else {
-          logger.info(`📊 Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
+          logger.info(`📊 STEP 3: Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
         }
+      } else {
+        logger.info(`🆕 STEP 3: Producto nuevo - no hay datos anteriores para comparar`);
       }
       
       // 4. Preparar datos para actualizar en BD
@@ -689,21 +714,27 @@ class StockMonitor {
       };
       
       // 5. Actualizar en base de datos
-      logger.info(`💾 Actualizando producto ${productId} en base de datos...`);
+      logger.info(`💾 STEP 4: Actualizando producto ${productId} en base de datos...`);
+      logger.info(`   • Datos a guardar: ${JSON.stringify(productToUpdate, null, 2)}`);
       await databaseService.upsertProduct(productToUpdate);
-      logger.info(`✅ Producto ${productId} guardado en BD exitosamente`);
+      logger.info(`✅ STEP 4: Producto ${productId} guardado en BD exitosamente`);
       
       // 6. Actualizar cache si es necesario
       if (this.monitoringActive) {
-        logger.info(`🔄 Actualizando cache de sesión...`);
+        logger.info(`🔄 STEP 5: Actualizando cache de sesión...`);
         await this.updateSessionCache(userId);
-        logger.info(`✅ Cache actualizado`);
+        logger.info(`✅ STEP 5: Cache actualizado`);
+      } else {
+        logger.info(`⏸️ STEP 5: Monitoreo inactivo - cache no actualizado`);
       }
       
       // 7. Log final con resumen
       const finalStock = productData.available_quantity || 0;
       const stockStatus = finalStock <= this.stockThreshold ? '🔴 STOCK BAJO' : '✅ Stock OK';
-      logger.info(`🎉 WEBHOOK PROCESADO EXITOSAMENTE: ${productId} | Stock: ${finalStock} ${stockStatus}`);
+      logger.info(`🎉 WEBHOOK PROCESSING COMPLETE: ${productId}`);
+      logger.info(`   • Stock final: ${finalStock} ${stockStatus}`);
+      logger.info(`   • Umbral configurado: ${this.stockThreshold}`);
+      logger.info(`   • Timestamp fin: ${new Date().toISOString()}`);
       
       return productToUpdate;
       
@@ -718,11 +749,19 @@ class StockMonitor {
    */
   async generateStockAlerts(userId, productId, previousData, currentData) {
     try {
+      logger.info(`🚨 GENERATE ALERTS START: ${productId}`);
+      
       const previousStock = previousData?.available_quantity || 0;
       const currentStock = currentData?.available_quantity || 0;
       
+      logger.info(`📊 STOCK COMPARISON:`);
+      logger.info(`   • Stock anterior: ${previousStock}`);
+      logger.info(`   • Stock actual: ${currentStock}`);
+      logger.info(`   • Umbral configurado: ${this.stockThreshold}`);
+      
       // Solo procesar si hay cambio de stock
       if (previousStock === currentStock) {
+        logger.info(`📊 Sin cambio de stock - no se generan alertas`);
         return;
       }
       
@@ -733,12 +772,15 @@ class StockMonitor {
         // Stock disminuyó
         if (currentStock <= this.stockThreshold) {
           alertType = 'LOW_STOCK'; // Stock bajo (crítico)
+          logger.info(`🚨 ALERTA CRÍTICA: Stock bajo detectado (${currentStock} <= ${this.stockThreshold})`);
         } else {
           alertType = 'STOCK_DECREASE'; // Solo disminución
+          logger.info(`📉 ALERTA: Disminución de stock detectada (${previousStock} → ${currentStock})`);
         }
       } else if (currentStock > previousStock) {
         // Stock aumentó
         alertType = 'STOCK_INCREASE';
+        logger.info(`📈 ALERTA: Incremento de stock detectado (${previousStock} → ${currentStock})`);
       }
       
       if (alertType) {
@@ -753,20 +795,34 @@ class StockMonitor {
           created_at: new Date().toISOString()
         };
         
+        logger.info(`💾 GUARDANDO ALERTA EN BD:`);
+        logger.info(`   • Tipo: ${alertType}`);
+        logger.info(`   • Usuario: ${userId}`);
+        logger.info(`   • Producto: ${productId}`);
+        logger.info(`   • Stock: ${previousStock} → ${currentStock}`);
+        logger.info(`   • Título: ${currentData.title?.substring(0, 50) || 'Sin título'}`);
+        logger.info(`   • SKU: ${currentData.seller_sku || 'Sin SKU'}`);
+        
         // Guardar en base de datos
-        await databaseService.saveStockAlert(alert);
+        const savedAlert = await databaseService.saveStockAlert(alert);
         
         // Log de la alerta generada
         const alertEmoji = alertType === 'LOW_STOCK' ? '🚨' : 
                           alertType === 'STOCK_DECREASE' ? '📉' : '📈';
         
-        logger.info(`${alertEmoji} ALERTA GENERADA: ${alertType} - ${productId}`);
-        logger.info(`   Stock: ${previousStock} → ${currentStock}`);
-        logger.info(`   Producto: ${currentData.title?.substring(0, 50) || 'Sin título'}`);
+        logger.info(`${alertEmoji} ALERTA GENERADA Y GUARDADA: ${alertType} - ${productId}`);
+        logger.info(`   • ID de alerta: ${savedAlert?.id || 'No disponible'}`);
+        logger.info(`   • Stock: ${previousStock} → ${currentStock}`);
+        logger.info(`   • Producto: ${currentData.title?.substring(0, 50) || 'Sin título'}`);
+        logger.info(`   • Timestamp: ${alert.created_at}`);
         
         // TODO: Aquí se podrían agregar notificaciones inmediatas (email, telegram, etc.)
         // await this.sendImmediateNotification(alert);
+      } else {
+        logger.info(`❌ No se determinó tipo de alerta válido`);
       }
+      
+      logger.info(`🚨 GENERATE ALERTS END: ${productId}`);
       
     } catch (error) {
       logger.error(`❌ Error generando alertas para ${productId}: ${error.message}`);
