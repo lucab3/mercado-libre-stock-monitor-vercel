@@ -22,9 +22,17 @@ class TokenManager {
    */
   saveTokens(userId, tokens, metadata = {}) {
     try {
+      logger.info(`🔍 DEBUG - saveTokens llamado para usuario: ${userId}`);
+      
       if (!userId || !tokens) {
+        logger.error(`❌ DEBUG - userId o tokens faltantes. userId: ${userId}, tokens: ${!!tokens}`);
         throw new Error('userId y tokens son requeridos');
       }
+
+      const userIdString = userId.toString();
+      logger.info(`🔍 DEBUG - Guardando tokens para userId: ${userIdString}`);
+      logger.info(`🔍 DEBUG - Access token preview: ${tokens.access_token ? tokens.access_token.substring(0, 20) + '...' : 'NO_TOKEN'}`);
+      logger.info(`🔍 DEBUG - Expires in: ${tokens.expires_in} segundos`);
 
       const userTokenData = {
         tokens: {
@@ -37,7 +45,7 @@ class TokenManager {
         },
         metadata: {
           savedAt: Date.now(),
-          expiresAt: Date.now() + (tokens.expires_in * 1000) - this.tokenExpiryBuffer,
+          expiresAt: tokens.expires_at || (Date.now() + (tokens.expires_in * 1000) - this.tokenExpiryBuffer),
           userAgent: metadata.userAgent,
           cookieId: metadata.cookieId,
           lastUsed: Date.now(),
@@ -48,14 +56,22 @@ class TokenManager {
       // Limpiar memoria si hay demasiados usuarios
       this.cleanupOldTokens();
 
-      this.userTokens.set(userId.toString(), userTokenData);
+      this.userTokens.set(userIdString, userTokenData);
       
-      logger.info(`🔑 Tokens guardados para usuario ${userId} (expiran en ${tokens.expires_in}s)`);
-      logger.debug(`📊 Usuarios en memoria: ${this.userTokens.size}/${this.maxUsersInMemory}`);
+      logger.info(`🔑 DEBUG - Tokens guardados exitosamente para usuario ${userIdString} (expiran en ${tokens.expires_in}s)`);
+      logger.info(`📊 DEBUG - Usuarios en memoria: ${this.userTokens.size}/${this.maxUsersInMemory}`);
+      
+      // Verificar que se guardaron correctamente
+      const verification = this.userTokens.get(userIdString);
+      if (verification) {
+        logger.info(`✅ DEBUG - Verificación exitosa: tokens guardados para ${userIdString}`);
+      } else {
+        logger.error(`❌ DEBUG - ERROR: tokens NO se guardaron para ${userIdString}`);
+      }
       
       return true;
     } catch (error) {
-      logger.error(`❌ Error guardando tokens para usuario ${userId}: ${error.message}`);
+      logger.error(`❌ DEBUG - Error guardando tokens para usuario ${userId}: ${error.message}`);
       return false;
     }
   }
@@ -65,20 +81,39 @@ class TokenManager {
    */
   getTokens(userId) {
     try {
+      logger.info(`🔍 DEBUG - getTokens llamado para usuario: ${userId}`);
+      
       if (!userId) {
+        logger.warn(`⚠️ DEBUG - userId es null/undefined`);
         return null;
       }
 
-      const userTokenData = this.userTokens.get(userId.toString());
+      const userIdString = userId.toString();
+      logger.info(`🔍 DEBUG - Buscando tokens para userId: ${userIdString}`);
+      logger.info(`🔍 DEBUG - Total usuarios en memoria: ${this.userTokens.size}`);
+      
+      // Debug: listar todos los usuarios en memoria
+      if (this.userTokens.size > 0) {
+        logger.info(`🔍 DEBUG - Usuarios en memoria:`);
+        for (const [storedUserId, data] of this.userTokens.entries()) {
+          logger.info(`   - ${storedUserId} (lastUsed: ${new Date(data.metadata.lastUsed).toISOString()})`);
+        }
+      } else {
+        logger.warn(`⚠️ DEBUG - No hay usuarios en memoria`);
+      }
+
+      const userTokenData = this.userTokens.get(userIdString);
       
       if (!userTokenData) {
-        logger.debug(`📭 No hay tokens para usuario ${userId}`);
+        logger.warn(`📭 DEBUG - No hay tokens para usuario ${userIdString}`);
         return null;
       }
 
+      logger.info(`✅ DEBUG - Tokens encontrados para usuario ${userIdString}`);
+      
       // Verificar si los tokens han expirado
       if (this.isTokenExpired(userTokenData)) {
-        logger.warn(`⏰ Tokens expirados para usuario ${userId} - limpiando`);
+        logger.warn(`⏰ DEBUG - Tokens expirados para usuario ${userIdString} - limpiando`);
         this.clearTokens(userId);
         return null;
       }
@@ -86,10 +121,10 @@ class TokenManager {
       // Actualizar último uso
       userTokenData.metadata.lastUsed = Date.now();
       
-      logger.debug(`✅ Tokens válidos recuperados para usuario ${userId}`);
+      logger.info(`✅ DEBUG - Tokens válidos recuperados para usuario ${userIdString}`);
       return userTokenData.tokens;
     } catch (error) {
-      logger.error(`❌ Error obteniendo tokens para usuario ${userId}: ${error.message}`);
+      logger.error(`❌ DEBUG - Error obteniendo tokens para usuario ${userId}: ${error.message}`);
       return null;
     }
   }

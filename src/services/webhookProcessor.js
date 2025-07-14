@@ -343,7 +343,8 @@ class WebhookProcessor {
           break;
           
         case 'items':
-          logger.info(`📦 STEP 2B: Procesando items webhook...`);
+        case 'items_prices':
+          logger.info(`📦 STEP 2B: Procesando ${webhook.topic} webhook...`);
           logger.info(`   • Product ID: ${webhook.product_id}`);
           logger.info(`   • User ID: ${webhook.user_id}`);
           result = await this.processItemsWebhook(
@@ -358,7 +359,7 @@ class WebhookProcessor {
               userId: webhook.user_id.toString()
             }
           );
-          logger.info(`✅ STEP 2B SUCCESS: Items webhook procesado`);
+          logger.info(`✅ STEP 2B SUCCESS: ${webhook.topic} webhook procesado`);
           break;
           
         default:
