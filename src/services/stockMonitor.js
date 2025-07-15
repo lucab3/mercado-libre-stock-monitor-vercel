@@ -614,7 +614,7 @@ class StockMonitor {
   /**
    * Procesar producto específico desde webhook
    */
-  async processProductFromWebhook(productId, userId) {
+  async processProductFromWebhook(productId, userId, webhookId = null) {
     try {
       logger.info(`🔔 WEBHOOK PROCESSING START: Procesando producto ${productId} para usuario ${userId}`);
       logger.info(`📍 Timestamp: ${new Date().toISOString()}`);
@@ -686,7 +686,7 @@ class StockMonitor {
           
           // 3.1. Generar alertas de cambio de stock
           logger.info(`🚨 STEP 3.1: Generando alertas de stock...`);
-          await this.generateStockAlerts(userId, productId, previousData, productData);
+          await this.generateStockAlerts(userId, productId, previousData, productData, webhookId);
           logger.info(`✅ ALERTAS DE STOCK PROCESADAS`);
         } else {
           logger.info(`📊 STEP 3: Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
@@ -747,7 +747,7 @@ class StockMonitor {
   /**
    * Generar alertas basadas en cambios de stock detectados
    */
-  async generateStockAlerts(userId, productId, previousData, currentData) {
+  async generateStockAlerts(userId, productId, previousData, currentData, webhookId = null) {
     try {
       logger.info(`🚨 GENERATE ALERTS START: ${productId}`);
       
@@ -792,6 +792,7 @@ class StockMonitor {
           new_stock: currentStock,
           product_title: currentData.title,
           seller_sku: currentData.seller_sku,
+          webhook_id: webhookId,
           created_at: new Date().toISOString()
         };
         
@@ -802,6 +803,7 @@ class StockMonitor {
         logger.info(`   • Stock: ${previousStock} → ${currentStock}`);
         logger.info(`   • Título: ${currentData.title?.substring(0, 50) || 'Sin título'}`);
         logger.info(`   • SKU: ${currentData.seller_sku || 'Sin SKU'}`);
+        logger.info(`   • Webhook ID: ${webhookId || 'Sin webhook ID'}`);
         
         // Guardar en base de datos
         const savedAlert = await databaseService.saveStockAlert(alert);

@@ -198,7 +198,7 @@ class WebhookProcessor {
 
       // Llamar al stock monitor para procesar el producto
       const stockMonitor = require('./stockMonitor');
-      const result = await stockMonitor.processProductFromWebhook(productId, userId);
+      const result = await stockMonitor.processProductFromWebhook(productId, userId, webhookData._id);
       
       logger.info(`✅ Stock webhook procesado exitosamente para ${productId}`);
       
@@ -244,7 +244,7 @@ class WebhookProcessor {
       // Llamar al stock monitor para procesar el producto
       logger.info(`🔄 Llamando a stockMonitor.processProductFromWebhook...`);
       const stockMonitor = require('./stockMonitor');
-      const result = await stockMonitor.processProductFromWebhook(productId, userId);
+      const result = await stockMonitor.processProductFromWebhook(productId, userId, webhookData._id);
       
       logger.info(`✅ PROCESS ITEMS WEBHOOK SUCCESS: ${productId}`);
       logger.info(`   • Final stock: ${result.available_quantity}`);
