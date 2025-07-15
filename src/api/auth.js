@@ -2,7 +2,6 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
-const storage = require('../utils/storage');
 const sessionManager = require('../utils/sessionManager');
 const tokenManager = require('../utils/tokenManager');
 
@@ -201,9 +200,6 @@ class MercadoLibreAuth {
       } else {
         logger.warn('⚠️ No hay cookieId activo para guardar tokens');
       }
-      
-      // Mantener compatibilidad con storage legacy (deprecado)
-      storage.saveTokens(tokens);
       
       logger.info('Tokens guardados correctamente');
     } catch (error) {
@@ -633,7 +629,6 @@ class MercadoLibreAuth {
     }
     
     try {
-      storage.clearTokens();
       if (this.mockMode && this.mockAPI && typeof this.mockAPI.reset === 'function') {
         this.mockAPI.reset();
       }
@@ -660,7 +655,6 @@ class MercadoLibreAuth {
       }
       
       this.currentCookieId = null;
-      storage.clearTokens();
     } catch (error) {
       logger.error(`Error al cerrar todas las sesiones: ${error.message}`);
     }
