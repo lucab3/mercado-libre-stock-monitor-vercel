@@ -646,13 +646,17 @@ class StockMonitor {
       
       const productData = await products.getProduct(productId, userId);
       
+      // Extraer SKU usando el método mejorado
+      const extractedSKU = products.extractSKUFromProduct(productData);
+      
       logger.info(`📦 DATOS RECIBIDOS DE ML API:`);
       logger.info(`   • ID: ${productData.id}`);
       logger.info(`   • Título: ${productData.title?.substring(0, 50) || 'Sin título'}...`);
       logger.info(`   • Stock actual: ${productData.available_quantity}`);
       logger.info(`   • Precio actual: ${productData.price}`);
       logger.info(`   • Estado actual: ${productData.status}`);
-      logger.info(`   • SKU: ${productData.seller_sku || 'Sin SKU'}`);
+      logger.info(`   • SKU directo: ${productData.seller_sku || 'Sin SKU directo'}`);
+      logger.info(`   • SKU extraído: ${extractedSKU || 'Sin SKU extraído'}`);
       logger.info(`   • Salud: ${productData.health || 'Sin health'}`);
       logger.info(`   • Timestamp respuesta: ${new Date().toISOString()}`);
       
@@ -686,7 +690,9 @@ class StockMonitor {
           
           // 3.1. Generar alertas de cambio de stock
           logger.info(`🚨 STEP 3.1: Generando alertas de stock...`);
-          await this.generateStockAlerts(userId, productId, previousData, productData, webhookId);
+          // Pasar datos con SKU extraído
+          const productDataWithSKU = { ...productData, seller_sku: extractedSKU };
+          await this.generateStockAlerts(userId, productId, previousData, productDataWithSKU, webhookId);
           logger.info(`✅ ALERTAS DE STOCK PROCESADAS`);
         } else {
           logger.info(`📊 STEP 3: Sin cambios detectados en ${productId} (webhook duplicado o interno)`);
@@ -700,7 +706,7 @@ class StockMonitor {
         id: productData.id,
         user_id: userId,
         title: productData.title,
-        seller_sku: productData.seller_sku,
+        seller_sku: extractedSKU, // Usar SKU extraído
         available_quantity: productData.available_quantity || 0,
         price: productData.price,
         status: productData.status,
