@@ -320,7 +320,6 @@ class WebhookProcessor {
 
       // STEP 1.5: Validar temporalidad del webhook
       logger.info(`🕐 STEP 1.5: Validando temporalidad del webhook...`);
-      const databaseService = require('./databaseService');
       const shouldProcess = await databaseService.shouldProcessWebhook(webhook.user_id, webhook.received_at);
       
       if (!shouldProcess) {
