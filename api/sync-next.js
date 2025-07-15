@@ -179,6 +179,12 @@ async function handleSyncNext(req, res) {
     // 8. Obtener conteo actual de productos en BD
     const totalInDB = await databaseService.getProductCount(userId);
 
+    // 9. Guardar sync control si el scan está completo
+    if (!hasMore) {
+      logger.info(`📅 Sync completo - guardando control temporal para usuario ${userId}`);
+      await databaseService.saveSyncControl(userId, totalInDB);
+    }
+
     const response = {
       success: true,
       message: `Lote procesado: ${savedCount} productos nuevos guardados`,

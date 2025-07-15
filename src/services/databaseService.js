@@ -846,6 +846,106 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES SYNC CONTROL
+  // ==========================================
+
+  /**
+   * Guardar/actualizar timestamp de sync inicial por usuario
+   */
+  async saveSyncControl(userId, productsCount = 0) {
+    try {
+      const syncData = {
+        user_id: userId,
+        last_full_sync: new Date().toISOString(),
+        products_count: productsCount,
+        updated_at: new Date().toISOString()
+      };
+
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('sync_control')
+            .upsert(syncData, { 
+              onConflict: 'user_id',
+              returning: 'minimal' 
+            });
+        },
+        'save_sync_control'
+      );
+
+      logger.info(`📅 Sync control guardado para usuario ${userId}: ${syncData.last_full_sync}`);
+      return { success: true, data: result.data };
+      
+    } catch (error) {
+      logger.error(`❌ Error guardando sync control: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener timestamp del último sync completo de un usuario
+   */
+  async getLastSyncTime(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('sync_control')
+            .select('last_full_sync, products_count')
+            .eq('user_id', userId)
+            .single();
+        },
+        'get_last_sync_time'
+      );
+
+      if (!result.data) {
+        return null;
+      }
+
+      return {
+        lastSync: new Date(result.data.last_full_sync),
+        productsCount: result.data.products_count
+      };
+      
+    } catch (error) {
+      if (error.message.includes('No rows returned')) {
+        logger.debug(`📭 No hay sync control para usuario ${userId}`);
+        return null;
+      }
+      logger.error(`❌ Error obteniendo último sync: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Verificar si webhook debe ser procesado (posterior al último sync)
+   */
+  async shouldProcessWebhook(userId, webhookTimestamp) {
+    try {
+      const syncInfo = await this.getLastSyncTime(userId);
+      
+      if (!syncInfo) {
+        logger.info(`⚠️ No hay sync inicial para usuario ${userId} - procesando webhook`);
+        return true; // Si no hay sync, procesar
+      }
+
+      const webhookTime = new Date(webhookTimestamp);
+      const shouldProcess = webhookTime > syncInfo.lastSync;
+
+      logger.info(`🕐 VALIDACIÓN TEMPORAL:`);
+      logger.info(`   • Último sync: ${syncInfo.lastSync.toISOString()}`);
+      logger.info(`   • Webhook time: ${webhookTime.toISOString()}`);
+      logger.info(`   • Procesar: ${shouldProcess ? 'SÍ' : 'NO (anterior al sync)'}`);
+
+      return shouldProcess;
+      
+    } catch (error) {
+      logger.error(`❌ Error validando webhook temporal: ${error.message}`);
+      return true; // En caso de error, procesar para no perder webhooks
+    }
+  }
 }
 
 // Exportar instancia singleton

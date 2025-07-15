@@ -318,6 +318,23 @@ class WebhookProcessor {
       logger.info(`   • User ID: ${webhook.user_id}`);
       logger.info(`   • Received at: ${webhook.received_at}`);
 
+      // STEP 1.5: Validar temporalidad del webhook
+      logger.info(`🕐 STEP 1.5: Validando temporalidad del webhook...`);
+      const databaseService = require('./databaseService');
+      const shouldProcess = await databaseService.shouldProcessWebhook(webhook.user_id, webhook.received_at);
+      
+      if (!shouldProcess) {
+        logger.info(`⏸️ WEBHOOK IGNORADO: Anterior al último sync del usuario ${webhook.user_id}`);
+        await databaseService.markWebhookProcessed(webhookId, true, {
+          skipped: true,
+          reason: 'webhook_older_than_last_sync',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      
+      logger.info(`✅ STEP 1.5 SUCCESS: Webhook válido temporalmente - procesando`);
+
       // STEP 2: Procesar según topic
       logger.info(`🔄 STEP 2: Procesando según topic '${webhook.topic}'...`);
       let result = null;
