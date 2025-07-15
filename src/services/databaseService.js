@@ -676,6 +676,176 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES TOKENS PERSISTENTES
+  // ==========================================
+
+  /**
+   * Guardar tokens de usuario en BD
+   */
+  async saveTokens(userId, tokens, metadata = {}) {
+    try {
+      const tokenData = {
+        user_id: userId,
+        access_token_encrypted: tokens.access_token, // Sin encriptación por ahora
+        refresh_token_encrypted: tokens.refresh_token || null,
+        token_type: tokens.token_type || 'Bearer',
+        expires_at: new Date(tokens.expires_at).toISOString(),
+        scope: tokens.scope || null,
+        metadata: {
+          ...metadata,
+          saved_at: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString(),
+        last_used: new Date().toISOString()
+      };
+
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('tokens_storage')
+            .upsert(tokenData, { 
+              onConflict: 'user_id',
+              returning: 'minimal' 
+            });
+        },
+        'save_tokens'
+      );
+
+      logger.info(`🔑 Tokens guardados en BD para usuario ${userId}`);
+      return { success: true, data: result.data };
+      
+    } catch (error) {
+      logger.error(`❌ Error guardando tokens en BD: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener tokens de usuario desde BD
+   */
+  async getTokens(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('tokens_storage')
+            .select('*')
+            .eq('user_id', userId)
+            .single();
+        },
+        'get_tokens'
+      );
+
+      if (!result.data) {
+        return null;
+      }
+
+      const tokenData = result.data;
+      
+      // Verificar si el token ha expirado
+      if (new Date() >= new Date(tokenData.expires_at)) {
+        logger.warn(`⏰ Token expirado para usuario ${userId}`);
+        return null;
+      }
+
+      // Actualizar last_used
+      await this.updateTokensLastUsed(userId);
+
+      return {
+        access_token: tokenData.access_token_encrypted,
+        refresh_token: tokenData.refresh_token_encrypted,
+        token_type: tokenData.token_type,
+        expires_at: new Date(tokenData.expires_at).getTime(),
+        scope: tokenData.scope,
+        user_id: userId
+      };
+      
+    } catch (error) {
+      if (error.message.includes('No rows returned')) {
+        logger.debug(`📭 No hay tokens en BD para usuario ${userId}`);
+        return null;
+      }
+      logger.error(`❌ Error obteniendo tokens desde BD: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar última vez que se usaron los tokens
+   */
+  async updateTokensLastUsed(userId) {
+    try {
+      await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('tokens_storage')
+            .update({ 
+              last_used: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', userId);
+        },
+        'update_tokens_last_used'
+      );
+    } catch (error) {
+      logger.error(`❌ Error actualizando last_used: ${error.message}`);
+      // No lanzar error, es solo metadata
+    }
+  }
+
+  /**
+   * Limpiar tokens expirados de BD
+   */
+  async cleanupExpiredTokens() {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('tokens_storage')
+            .delete()
+            .lt('expires_at', new Date().toISOString());
+        },
+        'cleanup_expired_tokens'
+      );
+
+      const deletedCount = result.data?.length || 0;
+      if (deletedCount > 0) {
+        logger.info(`🧹 Limpiados ${deletedCount} tokens expirados de BD`);
+      }
+      
+      return deletedCount;
+      
+    } catch (error) {
+      logger.error(`❌ Error limpiando tokens expirados: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Eliminar tokens de un usuario específico
+   */
+  async clearUserTokens(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('tokens_storage')
+            .delete()
+            .eq('user_id', userId);
+        },
+        'clear_user_tokens'
+      );
+
+      logger.info(`🗑️ Tokens eliminados de BD para usuario ${userId}`);
+      return { success: true, data: result.data };
+      
+    } catch (error) {
+      logger.error(`❌ Error eliminando tokens de BD: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton

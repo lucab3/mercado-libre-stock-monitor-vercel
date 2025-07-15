@@ -84,7 +84,7 @@ class MercadoLibreAuth {
   /**
    * MODIFICADO: Obtiene tokens desde la sesión del navegador actual
    */
-  getCurrentTokens() {
+  async getCurrentTokens() {
     if (this.mockMode) {
       return { 
         access_token: 'mock-access-token',
@@ -103,17 +103,21 @@ class MercadoLibreAuth {
     }
 
     // NUEVO: Intentar obtener desde tokenManager primero
-    const tokenManagerTokens = tokenManager.getTokens(session.userId);
-    if (tokenManagerTokens) {
-      logger.debug(`🔑 Tokens obtenidos desde tokenManager para usuario ${session.userId}`);
-      
-      // Sincronizar con la sesión si están desactualizados
-      if (!session.tokens || session.tokens.access_token !== tokenManagerTokens.access_token) {
-        session.tokens = tokenManagerTokens;
-        logger.debug('🔄 Tokens sincronizados con sesión');
+    try {
+      const tokenManagerTokens = await tokenManager.getTokens(session.userId);
+      if (tokenManagerTokens) {
+        logger.debug(`🔑 Tokens obtenidos desde tokenManager para usuario ${session.userId}`);
+        
+        // Sincronizar con la sesión si están desactualizados
+        if (!session.tokens || session.tokens.access_token !== tokenManagerTokens.access_token) {
+          session.tokens = tokenManagerTokens;
+          logger.debug('🔄 Tokens sincronizados con sesión');
+        }
+        
+        return tokenManagerTokens;
       }
-      
-      return tokenManagerTokens;
+    } catch (error) {
+      logger.error(`❌ Error obteniendo tokens desde tokenManager: ${error.message}`);
     }
 
     // Fallback: usar tokens de la sesión
@@ -170,7 +174,7 @@ class MercadoLibreAuth {
   /**
    * MODIFICADO: Guarda los tokens en el almacenamiento y actualiza la sesión
    */
-  saveTokens(tokens) {
+  async saveTokens(tokens) {
     try {
       // NUEVO: Guardar en tokenManager por usuario
       if (this.currentCookieId) {
@@ -183,7 +187,7 @@ class MercadoLibreAuth {
             sessionCreated: session.createdAt
           };
           
-          const success = tokenManager.saveTokens(session.userId, tokens, metadata);
+          const success = await tokenManager.saveTokens(session.userId, tokens, metadata);
           if (success) {
             logger.info(`🔑 Tokens guardados para usuario ${session.userId} (tokenManager)`);
           }
@@ -307,7 +311,7 @@ class MercadoLibreAuth {
    * MODIFICADO: Refresca el token de acceso y actualiza la sesión
    */
   async refreshAccessToken() {
-    const currentTokens = this.getCurrentTokens();
+    const currentTokens = await this.getCurrentTokens();
     
     if (!currentTokens || !currentTokens.refresh_token) {
       throw new Error('No hay refresh token disponible');
@@ -383,7 +387,7 @@ class MercadoLibreAuth {
       return 'mock-access-token';
     }
 
-    const tokens = this.getCurrentTokens();
+    const tokens = await this.getCurrentTokens();
     if (!tokens || !tokens.access_token) {
       throw new Error('No se ha autenticado con Mercado Libre');
     }
@@ -393,7 +397,7 @@ class MercadoLibreAuth {
       logger.info('Token expirado o a punto de expirar, refrescando...');
       try {
         await this.refreshAccessToken();
-        const refreshedTokens = this.getCurrentTokens();
+        const refreshedTokens = await this.getCurrentTokens();
         return refreshedTokens.access_token;
       } catch (error) {
         logger.error('Error al refrescar token:', error.message);
@@ -543,7 +547,7 @@ class MercadoLibreAuth {
   /**
    * NUEVO: Obtener tokens directamente por userId (para webhooks)
    */
-  getTokensByUserId(userId) {
+  async getTokensByUserId(userId) {
     if (this.mockMode) {
       return { 
         access_token: 'mock-access-token',
@@ -557,7 +561,7 @@ class MercadoLibreAuth {
     }
 
     // Obtener tokens directamente del tokenManager
-    const tokens = tokenManager.getTokens(userId);
+    const tokens = await tokenManager.getTokens(userId);
     if (tokens) {
       logger.debug(`🔑 Tokens obtenidos para webhook - Usuario: ${userId}`);
       return tokens;
@@ -575,7 +579,7 @@ class MercadoLibreAuth {
       return 'mock-access-token';
     }
 
-    const tokens = this.getTokensByUserId(userId);
+    const tokens = await this.getTokensByUserId(userId);
     if (!tokens || !tokens.access_token) {
       throw new Error(`No hay tokens válidos para el usuario ${userId}`);
     }
@@ -592,7 +596,7 @@ class MercadoLibreAuth {
         this.currentCookieId = tempSession.cookieId;
         
         await this.refreshAccessToken();
-        const refreshedTokens = this.getTokensByUserId(userId);
+        const refreshedTokens = await this.getTokensByUserId(userId);
         
         // Limpiar sesión temporal
         sessionManager.invalidateSession(tempSession.cookieId);

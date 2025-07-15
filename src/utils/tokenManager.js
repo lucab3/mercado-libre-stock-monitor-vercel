@@ -1,26 +1,28 @@
 /**
  * Gestor de tokens por usuario para MercadoLibre
- * Maneja almacenamiento en memoria, persistencia opcional y aislamiento por usuario
+ * VERSIÓN PERSISTENTE - Usa BD como almacenamiento principal con cache en memoria
  */
 
 const logger = require('./logger');
+const databaseService = require('../services/databaseService');
 
 class TokenManager {
   constructor() {
-    // Almacenamiento en memoria por usuario
+    // Cache en memoria por usuario (opcional, para rendimiento)
     this.userTokens = new Map(); // userId -> { tokens, metadata }
     
     // Configuración
     this.tokenExpiryBuffer = 5 * 60 * 1000; // 5 minutos antes de expirar
     this.maxUsersInMemory = 10; // Máximo usuarios en memoria simultáneamente
+    this.cacheEnabled = true; // Habilitar cache en memoria
     
-    logger.info('🔐 TokenManager inicializado - aislamiento por usuario');
+    logger.info('🔐 TokenManager PERSISTENTE inicializado - BD + cache en memoria');
   }
 
   /**
-   * Guardar tokens para un usuario específico
+   * Guardar tokens para un usuario específico (BD + cache)
    */
-  saveTokens(userId, tokens, metadata = {}) {
+  async saveTokens(userId, tokens, metadata = {}) {
     try {
       logger.info(`🔍 DEBUG - saveTokens llamado para usuario: ${userId}`);
       
@@ -34,41 +36,44 @@ class TokenManager {
       logger.info(`🔍 DEBUG - Access token preview: ${tokens.access_token ? tokens.access_token.substring(0, 20) + '...' : 'NO_TOKEN'}`);
       logger.info(`🔍 DEBUG - Expires in: ${tokens.expires_in} segundos`);
 
-      const userTokenData = {
-        tokens: {
-          access_token: tokens.access_token,
-          token_type: tokens.token_type || 'Bearer',
-          expires_in: tokens.expires_in,
-          refresh_token: tokens.refresh_token,
-          scope: tokens.scope,
-          user_id: tokens.user_id
-        },
-        metadata: {
-          savedAt: Date.now(),
-          expiresAt: tokens.expires_at || (Date.now() + (tokens.expires_in * 1000) - this.tokenExpiryBuffer),
-          userAgent: metadata.userAgent,
-          cookieId: metadata.cookieId,
-          lastUsed: Date.now(),
-          ...metadata
-        }
-      };
+      // 1. GUARDAR EN BD (persistente)
+      try {
+        await databaseService.saveTokens(userIdString, tokens, metadata);
+        logger.info(`✅ DEBUG - Tokens guardados en BD para usuario ${userIdString}`);
+      } catch (dbError) {
+        logger.error(`❌ DEBUG - Error guardando en BD: ${dbError.message}`);
+        throw dbError;
+      }
 
-      // Limpiar memoria si hay demasiados usuarios
-      this.cleanupOldTokens();
+      // 2. GUARDAR EN CACHE (opcional, para rendimiento)
+      if (this.cacheEnabled) {
+        const userTokenData = {
+          tokens: {
+            access_token: tokens.access_token,
+            token_type: tokens.token_type || 'Bearer',
+            expires_in: tokens.expires_in,
+            refresh_token: tokens.refresh_token,
+            scope: tokens.scope,
+            user_id: tokens.user_id
+          },
+          metadata: {
+            savedAt: Date.now(),
+            expiresAt: tokens.expires_at || (Date.now() + (tokens.expires_in * 1000) - this.tokenExpiryBuffer),
+            userAgent: metadata.userAgent,
+            cookieId: metadata.cookieId,
+            lastUsed: Date.now(),
+            ...metadata
+          }
+        };
 
-      this.userTokens.set(userIdString, userTokenData);
-      
-      logger.info(`🔑 DEBUG - Tokens guardados exitosamente para usuario ${userIdString} (expiran en ${tokens.expires_in}s)`);
-      logger.info(`📊 DEBUG - Usuarios en memoria: ${this.userTokens.size}/${this.maxUsersInMemory}`);
-      
-      // Verificar que se guardaron correctamente
-      const verification = this.userTokens.get(userIdString);
-      if (verification) {
-        logger.info(`✅ DEBUG - Verificación exitosa: tokens guardados para ${userIdString}`);
-      } else {
-        logger.error(`❌ DEBUG - ERROR: tokens NO se guardaron para ${userIdString}`);
+        // Limpiar memoria si hay demasiados usuarios
+        this.cleanupOldTokens();
+
+        this.userTokens.set(userIdString, userTokenData);
+        logger.info(`📊 DEBUG - Tokens cacheados en memoria: ${this.userTokens.size}/${this.maxUsersInMemory}`);
       }
       
+      logger.info(`🔑 DEBUG - Tokens guardados exitosamente para usuario ${userIdString} (BD + cache)`);
       return true;
     } catch (error) {
       logger.error(`❌ DEBUG - Error guardando tokens para usuario ${userId}: ${error.message}`);
@@ -77,9 +82,9 @@ class TokenManager {
   }
 
   /**
-   * Obtener tokens para un usuario específico
+   * Obtener tokens para un usuario específico (BD + cache)
    */
-  getTokens(userId) {
+  async getTokens(userId) {
     try {
       logger.info(`🔍 DEBUG - getTokens llamado para usuario: ${userId}`);
       
@@ -90,39 +95,49 @@ class TokenManager {
 
       const userIdString = userId.toString();
       logger.info(`🔍 DEBUG - Buscando tokens para userId: ${userIdString}`);
-      logger.info(`🔍 DEBUG - Total usuarios en memoria: ${this.userTokens.size}`);
       
-      // Debug: listar todos los usuarios en memoria
-      if (this.userTokens.size > 0) {
-        logger.info(`🔍 DEBUG - Usuarios en memoria:`);
-        for (const [storedUserId, data] of this.userTokens.entries()) {
-          logger.info(`   - ${storedUserId} (lastUsed: ${new Date(data.metadata.lastUsed).toISOString()})`);
+      // 1. INTENTAR CACHE PRIMERO (si está habilitado)
+      if (this.cacheEnabled) {
+        logger.info(`🔍 DEBUG - Total usuarios en memoria: ${this.userTokens.size}`);
+        
+        const userTokenData = this.userTokens.get(userIdString);
+        if (userTokenData && !this.isTokenExpired(userTokenData)) {
+          logger.info(`✅ DEBUG - Tokens encontrados en CACHE para usuario ${userIdString}`);
+          userTokenData.metadata.lastUsed = Date.now();
+          return userTokenData.tokens;
         }
-      } else {
-        logger.warn(`⚠️ DEBUG - No hay usuarios en memoria`);
       }
 
-      const userTokenData = this.userTokens.get(userIdString);
+      // 2. CONSULTAR BD (fuente de verdad)
+      logger.info(`🔍 DEBUG - Consultando BD para usuario ${userIdString}`);
+      const tokensFromDB = await databaseService.getTokens(userIdString);
       
-      if (!userTokenData) {
-        logger.warn(`📭 DEBUG - No hay tokens para usuario ${userIdString}`);
+      if (!tokensFromDB) {
+        logger.warn(`📭 DEBUG - No hay tokens en BD para usuario ${userIdString}`);
         return null;
       }
 
-      logger.info(`✅ DEBUG - Tokens encontrados para usuario ${userIdString}`);
+      logger.info(`✅ DEBUG - Tokens encontrados en BD para usuario ${userIdString}`);
       
-      // Verificar si los tokens han expirado
-      if (this.isTokenExpired(userTokenData)) {
-        logger.warn(`⏰ DEBUG - Tokens expirados para usuario ${userIdString} - limpiando`);
-        this.clearTokens(userId);
-        return null;
-      }
+      // 3. ACTUALIZAR CACHE (si está habilitado)
+      if (this.cacheEnabled) {
+        const userTokenData = {
+          tokens: tokensFromDB,
+          metadata: {
+            savedAt: Date.now(),
+            expiresAt: tokensFromDB.expires_at,
+            lastUsed: Date.now(),
+            fromDB: true
+          }
+        };
 
-      // Actualizar último uso
-      userTokenData.metadata.lastUsed = Date.now();
+        this.cleanupOldTokens();
+        this.userTokens.set(userIdString, userTokenData);
+        logger.info(`📊 DEBUG - Tokens cacheados desde BD: ${this.userTokens.size}/${this.maxUsersInMemory}`);
+      }
       
-      logger.info(`✅ DEBUG - Tokens válidos recuperados para usuario ${userIdString}`);
-      return userTokenData.tokens;
+      logger.info(`✅ DEBUG - Tokens válidos recuperados para usuario ${userIdString} (BD)`);
+      return tokensFromDB;
     } catch (error) {
       logger.error(`❌ DEBUG - Error obteniendo tokens para usuario ${userId}: ${error.message}`);
       return null;
@@ -164,22 +179,31 @@ class TokenManager {
   }
 
   /**
-   * Limpiar tokens para un usuario específico
+   * Limpiar tokens para un usuario específico (BD + cache)
    */
-  clearTokens(userId) {
+  async clearTokens(userId) {
     if (!userId) {
       return false;
     }
 
-    const existed = this.userTokens.delete(userId.toString());
-    
-    if (existed) {
-      logger.info(`🗑️ Tokens limpiados para usuario ${userId}`);
-    } else {
-      logger.debug(`📭 No había tokens para limpiar del usuario ${userId}`);
+    const userIdString = userId.toString();
+
+    try {
+      // 1. LIMPIAR DE BD
+      await databaseService.clearUserTokens(userIdString);
+      logger.info(`🗑️ Tokens limpiados de BD para usuario ${userIdString}`);
+      
+      // 2. LIMPIAR DE CACHE
+      const existedInCache = this.userTokens.delete(userIdString);
+      if (existedInCache) {
+        logger.info(`🗑️ Tokens limpiados de cache para usuario ${userIdString}`);
+      }
+      
+      return true;
+    } catch (error) {
+      logger.error(`❌ Error limpiando tokens para usuario ${userIdString}: ${error.message}`);
+      return false;
     }
-    
-    return existed;
   }
 
   /**
