@@ -644,7 +644,59 @@ class StockMonitor {
       logger.info(`   • User ID: ${userId}`);
       logger.info(`   • Timestamp consulta: ${new Date().toISOString()}`);
       
-      const productData = await products.getProduct(productId, userId);
+      let productData;
+      try {
+        productData = await products.getProduct(productId, userId);
+      } catch (error) {
+        // Si el producto no existe (404), tratarlo como eliminado
+        if (error.response && error.response.status === 404) {
+          logger.warn(`⚠️ Producto ${productId} no encontrado (404) - probablemente eliminado de ML`);
+          
+          // Si había datos anteriores, generar alerta de eliminación
+          if (previousData) {
+            logger.info(`🗑️ Producto ${productId} eliminado de ML - era "${previousData.title}"`);
+            
+            // TODO: Podríamos generar una alerta especial de "PRODUCT_DELETED" aquí
+            // Por ahora, simplemente marcamos el producto como inactivo en BD
+            const deletedProduct = {
+              id: productId,
+              user_id: userId,
+              title: previousData.title + ' [ELIMINADO]',
+              seller_sku: previousData.seller_sku,
+              available_quantity: 0,
+              price: previousData.price,
+              status: 'deleted',
+              permalink: previousData.permalink,
+              category_id: previousData.category_id,
+              condition: previousData.condition,
+              listing_type_id: previousData.listing_type_id,
+              health: 0,
+              last_webhook_sync: new Date().toISOString(),
+              webhook_source: 'ml_webhook_deleted'
+            };
+            
+            await databaseService.upsertProduct(deletedProduct);
+            logger.info(`✅ Producto ${productId} marcado como eliminado en BD`);
+            
+            return deletedProduct;
+          }
+          
+          // Si no había datos anteriores, simplemente ignorar
+          logger.info(`ℹ️ Producto ${productId} no encontrado y sin datos anteriores - ignorando`);
+          return {
+            id: productId,
+            user_id: userId,
+            title: 'Producto no encontrado',
+            available_quantity: 0,
+            status: 'not_found',
+            last_webhook_sync: new Date().toISOString(),
+            webhook_source: 'ml_webhook_not_found'
+          };
+        }
+        
+        // Si es otro tipo de error, re-lanzarlo
+        throw error;
+      }
       
       // Extraer SKU usando el método mejorado
       const extractedSKU = products.extractSKUFromProduct(productData);

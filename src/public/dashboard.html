@@ -230,6 +230,279 @@
                 max-width: 100%;
             }
         }
+
+        /* NUEVO: Estilos para campanita de notificaciones */
+        .notification-bell {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .notification-bell .btn {
+            position: relative;
+            border: none;
+            background: transparent;
+            font-size: 1.2rem;
+            color: #ffffff;
+            padding: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .notification-bell .btn:hover {
+            color: #ffc107;
+            transform: scale(1.1);
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            padding: 0.2rem 0.4rem;
+            font-size: 0.7rem;
+            font-weight: bold;
+            min-width: 18px;
+            text-align: center;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .notification-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            min-width: 350px;
+            max-width: 400px;
+            display: none;
+        }
+
+        .notification-dropdown.show {
+            display: block;
+        }
+
+        .notification-header {
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            background: #f8f9fa;
+            border-radius: 0.375rem 0.375rem 0 0;
+        }
+
+        .notification-header h6 {
+            margin: 0;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .notification-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .notification-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .notification-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+
+        .notification-item.critical {
+            border-left: 4px solid #dc3545;
+        }
+
+        .notification-item.warning {
+            border-left: 4px solid #fd7e14;
+        }
+
+        .notification-item.info {
+            border-left: 4px solid #28a745;
+        }
+
+        .notification-icon {
+            font-size: 1.2rem;
+            margin-right: 0.5rem;
+        }
+
+        .notification-content {
+            flex: 1;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.25rem;
+        }
+
+        .notification-description {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 0.25rem;
+        }
+
+        .notification-time {
+            font-size: 0.75rem;
+            color: #adb5bd;
+        }
+
+        .notification-footer {
+            padding: 0.75rem 1rem;
+            border-top: 1px solid #dee2e6;
+            background: #f8f9fa;
+            text-align: center;
+        }
+
+        .notification-footer .btn {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.75rem;
+        }
+
+        .alert-section {
+            margin-bottom: 2rem;
+        }
+
+        .alert-filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .alert-filter-btn {
+            position: relative;
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid #dee2e6;
+            background: white;
+            color: #495057;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .alert-filter-btn:hover {
+            background: #f8f9fa;
+            border-color: #adb5bd;
+        }
+
+        .alert-filter-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .alert-filter-btn.active.critical {
+            background: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .alert-filter-btn.active.warning {
+            background: #fd7e14;
+            border-color: #fd7e14;
+        }
+
+        .alert-filter-btn.active.info {
+            background: #28a745;
+            border-color: #28a745;
+        }
+
+        .alert-filter-count {
+            background: rgba(0, 0, 0, 0.1);
+            color: inherit;
+            border-radius: 0.75rem;
+            padding: 0.125rem 0.375rem;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+        }
+
+        .alerts-table {
+            margin-top: 1rem;
+        }
+
+        .alert-row {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .alert-row:hover {
+            background-color: #f8f9fa;
+        }
+
+        .alert-row.critical {
+            border-left: 4px solid #dc3545;
+        }
+
+        .alert-row.warning {
+            border-left: 4px solid #fd7e14;
+        }
+
+        .alert-row.info {
+            border-left: 4px solid #28a745;
+        }
+
+        .alert-priority-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+        }
+
+        .alert-priority-badge.critical {
+            background: #dc3545;
+            color: white;
+        }
+
+        .alert-priority-badge.warning {
+            background: #fd7e14;
+            color: white;
+        }
+
+        .alert-priority-badge.info {
+            background: #28a745;
+            color: white;
+        }
+
+        .settings-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .settings-panel h6 {
+            margin-bottom: 0.75rem;
+            color: #495057;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -243,6 +516,36 @@
                 <button id="sync-btn" class="btn btn-sm btn-warning" onclick="startBackgroundSync()">
                     <i class="bi bi-arrow-clockwise"></i> <span id="sync-text">Sincronizar</span>
                 </button>
+            </div>
+            <!-- NUEVA: Campanita de notificaciones -->
+            <div class="nav-item text-nowrap me-3">
+                <div class="notification-bell" onclick="toggleNotifications()">
+                    <button class="btn">
+                        <i class="bi bi-bell"></i>
+                        <span id="notification-badge" class="notification-badge" style="display: none;">0</span>
+                    </button>
+                    <div id="notification-dropdown" class="notification-dropdown">
+                        <div class="notification-header">
+                            <h6>Alertas de Stock</h6>
+                        </div>
+                        <div id="notification-body" class="notification-body">
+                            <div class="text-center p-3">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Cargando alertas...</span>
+                                </div>
+                                <div class="mt-2">Cargando alertas...</div>
+                            </div>
+                        </div>
+                        <div class="notification-footer">
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="viewAllAlerts()">
+                                Ver todas
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleAlertSettings()">
+                                <i class="bi bi-gear"></i> Configurar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="nav-item text-nowrap me-3">
                 <span class="navbar-text text-light">
@@ -263,17 +566,23 @@
                 <div class="sidebar-sticky pt-3">
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link active" href="#">
+                            <a class="nav-link active" href="#" onclick="showSection('dashboard')">
                                 <i class="bi bi-speedometer2"></i> Dashboard
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link" href="#" onclick="showSection('alerts')">
+                                <i class="bi bi-exclamation-triangle"></i> Alertas
+                                <span id="sidebar-alert-count" class="badge bg-danger ms-2" style="display: none;">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('products')">
                                 <i class="bi bi-box-seam"></i> Productos
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link" href="#" onclick="showSection('settings')">
                                 <i class="bi bi-gear"></i> Configuración
                             </a>
                         </li>
@@ -292,8 +601,10 @@
             </nav>
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">Dashboard</h1>
+                <!-- SECCIÓN DASHBOARD -->
+                <div id="dashboard-section" class="content-section">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Dashboard</h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <div class="btn-group me-2">
                             <button type="button" id="start-monitoring" class="btn btn-sm btn-outline-success">
@@ -406,6 +717,141 @@
                         </tbody>
                     </table>
                 </div>
+                </div>
+                
+                <!-- NUEVA SECCIÓN: ALERTAS -->
+                <div id="alerts-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">
+                            <i class="bi bi-exclamation-triangle"></i> Alertas de Stock
+                        </h1>
+                        <div class="btn-toolbar mb-2 mb-md-0">
+                            <button type="button" id="refresh-alerts" class="btn btn-sm btn-outline-secondary me-2">
+                                <i class="bi bi-arrow-repeat"></i> Actualizar
+                            </button>
+                            <button type="button" id="cleanup-webhooks-btn" class="btn btn-sm btn-outline-warning me-2" onclick="cleanupWebhooks()">
+                                <i class="bi bi-trash"></i> Limpiar webhooks
+                            </button>
+                            <button type="button" id="alert-settings-btn" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-gear"></i> Configurar alertas
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Panel de configuración de alertas (oculto por defecto) -->
+                    <div id="alert-settings-panel" class="settings-panel" style="display: none;">
+                        <h6><i class="bi bi-gear"></i> Configuración de Alertas</h6>
+                        <div class="settings-row">
+                            <label for="enable-popups">Mostrar popups de alertas:</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="enable-popups" checked>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <label for="enable-sound">Sonido de notificación:</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="enable-sound">
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <label for="critical-only">Solo alertas críticas:</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="critical-only">
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <button class="btn btn-sm btn-success" onclick="saveAlertSettings()">
+                                <i class="bi bi-check"></i> Guardar configuración
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="toggleAlertSettings()">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filtros de alertas -->
+                    <div class="alert-filters">
+                        <button class="alert-filter-btn active" data-filter="all" onclick="filterAlerts('all')">
+                            <i class="bi bi-list"></i> Todas
+                            <span class="alert-filter-count" id="count-all">0</span>
+                        </button>
+                        <button class="alert-filter-btn critical" data-filter="critical" onclick="filterAlerts('critical')">
+                            <i class="bi bi-exclamation-triangle"></i> Críticas
+                            <span class="alert-filter-count" id="count-critical">0</span>
+                        </button>
+                        <button class="alert-filter-btn warning" data-filter="warning" onclick="filterAlerts('warning')">
+                            <i class="bi bi-exclamation-circle"></i> Advertencias
+                            <span class="alert-filter-count" id="count-warning">0</span>
+                        </button>
+                        <button class="alert-filter-btn info" data-filter="info" onclick="filterAlerts('info')">
+                            <i class="bi bi-info-circle"></i> Informativas
+                            <span class="alert-filter-count" id="count-info">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Tabla de alertas -->
+                    <div class="table-responsive alerts-table">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Producto</th>
+                                    <th>SKU</th>
+                                    <th>Stock Anterior</th>
+                                    <th>Stock Actual</th>
+                                    <th>Tiempo</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alerts-table">
+                                <tr>
+                                    <td colspan="7" class="text-center">Cargando alertas...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted">
+                            <small id="alerts-pagination-info">Mostrando 0 de 0 alertas</small>
+                        </div>
+                        <nav>
+                            <ul class="pagination pagination-sm">
+                                <li class="page-item" id="alerts-prev-page">
+                                    <a class="page-link" href="#" onclick="loadAlerts('prev')">Anterior</a>
+                                </li>
+                                <li class="page-item" id="alerts-next-page">
+                                    <a class="page-link" href="#" onclick="loadAlerts('next')">Siguiente</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN PRODUCTOS (placeholder) -->
+                <div id="products-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">
+                            <i class="bi bi-box-seam"></i> Productos
+                        </h1>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Esta sección está en desarrollo.
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN CONFIGURACIÓN (placeholder) -->
+                <div id="settings-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">
+                            <i class="bi bi-gear"></i> Configuración
+                        </h1>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Esta sección está en desarrollo.
+                    </div>
+                </div>
             </main>
         </div>
     </div>
@@ -419,6 +865,19 @@
         let availableCategories = new Map(); // Para mapear category_id a información de categoría
         let categoriesCache = new Map(); // Cache de categorías obtenidas de la API
         let categoriesLoaded = false;
+        
+        // NUEVAS: Variables globales para alertas
+        let alertsData = [];
+        let alertsLoaded = false;
+        let currentAlertFilter = 'all';
+        let alertsPage = 0;
+        let alertsPerPage = 20;
+        let alertSettings = {
+            popupsEnabled: true,
+            soundEnabled: false,
+            criticalOnly: false
+        };
+        let currentSection = 'dashboard'; // Sección actual del dashboard
         
         // Script para interactuar con la API - MEJORADO CON ENLACES A ML
         document.addEventListener('DOMContentLoaded', function() {
@@ -1604,7 +2063,555 @@
             
             console.log('🔄 Función de sincronización background agregada');
             console.log('- startBackgroundSync(): Iniciar sincronización por lotes');
+            
+            // ===== ALERTAS FUNCTIONALITY =====
+            
+            // Cargar alertas inicial
+            loadAlerts();
+            
+            // Auto-refresh de alertas cada minuto
+            setInterval(loadAlerts, 60000);
+            
+            // Event listeners para alertas
+            document.getElementById('refresh-alerts').addEventListener('click', () => loadAlerts(null, true));
+            document.getElementById('alert-settings-btn').addEventListener('click', toggleAlertSettings);
+            document.getElementById('enable-popups').addEventListener('change', updateAlertSettings);
+            document.getElementById('enable-sound').addEventListener('change', updateAlertSettings);
+            document.getElementById('critical-only').addEventListener('change', updateAlertSettings);
+            
+            // Cerrar dropdown al hacer clic fuera
+            document.addEventListener('click', function(event) {
+                const notificationDropdown = document.getElementById('notification-dropdown');
+                const notificationBell = document.querySelector('.notification-bell');
+                
+                if (!notificationBell.contains(event.target)) {
+                    notificationDropdown.classList.remove('show');
+                }
+            });
+            
+            console.log('🔔 Sistema de alertas inicializado');
         });
+        
+        // ===== FUNCIONES DE ALERTAS =====
+        
+        /**
+         * Cargar alertas desde la API
+         */
+        async function loadAlerts(page = null, forceRefresh = false) {
+            if (page === 'prev') {
+                alertsPage = Math.max(0, alertsPage - 1);
+            } else if (page === 'next') {
+                alertsPage++;
+            } else if (page === null && !forceRefresh && alertsLoaded) {
+                return; // Ya están cargadas
+            }
+            
+            try {
+                const response = await fetch(`/api/alerts?limit=${alertsPerPage}&offset=${alertsPage * alertsPerPage}&alertType=${currentAlertFilter === 'all' ? '' : currentAlertFilter}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    alertsData = data.alerts || [];
+                    alertsLoaded = true;
+                    
+                    // Actualizar campanita
+                    updateNotificationBell(data.summary);
+                    
+                    // Actualizar sidebar
+                    updateSidebarAlertCount(data.summary.critical);
+                    
+                    // Si estamos en la sección de alertas, actualizar tabla
+                    if (currentSection === 'alerts') {
+                        updateAlertsTable(alertsData);
+                        updateAlertFilters(data.counts);
+                        updateAlertsPagination(data.pagination);
+                    }
+                    
+                    // Actualizar dropdown de notificaciones
+                    updateNotificationDropdown(alertsData.slice(0, 5)); // Solo las primeras 5
+                    
+                    // Mostrar popup si hay alertas críticas nuevas
+                    if (alertSettings.popupsEnabled && data.summary.critical > 0) {
+                        showCriticalAlertPopup(alertsData.filter(a => a.priority === 'critical'));
+                    }
+                    
+                    console.log('🔔 Alertas cargadas:', data.summary);
+                } else {
+                    console.error('Error cargando alertas:', data.error);
+                }
+            } catch (error) {
+                console.error('Error cargando alertas:', error);
+            }
+        }
+        
+        /**
+         * Actualizar campanita de notificaciones
+         */
+        function updateNotificationBell(summary) {
+            const badge = document.getElementById('notification-badge');
+            const criticalCount = summary.critical || 0;
+            
+            if (criticalCount > 0) {
+                badge.textContent = criticalCount;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        /**
+         * Actualizar contador en sidebar
+         */
+        function updateSidebarAlertCount(criticalCount) {
+            const sidebarCount = document.getElementById('sidebar-alert-count');
+            if (criticalCount > 0) {
+                sidebarCount.textContent = criticalCount;
+                sidebarCount.style.display = 'inline-block';
+            } else {
+                sidebarCount.style.display = 'none';
+            }
+        }
+        
+        /**
+         * Actualizar dropdown de notificaciones
+         */
+        function updateNotificationDropdown(alerts) {
+            const body = document.getElementById('notification-body');
+            
+            if (alerts.length === 0) {
+                body.innerHTML = '<div class="text-center p-3"><i class="bi bi-check-circle text-success"></i><div class="mt-2">No hay alertas</div></div>';
+                return;
+            }
+            
+            body.innerHTML = alerts.map(alert => `
+                <div class="notification-item d-flex align-items-start ${alert.priority}" onclick="viewAlertDetail('${alert.id}')">
+                    <div class="notification-icon">${alert.icon}</div>
+                    <div class="notification-content">
+                        <div class="notification-title">${alert.title}</div>
+                        <div class="notification-description">${alert.description}</div>
+                        <div class="notification-time">${alert.timeAgo}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        /**
+         * Actualizar tabla de alertas
+         */
+        function updateAlertsTable(alerts) {
+            const tbody = document.getElementById('alerts-table');
+            
+            if (alerts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No hay alertas para mostrar</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = alerts.map(alert => `
+                <tr class="alert-row ${alert.priority}" onclick="viewAlertDetail('${alert.id}')">
+                    <td>
+                        <span class="alert-priority-badge ${alert.priority}">
+                            ${alert.icon} ${alert.title}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="product-title">${alert.product_title}</div>
+                        <small class="text-muted">ID: ${alert.product_id}</small>
+                    </td>
+                    <td>
+                        <span class="badge ${alert.seller_sku ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.75rem;">
+                            ${alert.seller_sku || 'Sin SKU'}
+                        </span>
+                    </td>
+                    <td>${alert.previous_stock}</td>
+                    <td>
+                        <span class="badge ${alert.priority === 'critical' ? 'bg-danger' : alert.priority === 'warning' ? 'bg-warning' : 'bg-success'}">
+                            ${alert.new_stock}
+                        </span>
+                    </td>
+                    <td>
+                        <div>${alert.timeAgo}</div>
+                        <small class="text-muted">${alert.formattedTime}</small>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewAlertDetail('${alert.id}'); event.stopPropagation();" title="Ver detalles">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        /**
+         * Actualizar filtros de alertas
+         */
+        function updateAlertFilters(counts) {
+            document.getElementById('count-all').textContent = counts.total || 0;
+            document.getElementById('count-critical').textContent = counts.LOW_STOCK || 0;
+            document.getElementById('count-warning').textContent = counts.STOCK_DECREASE || 0;
+            document.getElementById('count-info').textContent = counts.STOCK_INCREASE || 0;
+        }
+        
+        /**
+         * Actualizar paginación de alertas
+         */
+        function updateAlertsPagination(pagination) {
+            const info = document.getElementById('alerts-pagination-info');
+            const prevBtn = document.getElementById('alerts-prev-page');
+            const nextBtn = document.getElementById('alerts-next-page');
+            
+            const start = (alertsPage * alertsPerPage) + 1;
+            const end = Math.min(start + alertsPerPage - 1, start + alertsData.length - 1);
+            
+            info.textContent = `Mostrando ${start}-${end} de ${alertsData.length} alertas`;
+            
+            prevBtn.style.display = alertsPage > 0 ? 'block' : 'none';
+            nextBtn.style.display = pagination.hasMore ? 'block' : 'none';
+        }
+        
+        /**
+         * Filtrar alertas por tipo
+         */
+        function filterAlerts(filter) {
+            currentAlertFilter = filter;
+            alertsPage = 0;
+            
+            // Actualizar botones activos
+            document.querySelectorAll('.alert-filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+            
+            // Recargar alertas
+            loadAlerts(null, true);
+        }
+        
+        /**
+         * Mostrar/ocultar dropdown de notificaciones
+         */
+        function toggleNotifications() {
+            const dropdown = document.getElementById('notification-dropdown');
+            dropdown.classList.toggle('show');
+            
+            // Cargar alertas recientes si se abre
+            if (dropdown.classList.contains('show')) {
+                loadAlerts(null, true);
+            }
+        }
+        
+        /**
+         * Navegar a la sección de alertas
+         */
+        function viewAllAlerts() {
+            showSection('alerts');
+            toggleNotifications(); // Cerrar dropdown
+        }
+        
+        /**
+         * Mostrar/ocultar panel de configuración
+         */
+        function toggleAlertSettings() {
+            const panel = document.getElementById('alert-settings-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        /**
+         * Actualizar configuración de alertas
+         */
+        function updateAlertSettings() {
+            alertSettings.popupsEnabled = document.getElementById('enable-popups').checked;
+            alertSettings.soundEnabled = document.getElementById('enable-sound').checked;
+            alertSettings.criticalOnly = document.getElementById('critical-only').checked;
+            
+            console.log('⚙️ Configuración de alertas actualizada:', alertSettings);
+        }
+        
+        /**
+         * Guardar configuración de alertas
+         */
+        async function saveAlertSettings() {
+            try {
+                const response = await fetch('/api/alert-settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ settings: alertSettings })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Configuración guardada exitosamente');
+                    toggleAlertSettings();
+                } else {
+                    alert('Error guardando configuración: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error guardando configuración:', error);
+                alert('Error guardando configuración');
+            }
+        }
+        
+        /**
+         * Mostrar popup de alerta crítica
+         */
+        function showCriticalAlertPopup(criticalAlerts) {
+            if (criticalAlerts.length === 0) return;
+            
+            const alert = criticalAlerts[0]; // Mostrar la primera alerta crítica
+            
+            // Crear popup
+            const popup = document.createElement('div');
+            popup.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            popup.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 350px;';
+            
+            popup.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="me-3 fs-4">${alert.icon}</div>
+                    <div>
+                        <h6 class="alert-heading mb-1">${alert.title}</h6>
+                        <p class="mb-1">${alert.description}</p>
+                        <small class="text-muted">${alert.timeAgo}</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(popup);
+            
+            // Auto-remover después de 10 segundos
+            setTimeout(() => {
+                if (popup.parentNode) {
+                    popup.parentNode.removeChild(popup);
+                }
+            }, 10000);
+            
+            // Sonido si está habilitado
+            if (alertSettings.soundEnabled) {
+                playNotificationSound();
+            }
+        }
+        
+        /**
+         * Reproducir sonido de notificación
+         */
+        function playNotificationSound() {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMeAjuK2/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+Dyvmze');
+            audio.volume = 0.3;
+            audio.play().catch(e => console.log('No se pudo reproducir el sonido:', e));
+        }
+        
+        /**
+         * Ver detalles de una alerta
+         */
+        function viewAlertDetail(alertId) {
+            const alert = alertsData.find(a => a.id === alertId);
+            if (!alert) return;
+            
+            const modal = `
+                <div class="modal fade" id="alertDetailModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">${alert.icon} ${alert.title}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Producto</h6>
+                                        <p>${alert.product_title}</p>
+                                        <p><small class="text-muted">ID: ${alert.product_id}</small></p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>SKU</h6>
+                                        <p>${alert.seller_sku || 'Sin SKU'}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Stock Anterior</h6>
+                                        <p>${alert.previous_stock} unidades</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Stock Actual</h6>
+                                        <p class="text-${alert.priority === 'critical' ? 'danger' : alert.priority === 'warning' ? 'warning' : 'success'}">
+                                            ${alert.new_stock} unidades
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <h6>Descripción</h6>
+                                        <p>${alert.description}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <h6>Tiempo</h6>
+                                        <p>${alert.timeAgo} (${alert.formattedTime})</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                <button type="button" class="btn btn-primary" onclick="checkProduct('${alert.product_id}')">
+                                    Ver producto
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remover modal anterior si existe
+            const existingModal = document.getElementById('alertDetailModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Agregar modal al DOM
+            document.body.insertAdjacentHTML('beforeend', modal);
+            
+            // Mostrar modal
+            const bootstrapModal = new bootstrap.Modal(document.getElementById('alertDetailModal'));
+            bootstrapModal.show();
+        }
+        
+        /**
+         * Navegar entre secciones
+         */
+        function showSection(sectionName) {
+            // Ocultar todas las secciones
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Mostrar sección seleccionada
+            document.getElementById(sectionName + '-section').style.display = 'block';
+            
+            // Actualizar navegación activa
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelector(`[onclick="showSection('${sectionName}')"]`).classList.add('active');
+            
+            // Actualizar sección actual
+            currentSection = sectionName;
+            
+            // Cargar datos específicos de la sección
+            if (sectionName === 'alerts') {
+                loadAlerts(null, true);
+            }
+        }
+        
+        // Hacer funciones globales disponibles
+        window.loadAlerts = loadAlerts;
+        window.filterAlerts = filterAlerts;
+        window.toggleNotifications = toggleNotifications;
+        window.viewAllAlerts = viewAllAlerts;
+        window.toggleAlertSettings = toggleAlertSettings;
+        window.saveAlertSettings = saveAlertSettings;
+        window.showSection = showSection;
+        window.viewAlertDetail = viewAlertDetail;
+        
+        /**
+         * Limpiar webhooks antiguos
+         */
+        async function cleanupWebhooks() {
+            const button = document.getElementById('cleanup-webhooks-btn');
+            const originalText = button.innerHTML;
+            
+            if (!confirm('¿Estás seguro de que quieres limpiar los webhooks antiguos? Esto puede tomar unos minutos.')) {
+                return;
+            }
+            
+            try {
+                // Deshabilitar botón y mostrar progreso
+                button.disabled = true;
+                button.innerHTML = '<i class="bi bi-hourglass-split"></i> Limpiando...';
+                
+                console.log('🧹 Iniciando limpieza de webhooks...');
+                
+                const response = await fetch('/api/cleanup-webhooks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const results = data.results;
+                    const message = `Limpieza completada exitosamente!\n\n` +
+                                  `Webhooks antes: ${results.webhooksBefore}\n` +
+                                  `Webhooks después: ${results.webhooksAfter}\n` +
+                                  `Limpiados: ${results.cleaned}\n` +
+                                  `Mejora: ${results.improvement}`;
+                    
+                    alert(message);
+                    
+                    // Actualizar alertas después de la limpieza
+                    if (currentSection === 'alerts') {
+                        loadAlerts(null, true);
+                    }
+                    
+                    console.log('✅ Limpieza de webhooks completada:', results);
+                } else {
+                    alert('Error en la limpieza: ' + data.error);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error limpiando webhooks:', error);
+                alert('Error al limpiar webhooks: ' + error.message);
+            } finally {
+                // Restaurar botón
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+        
+        /**
+         * Obtener estadísticas de webhooks
+         */
+        async function getWebhookStats() {
+            try {
+                const response = await fetch('/api/cleanup-webhooks');
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('📊 Estadísticas de webhooks:', data.stats);
+                    
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        console.log('💡 Recomendaciones:', data.recommendations);
+                        
+                        const criticalRecommendations = data.recommendations.filter(r => r.priority === 'critical');
+                        if (criticalRecommendations.length > 0) {
+                            const message = criticalRecommendations.map(r => `${r.message}\nAcción: ${r.action}`).join('\n\n');
+                            alert('⚠️ Recomendaciones críticas:\n\n' + message);
+                        }
+                    }
+                    
+                    return data;
+                } else {
+                    console.error('Error obteniendo estadísticas:', data.error);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error obteniendo estadísticas:', error);
+                return null;
+            }
+        }
+        
+        // Hacer funciones globales disponibles
+        window.cleanupWebhooks = cleanupWebhooks;
+        window.getWebhookStats = getWebhookStats;
+        
+        // Verificar estadísticas al cargar la página
+        setTimeout(() => {
+            getWebhookStats();
+        }, 5000); // Esperar 5 segundos después de cargar
     </script>
 </body>
 </html>

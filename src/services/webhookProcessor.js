@@ -22,7 +22,11 @@ class WebhookProcessor {
       'stock-location',
       'stock-locations', // ML envía ambas versiones
       'items',
-      'items_prices'
+      'items_prices',
+      'fbm_stock_operations',    // Operaciones de stock FBM
+      'inventory_health',        // Salud del inventario
+      'listing_updates',         // Actualizaciones de listado que pueden afectar stock
+      'catalog_updates'          // Actualizaciones de catálogo que pueden afectar stock
     ];
     
     // Topics que recibimos pero ignoramos (no causan error 400)
@@ -31,8 +35,14 @@ class WebhookProcessor {
       'shipments',
       'messages',
       'price_suggestion',
-      'fbm_stock_operations',
-      'questions'
+      'questions',
+      'user-products-families',  // Familias de productos - no relevante para stock
+      'flex-handshakes',         // Handshakes de Flex - no relevante para stock
+      'shipping_preferences',    // Preferencias de envío - no relevante para stock
+      'promotions',              // Promociones - no relevante para stock
+      'claims',                  // Reclamos - no relevante para stock
+      'reviews',                 // Reseñas - no relevante para stock
+      'payment_disputes'         // Disputas de pago - no relevante para stock
     ];
   }
 
@@ -282,7 +292,7 @@ class WebhookProcessor {
 
       // STEP 1: Obtener webhook de la base de datos
       logger.info(`📋 STEP 1: Buscando webhook ${webhookId} en BD...`);
-      const webhooks = await databaseService.getPendingWebhooks(50); // Buscar en más webhooks
+      const webhooks = await databaseService.getPendingWebhooks(20); // REDUCIDO: Procesar menos webhooks por vez
       logger.info(`   • Webhooks pendientes encontrados: ${webhooks.length}`);
       
       if (webhooks.length > 0) {
@@ -360,6 +370,10 @@ class WebhookProcessor {
           
         case 'items':
         case 'items_prices':
+        case 'fbm_stock_operations':
+        case 'inventory_health':
+        case 'listing_updates':
+        case 'catalog_updates':
           logger.info(`📦 STEP 2B: Procesando ${webhook.topic} webhook...`);
           logger.info(`   • Product ID: ${webhook.product_id}`);
           logger.info(`   • User ID: ${webhook.user_id}`);
@@ -396,23 +410,48 @@ class WebhookProcessor {
 
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      logger.error(`❌ ASYNC PROCESSING FAILED: ${webhookId} (${processingTime}ms)`);
-      logger.error(`   • Error: ${error.message}`);
-      logger.error(`   • Stack: ${error.stack}`);
       
-      // Marcar como fallido
-      try {
-        logger.info(`💾 Marcando webhook como fallido...`);
-        await databaseService.markWebhookProcessed(webhookId, false, {
-          error: error.message,
-          stack: error.stack,
-          timestamp: new Date().toISOString(),
-          processingTime
-        });
-        logger.info(`✅ Webhook marcado como fallido en BD`);
-      } catch (dbError) {
-        logger.error(`❌ Error marcando webhook como fallido: ${dbError.message}`);
-        logger.error(`   • DB Error Stack: ${dbError.stack}`);
+      // Verificar si es un error 404 (producto eliminado)
+      const is404Error = error.response && error.response.status === 404;
+      const isProductNotFound = error.message && error.message.includes('status code 404');
+      
+      if (is404Error || isProductNotFound) {
+        logger.warn(`⚠️ ASYNC PROCESSING - Producto no encontrado (404): ${webhookId} (${processingTime}ms)`);
+        logger.warn(`   • Producto probablemente eliminado de ML`);
+        
+        // Marcar como procesado exitosamente ya que el producto fue eliminado
+        try {
+          logger.info(`💾 Marcando webhook como procesado (producto eliminado)...`);
+          await databaseService.markWebhookProcessed(webhookId, true, {
+            status: 'product_deleted',
+            reason: 'Product not found in ML API (404)',
+            timestamp: new Date().toISOString(),
+            processingTime
+          });
+          logger.info(`✅ Webhook marcado como procesado (producto eliminado) en BD`);
+        } catch (dbError) {
+          logger.error(`❌ Error marcando webhook como procesado: ${dbError.message}`);
+        }
+      } else {
+        // Es un error real del sistema
+        logger.error(`❌ ASYNC PROCESSING FAILED: ${webhookId} (${processingTime}ms)`);
+        logger.error(`   • Error: ${error.message}`);
+        logger.error(`   • Stack: ${error.stack}`);
+        
+        // Marcar como fallido
+        try {
+          logger.info(`💾 Marcando webhook como fallido...`);
+          await databaseService.markWebhookProcessed(webhookId, false, {
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+            processingTime
+          });
+          logger.info(`✅ Webhook marcado como fallido en BD`);
+        } catch (dbError) {
+          logger.error(`❌ Error marcando webhook como fallido: ${dbError.message}`);
+          logger.error(`   • DB Error Stack: ${dbError.stack}`);
+        }
       }
     }
   }
@@ -473,12 +512,13 @@ class WebhookProcessor {
         };
       }
 
-      // 4. Programar procesamiento asíncrono (no esperar)
-      setImmediate(() => {
+      // 4. Programar procesamiento asíncrono con throttling
+      const randomDelay = Math.random() * 2000; // Entre 0 y 2 segundos para evitar sobrecarga
+      setTimeout(() => {
         this.processWebhookAsync(webhookData._id).catch(error => {
           logger.error(`❌ Error en procesamiento asíncrono: ${error.message}`);
         });
-      });
+      }, randomDelay);
 
       const processingTime = Date.now() - startTime;
       
