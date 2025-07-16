@@ -63,6 +63,14 @@
       "dest": "client/dist/assets/$1"
     },
     {
+      "src": "/favicon.ico",
+      "dest": "client/public/favicon.ico"
+    },
+    {
+      "src": "/favicon.png",
+      "dest": "client/public/favicon.png"
+    },
+    {
       "src": "/",
       "dest": "client/dist/index.html"
     },
