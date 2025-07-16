@@ -61,14 +61,24 @@ app.use('/api/', async (req, res, next) => {
   const protectedRoutes = ['/api/monitor/', '/api/products/', '/api/rate-limit/', '/api/stock-alerts'];
   const isProtectedRoute = protectedRoutes.some(route => req.path.startsWith(route));
 
-  if (isProtectedRoute && auth.isAuthenticated()) {
+  if (isProtectedRoute) {
     try {
-      // Validar que la sesión actual pertenece al usuario correcto
-      const isValidSession = await auth.validateCurrentSession();
+      // Obtener session ID de la cookie
+      const sessionCookie = req.sessionCookie;
       
-      if (!isValidSession) {
-        logger.error('🚨 SEGURIDAD: Sesión inválida detectada - forzando logout');
-        auth.logout();
+      if (!sessionCookie) {
+        return res.status(401).json({ 
+          error: 'No autenticado',
+          message: 'No se encontró sesión. Por favor, inicia sesión.',
+          requiresReauth: true
+        });
+      }
+      
+      // Validar sesión directamente desde la base de datos
+      const session = await databaseService.getUserSession(sessionCookie);
+      
+      if (!session || !session.data) {
+        logger.error('🚨 SERVERLESS: Sesión no encontrada en BD');
         
         // Limpiar cookie del navegador
         res.clearCookie('ml-session', {
@@ -80,13 +90,19 @@ app.use('/api/', async (req, res, next) => {
         
         return res.status(401).json({ 
           error: 'Sesión inválida',
-          message: 'Tu sesión no es válida. Por favor, inicia sesión nuevamente.',
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
           requiresReauth: true
         });
       }
+      
+      // Establecer datos de sesión para esta request
+      auth.setCurrentCookieId(sessionCookie);
+      auth.currentSessionId = session.data.user_id;
+      
+      logger.debug(`✅ SERVERLESS: Sesión válida para usuario ${session.data.user_id}`);
+      
     } catch (error) {
-      logger.error(`Error en validación de sesión: ${error.message}`);
-      auth.logout();
+      logger.error(`Error en validación de sesión serverless: ${error.message}`);
       
       // Limpiar cookie del navegador
       res.clearCookie('ml-session', {
