@@ -35,6 +35,10 @@
       "dest": "src/api/alerts.js"
     },
     {
+      "src": "/api/stock-alerts",
+      "dest": "src/api/alerts.js"
+    },
+    {
       "src": "/api/alert-settings",
       "dest": "src/api/alert-settings.js"
     },
