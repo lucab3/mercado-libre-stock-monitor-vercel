@@ -2302,9 +2302,7 @@ app.use('/api/', (req, res, next) => {
 // GET /api/products - Obtener todos los productos
 app.get('/api/products', async (req, res) => {
   try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'No autenticado' });
-    }
+    // La autenticación ya fue validada por el middleware
 
     const products = require('./api/products');
     await products.ensureAuthentication();
@@ -2348,9 +2346,7 @@ app.get('/api/products', async (req, res) => {
 // GET /api/products/stats - Estadísticas de productos
 app.get('/api/products/stats', async (req, res) => {
   try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'No autenticado' });
-    }
+    // La autenticación ya fue validada por el middleware
 
     const monitorStatus = stockMonitor.getStatus();
     
@@ -2370,9 +2366,7 @@ app.get('/api/products/stats', async (req, res) => {
 // POST /api/monitor/sync - Sincronizar productos
 app.post('/api/monitor/sync', async (req, res) => {
   try {
-    if (!auth.isAuthenticated()) {
-      return res.status(401).json({ error: 'No autenticado' });
-    }
+    // La autenticación ya fue validada por el middleware
 
     logger.info('🔄 Iniciando sincronización desde React frontend');
     
@@ -2400,6 +2394,7 @@ app.post('/api/monitor/sync', async (req, res) => {
 // POST /api/auth/logout - Cerrar sesión (formato JSON para React)
 app.post('/api/auth/logout', async (req, res) => {
   try {
+    // No necesita validación de autenticación para logout
     const currentUserId = auth.currentSessionId;
     if (currentUserId) {
       logger.info(`🚪 Cerrando sesión para usuario: ${currentUserId} (desde React)`);
