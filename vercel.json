@@ -52,27 +52,27 @@
     },
     {
       "src": "/login",
-      "dest": "/index.html"
+      "dest": "/client/index.html"
     },
     {
       "src": "/dashboard(.*)",
-      "dest": "/index.html"
+      "dest": "/client/index.html"
     },
     {
       "src": "/assets/(.*)",
-      "dest": "/assets/$1"
+      "dest": "/client/assets/$1"
     },
     {
       "src": "/favicon.ico",
-      "dest": "client/public/favicon.ico"
+      "dest": "/client/favicon.ico"
     },
     {
       "src": "/favicon.png",
-      "dest": "client/public/favicon.png"
+      "dest": "/client/favicon.png"
     },
     {
       "src": "/",
-      "dest": "/index.html"
+      "dest": "/client/index.html"
     },
     {
       "src": "/(.*)",
