@@ -287,6 +287,20 @@ class MercadoLibreAuth {
       const newCookieId = sessionManager.createSession(userId, tokens, cookieId);
       this.currentCookieId = newCookieId;
 
+      // También crear sesión en BD para compatibilidad con serverless functions
+      try {
+        const databaseService = require('../services/databaseService');
+        await databaseService.createUserSession(
+          newCookieId, 
+          userId, 
+          null, // IP se podría obtener del request
+          null  // UserAgent se podría obtener del request
+        );
+        logger.info(`✅ Sesión creada tanto en memoria como en BD`);
+      } catch (dbError) {
+        logger.error(`⚠️ Error creando sesión en BD (continuando con memoria): ${dbError.message}`);
+      }
+
       logger.info(`🔐 Sesión autorizada y creada para usuario ML: ${userId} (${userInfo.nickname}) en navegador ${newCookieId.substring(0, 8)}...`);
 
       this.saveTokens(tokens);

@@ -35,7 +35,7 @@ async function getAlertSettings(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,
@@ -83,7 +83,7 @@ async function updateAlertSettings(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,

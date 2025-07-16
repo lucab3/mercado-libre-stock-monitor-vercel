@@ -44,7 +44,15 @@ async function getAlerts(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    // Usar sesiones de BD en lugar de memoria para compatibilidad con serverless
+    const session = await databaseService.getUserSession(cookieId);
+    
+    logger.info(`🔍 SESSION DEBUG:`, {
+      cookieId: cookieId ? cookieId.substring(0, 8) + '...' : null,
+      sessionFound: !!session,
+      sessionUserId: session?.userId
+    });
+    
     if (!session) {
       return res.status(401).json({
         success: false,
@@ -133,7 +141,7 @@ async function markAlertsAsRead(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,
@@ -184,7 +192,7 @@ async function getAlertSettings(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,
@@ -235,7 +243,7 @@ async function updateAlertSettings(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,

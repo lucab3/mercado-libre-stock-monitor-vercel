@@ -946,6 +946,222 @@ class DatabaseService {
       return true; // En caso de error, procesar para no perder webhooks
     }
   }
+
+  // ==========================================
+  // OPERACIONES USER SESSIONS
+  // ==========================================
+
+  /**
+   * Crear nueva sesión de usuario en BD
+   */
+  async createUserSession(sessionId, userId, ipAddress = null, userAgent = null) {
+    try {
+      const sessionData = {
+        session_id: sessionId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        last_used: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // 6 horas
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        revoked: false
+      };
+
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .insert([sessionData])
+            .select('session_id');
+        },
+        'create_user_session'
+      );
+
+      logger.info(`🔐 Sesión creada en BD: ${sessionId.substring(0, 8)}... para usuario ${userId}`);
+      return result.data?.[0];
+      
+    } catch (error) {
+      logger.error(`❌ Error creando sesión en BD: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener sesión válida desde BD
+   */
+  async getUserSession(sessionId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('session_id', sessionId)
+            .eq('revoked', false)
+            .gt('expires_at', new Date().toISOString())
+            .single();
+        },
+        'get_user_session'
+      );
+
+      if (result.data) {
+        // Actualizar last_used
+        await this.updateSessionLastUsed(sessionId);
+        
+        logger.debug(`✅ Sesión válida encontrada: ${sessionId.substring(0, 8)}... para usuario ${result.data.user_id}`);
+        return {
+          sessionId: result.data.session_id,
+          userId: result.data.user_id,
+          createdAt: result.data.created_at,
+          lastUsed: result.data.last_used,
+          expiresAt: result.data.expires_at,
+          ipAddress: result.data.ip_address,
+          userAgent: result.data.user_agent
+        };
+      }
+
+      return null;
+      
+    } catch (error) {
+      if (error.message.includes('No rows returned')) {
+        logger.debug(`📭 No hay sesión válida para ${sessionId.substring(0, 8)}...`);
+        return null;
+      }
+      logger.error(`❌ Error obteniendo sesión: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar último uso de sesión
+   */
+  async updateSessionLastUsed(sessionId) {
+    try {
+      await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .update({ 
+              last_used: new Date().toISOString()
+            })
+            .eq('session_id', sessionId);
+        },
+        'update_session_last_used'
+      );
+    } catch (error) {
+      logger.error(`❌ Error actualizando last_used de sesión: ${error.message}`);
+      // No lanzar error, es solo metadata
+    }
+  }
+
+  /**
+   * Revocar sesión específica
+   */
+  async revokeUserSession(sessionId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .update({ 
+              revoked: true,
+              revoked_at: new Date().toISOString()
+            })
+            .eq('session_id', sessionId);
+        },
+        'revoke_user_session'
+      );
+
+      logger.info(`🚫 Sesión revocada: ${sessionId.substring(0, 8)}...`);
+      return result;
+      
+    } catch (error) {
+      logger.error(`❌ Error revocando sesión: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Revocar todas las sesiones de un usuario
+   */
+  async revokeAllUserSessions(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .update({ 
+              revoked: true,
+              revoked_at: new Date().toISOString()
+            })
+            .eq('user_id', userId)
+            .eq('revoked', false);
+        },
+        'revoke_all_user_sessions'
+      );
+
+      logger.info(`🚫 Todas las sesiones revocadas para usuario ${userId}`);
+      return result;
+      
+    } catch (error) {
+      logger.error(`❌ Error revocando todas las sesiones: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Limpiar sesiones expiradas
+   */
+  async cleanExpiredSessions() {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .delete()
+            .lt('expires_at', new Date().toISOString());
+        },
+        'clean_expired_sessions'
+      );
+
+      const deletedCount = result.data?.length || 0;
+      if (deletedCount > 0) {
+        logger.info(`🧹 Limpiadas ${deletedCount} sesiones expiradas`);
+      }
+      
+      return deletedCount;
+      
+    } catch (error) {
+      logger.error(`❌ Error limpiando sesiones expiradas: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener sesiones activas de un usuario
+   */
+  async getUserActiveSessions(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('session_id, created_at, last_used, ip_address, user_agent')
+            .eq('user_id', userId)
+            .eq('revoked', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('last_used', { ascending: false });
+        },
+        'get_user_active_sessions'
+      );
+
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo sesiones activas: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton
