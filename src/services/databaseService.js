@@ -1162,6 +1162,30 @@ class DatabaseService {
       throw error;
     }
   }
+
+  /**
+   * Obtener todos los productos de un usuario
+   */
+  async getAllProducts(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false });
+        },
+        'get_all_products'
+      );
+      
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton

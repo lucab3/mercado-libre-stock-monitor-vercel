@@ -2309,38 +2309,25 @@ app.use('/api/', (req, res, next) => {
 app.get('/api/products', async (req, res) => {
   try {
     // La autenticación ya fue validada por el middleware
-
-    const products = require('./api/products');
-    // Usar el userId que estableció el middleware
-    await products.ensureAuthentication(auth.currentSessionId);
+    // Obtener productos directamente de la base de datos (no de ML API)
     
-    const productIds = await products.getAllProducts();
-    const productDetails = [];
+    const products = await databaseService.getAllProducts(auth.currentSessionId);
     
-    // Obtener detalles de los primeros 50 productos para no sobrecargar
-    const limitedIds = productIds.results.slice(0, 50);
-    
-    for (const id of limitedIds) {
-      try {
-        const productData = await products.getProduct(id);
-        productDetails.push({
-          id: productData.id,
-          title: productData.title,
-          seller_sku: productData.seller_sku,
-          available_quantity: productData.available_quantity,
-          status: productData.status,
-          permalink: productData.permalink,
-          thumbnail: productData.pictures?.[0]?.url || null,
-          updated_at: productData.last_updated
-        });
-      } catch (error) {
-        logger.warn(`Error obteniendo producto ${id}: ${error.message}`);
-      }
-    }
+    // Formatear para el frontend
+    const productDetails = products.map(product => ({
+      id: product.id,
+      title: product.title,
+      seller_sku: product.seller_sku,
+      available_quantity: product.available_quantity,
+      status: product.status,
+      permalink: product.permalink,
+      thumbnail: null, // No tenemos thumbnails en BD
+      updated_at: product.updated_at || product.last_webhook_sync
+    }));
 
     res.json({
       products: productDetails,
-      total: productIds.results.length,
+      total: products.length,
       showing: productDetails.length
     });
 
