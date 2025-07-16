@@ -83,9 +83,10 @@ async function getAlerts(req, res) {
     });
 
     // 3. Preparar filtros para base de datos (sin paginación inicial si hay filtro de prioridad)
+    const hasValidPriorityFilter = priority && priority.trim() !== '' && priority !== 'all';
     const filters = {
-      limit: priority ? 1000 : parseInt(limit), // Si hay filtro de prioridad, traer más para filtrar después
-      offset: priority ? 0 : parseInt(offset),  // Si hay filtro de prioridad, empezar desde 0
+      limit: hasValidPriorityFilter ? 500 : parseInt(limit), // Si hay filtro de prioridad, traer más para filtrar después
+      offset: hasValidPriorityFilter ? 0 : parseInt(offset),  // Si hay filtro de prioridad, empezar desde 0
       alertType
     };
 
@@ -97,8 +98,11 @@ async function getAlerts(req, res) {
     
     // 6. Filtrar por prioridad si se especifica
     let filteredAlerts = classifiedAlerts;
-    if (priority && priority !== 'all') {
+    if (hasValidPriorityFilter) {
       filteredAlerts = classifiedAlerts.filter(alert => alert.priority === priority);
+      logger.info(`🔍 Filtrando por prioridad '${priority}': ${filteredAlerts.length}/${classifiedAlerts.length} alertas`);
+    } else {
+      logger.info(`📋 Mostrando todas las alertas: ${classifiedAlerts.length}`);
     }
     
     // 7. Aplicar paginación después de filtrar por prioridad

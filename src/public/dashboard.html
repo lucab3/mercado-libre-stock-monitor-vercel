@@ -2108,7 +2108,8 @@
             }
             
             try {
-                const response = await fetch(`/api/alerts?limit=${alertsPerPage}&offset=${alertsPage * alertsPerPage}&priority=${currentAlertFilter === 'all' ? '' : currentAlertFilter}`);
+                const priorityParam = currentAlertFilter === 'all' ? '' : `&priority=${currentAlertFilter}`;
+                const response = await fetch(`/api/alerts?limit=${alertsPerPage}&offset=${alertsPage * alertsPerPage}${priorityParam}`);
                 const data = await response.json();
                 
                 if (data.success) {
