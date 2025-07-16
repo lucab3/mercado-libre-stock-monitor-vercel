@@ -884,6 +884,7 @@
             // Comprobar estado inicial
             loadStatus();
             checkSessionStatus(); // Verificar sesión ML por separado
+            loadAlertSettings(); // Cargar configuración de alertas
             
             // Auto-refresh desde BD cada 30 segundos (sin validaciones de sesión)
             let autoRefreshInterval = setInterval(loadStatus, 30000); // 30 segundos
@@ -2107,7 +2108,7 @@
             }
             
             try {
-                const response = await fetch(`/api/alerts?limit=${alertsPerPage}&offset=${alertsPage * alertsPerPage}&alertType=${currentAlertFilter === 'all' ? '' : currentAlertFilter}`);
+                const response = await fetch(`/api/alerts?limit=${alertsPerPage}&offset=${alertsPage * alertsPerPage}&priority=${currentAlertFilter === 'all' ? '' : currentAlertFilter}`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -2315,6 +2316,29 @@
         }
         
         /**
+         * Cargar configuración de alertas desde el servidor
+         */
+        async function loadAlertSettings() {
+            try {
+                const response = await fetch('/api/alert-settings');
+                const data = await response.json();
+                
+                if (data.success) {
+                    alertSettings = { ...alertSettings, ...data.settings };
+                    
+                    // Actualizar formulario
+                    document.getElementById('enable-popups').checked = alertSettings.popupsEnabled;
+                    document.getElementById('enable-sound').checked = alertSettings.soundEnabled;
+                    document.getElementById('critical-only').checked = alertSettings.criticalOnly;
+                    
+                    console.log('⚙️ Configuración de alertas cargada:', alertSettings);
+                }
+            } catch (error) {
+                console.error('Error cargando configuración de alertas:', error);
+            }
+        }
+
+        /**
          * Actualizar configuración de alertas
          */
         function updateAlertSettings() {
@@ -2330,6 +2354,9 @@
          */
         async function saveAlertSettings() {
             try {
+                // Actualizar configuración desde el formulario
+                updateAlertSettings();
+                
                 const response = await fetch('/api/alert-settings', {
                     method: 'PUT',
                     headers: {
@@ -2586,11 +2613,12 @@
                     if (data.recommendations && data.recommendations.length > 0) {
                         console.log('💡 Recomendaciones:', data.recommendations);
                         
-                        const criticalRecommendations = data.recommendations.filter(r => r.priority === 'critical');
-                        if (criticalRecommendations.length > 0) {
-                            const message = criticalRecommendations.map(r => `${r.message}\nAcción: ${r.action}`).join('\n\n');
-                            alert('⚠️ Recomendaciones críticas:\n\n' + message);
-                        }
+                        // TODO: Implementar cuando se cree perfil de administrador
+                        // const criticalRecommendations = data.recommendations.filter(r => r.priority === 'critical');
+                        // if (criticalRecommendations.length > 0) {
+                        //     const message = criticalRecommendations.map(r => `${r.message}\nAcción: ${r.action}`).join('\n\n');
+                        //     alert('⚠️ Recomendaciones críticas:\n\n' + message);
+                        // }
                     }
                     
                     return data;

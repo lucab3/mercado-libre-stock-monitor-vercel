@@ -66,6 +66,7 @@ async function getAlerts(req, res) {
     // 2. Obtener parámetros de filtros
     const {
       alertType,
+      priority, // Nuevo: filtro por prioridad (critical, warning, info)
       limit = 50,
       offset = 0,
       onlyUnread = false,
@@ -74,35 +75,44 @@ async function getAlerts(req, res) {
 
     logger.info(`📋 Obteniendo alertas para usuario ${userId} con filtros:`, {
       alertType,
+      priority,
       limit: parseInt(limit),
       offset: parseInt(offset),
       onlyUnread,
       timeRange
     });
 
-    // 3. Preparar filtros para base de datos
+    // 3. Preparar filtros para base de datos (sin paginación inicial si hay filtro de prioridad)
     const filters = {
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit: priority ? 1000 : parseInt(limit), // Si hay filtro de prioridad, traer más para filtrar después
+      offset: priority ? 0 : parseInt(offset),  // Si hay filtro de prioridad, empezar desde 0
       alertType
     };
 
     // 4. Obtener alertas desde base de datos
     const alerts = await databaseService.getStockAlerts(userId, filters);
     
-    // 5. Obtener conteo por tipo de alerta
-    const alertCounts = await databaseService.getAlertsCount(userId);
-
-    // 6. Clasificar alertas por prioridad
+    // 5. Clasificar alertas por prioridad ANTES de filtrar
     const classifiedAlerts = classifyAlerts(alerts);
-
-    // 7. Preparar respuesta
+    
+    // 6. Filtrar por prioridad si se especifica
+    let filteredAlerts = classifiedAlerts;
+    if (priority && priority !== 'all') {
+      filteredAlerts = classifiedAlerts.filter(alert => alert.priority === priority);
+    }
+    
+    // 7. Aplicar paginación después de filtrar por prioridad
+    const startIndex = parseInt(offset);
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedAlerts = filteredAlerts.slice(startIndex, endIndex);
+    
+    // 9. Preparar respuesta
     const response = {
       success: true,
-      alerts: classifiedAlerts,
+      alerts: paginatedAlerts,
       counts: alertCounts,
       summary: {
-        total: alerts.length,
+        total: filteredAlerts.length,
         critical: classifiedAlerts.filter(a => a.priority === 'critical').length,
         warning: classifiedAlerts.filter(a => a.priority === 'warning').length,
         info: classifiedAlerts.filter(a => a.priority === 'info').length
@@ -110,7 +120,7 @@ async function getAlerts(req, res) {
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
-        hasMore: alerts.length === parseInt(limit) // Si llegamos al límite, probablemente hay más
+        hasMore: endIndex < filteredAlerts.length
       }
     };
 
