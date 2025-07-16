@@ -110,6 +110,9 @@ async function getAlerts(req, res) {
     const endIndex = startIndex + parseInt(limit);
     const paginatedAlerts = filteredAlerts.slice(startIndex, endIndex);
     
+    // 8. Obtener conteo por tipo de alerta
+    const alertCounts = await databaseService.getAlertsCount(userId);
+    
     // 9. Preparar respuesta
     const response = {
       success: true,
