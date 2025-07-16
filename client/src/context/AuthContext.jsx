@@ -69,6 +69,13 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error('Error verificando autenticación:', error)
+      
+      // Si es error 401, redirigir a login en lugar de mostrar error
+      if (error.message.includes('401')) {
+        window.location.href = '/auth/login'
+        return
+      }
+      
       dispatch({ type: 'AUTH_ERROR', payload: error.message })
     }
   }
