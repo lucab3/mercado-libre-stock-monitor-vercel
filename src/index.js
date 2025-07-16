@@ -58,7 +58,7 @@ app.use((req, res, next) => {
 // Middleware de seguridad para validar sesiones
 app.use('/api/', async (req, res, next) => {
   // Solo aplicar a rutas que requieren autenticación
-  const protectedRoutes = ['/api/monitor/', '/api/products/', '/api/rate-limit/'];
+  const protectedRoutes = ['/api/monitor/', '/api/products/', '/api/rate-limit/', '/api/stock-alerts'];
   const isProtectedRoute = protectedRoutes.some(route => req.path.startsWith(route));
 
   if (isProtectedRoute && auth.isAuthenticated()) {
