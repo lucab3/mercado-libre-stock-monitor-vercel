@@ -6,13 +6,28 @@ const databaseService = require('../services/databaseService');
 const sessionManager = require('../utils/sessionManager');
 const logger = require('../utils/logger');
 
+// Parse cookies manually since we don't have middleware
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (cookieHeader) {
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      if (name && value) {
+        cookies[name] = decodeURIComponent(value);
+      }
+    });
+  }
+  return cookies;
+}
+
 /**
  * Obtener configuración de alertas del usuario
  */
 async function getAlertSettings(req, res) {
   try {
     // 1. Validar autenticación
-    const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
+    const cookies = parseCookies(req.headers.cookie);
+    const cookieId = cookies['ml-session'];
     if (!cookieId) {
       return res.status(401).json({
         success: false,
@@ -59,7 +74,8 @@ async function getAlertSettings(req, res) {
 async function updateAlertSettings(req, res) {
   try {
     // 1. Validar autenticación
-    const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
+    const cookies = parseCookies(req.headers.cookie);
+    const cookieId = cookies['ml-session'];
     if (!cookieId) {
       return res.status(401).json({
         success: false,
