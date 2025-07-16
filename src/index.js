@@ -62,11 +62,15 @@ app.use('/api/', async (req, res, next) => {
   const isProtectedRoute = protectedRoutes.some(route => req.path.startsWith(route));
 
   if (isProtectedRoute) {
+    logger.info(`🔍 SERVERLESS AUTH CHECK: ${req.path}`);
+    
     try {
       // Obtener session ID de la cookie
       const sessionCookie = req.sessionCookie;
+      logger.info(`🍪 COOKIE: ${sessionCookie ? 'Presente' : 'Ausente'}`);
       
       if (!sessionCookie) {
+        logger.error('🚨 SERVERLESS: No se encontró cookie de sesión');
         return res.status(401).json({ 
           error: 'No autenticado',
           message: 'No se encontró sesión. Por favor, inicia sesión.',
@@ -75,6 +79,7 @@ app.use('/api/', async (req, res, next) => {
       }
       
       // Validar sesión directamente desde la base de datos
+      logger.info(`🔍 VALIDANDO SESIÓN: ${sessionCookie.substring(0, 8)}...`);
       const session = await databaseService.getUserSession(sessionCookie);
       
       if (!session || !session.data) {
@@ -99,10 +104,11 @@ app.use('/api/', async (req, res, next) => {
       auth.setCurrentCookieId(sessionCookie);
       auth.currentSessionId = session.data.user_id;
       
-      logger.debug(`✅ SERVERLESS: Sesión válida para usuario ${session.data.user_id}`);
+      logger.info(`✅ SERVERLESS: Sesión válida para usuario ${session.data.user_id}`);
       
     } catch (error) {
-      logger.error(`Error en validación de sesión serverless: ${error.message}`);
+      logger.error(`❌ ERROR en validación de sesión serverless: ${error.message}`);
+      logger.error(`❌ STACK: ${error.stack}`);
       
       // Limpiar cookie del navegador
       res.clearCookie('ml-session', {
