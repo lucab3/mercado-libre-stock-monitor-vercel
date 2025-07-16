@@ -2311,7 +2311,8 @@ app.get('/api/products', async (req, res) => {
     // La autenticación ya fue validada por el middleware
 
     const products = require('./api/products');
-    await products.ensureAuthentication();
+    // Usar el userId que estableció el middleware
+    await products.ensureAuthentication(auth.currentSessionId);
     
     const productIds = await products.getAllProducts();
     const productDetails = [];
@@ -2377,7 +2378,8 @@ app.post('/api/monitor/sync', async (req, res) => {
     logger.info('🔄 Iniciando sincronización desde React frontend');
     
     const products = require('./api/products');
-    await products.ensureAuthentication();
+    // Usar el userId que estableció el middleware
+    await products.ensureAuthentication(auth.currentSessionId);
     
     const result = await stockMonitor.forceSync();
     
