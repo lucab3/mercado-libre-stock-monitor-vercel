@@ -8,12 +8,32 @@
         "maxLambdaSize": "10mb",
         "maxDuration": 15
       }
+    },
+    {
+      "src": "src/api/*.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "10mb",
+        "maxDuration": 15
+      }
     }
   ],
   "routes": [
     {
       "src": "/health",
       "dest": "src/index.js"
+    },
+    {
+      "src": "/api/alerts",
+      "dest": "src/api/alerts.js"
+    },
+    {
+      "src": "/api/alert-settings",
+      "dest": "src/api/alert-settings.js"
+    },
+    {
+      "src": "/api/cleanup-webhooks",
+      "dest": "src/api/cleanup-webhooks.js"
     },
     {
       "src": "/api/(.*)",
