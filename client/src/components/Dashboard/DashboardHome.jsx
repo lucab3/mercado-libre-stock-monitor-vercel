@@ -9,6 +9,7 @@ import MonitoringControls from './MonitoringControls'
 function DashboardHome() {
   const { products, alerts, stats, loading, actions } = useAppContext()
   const [monitorStatus, setMonitorStatus] = useState(null)
+  const [dataLoaded, setDataLoaded] = useState(false)
 
   useEffect(() => {
     loadMonitorStatus()
@@ -59,10 +60,60 @@ function DashboardHome() {
     }
   }
 
+  const handleLoadData = async () => {
+    try {
+      actions.setLoading('products', true)
+      actions.setLoading('alerts', true)
+      actions.setLoading('stats', true)
+
+      const [productsResponse, alertsResponse, statsResponse] = await Promise.all([
+        apiService.getProducts(),
+        apiService.getAlerts(),
+        apiService.getProductStats()
+      ])
+
+      actions.setProducts(productsResponse.products || [])
+      actions.setAlerts(alertsResponse.alerts || [])
+      actions.setStats(statsResponse)
+      setDataLoaded(true)
+    } catch (error) {
+      console.error('Error cargando datos:', error)
+      actions.setError('general', error.message)
+    } finally {
+      actions.setLoading('products', false)
+      actions.setLoading('alerts', false)
+      actions.setLoading('stats', false)
+    }
+  }
+
   const recentAlerts = alerts.slice(0, 5)
 
   return (
     <div>
+      {!dataLoaded && (
+        <div className="alert alert-info mb-4">
+          <h5>¡Bienvenido al Dashboard!</h5>
+          <p className="mb-3">Carga tus datos para comenzar a monitorear tus productos.</p>
+          <button 
+            className="btn btn-primary"
+            onClick={handleLoadData}
+            disabled={loading.products || loading.alerts || loading.stats}
+          >
+            {loading.products || loading.alerts || loading.stats ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Cargando datos...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-download me-2"></i>
+                Cargar Datos del Dashboard
+              </>
+            )}
+          </button>
+        </div>
+      )}
+      
       <MonitoringControls 
         monitorStatus={monitorStatus}
         onStart={handleStartMonitoring}

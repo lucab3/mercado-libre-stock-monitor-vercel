@@ -14,12 +14,13 @@ function DashboardLayout() {
   const { actions, loading } = useAppContext()
   const { user, isAuthenticated } = useAuthContext()
 
-  useEffect(() => {
-    // Solo cargar datos si el usuario está autenticado
-    if (isAuthenticated && user) {
-      loadInitialData()
-    }
-  }, [isAuthenticated, user])
+  // DESHABILITADO: Carga inicial de datos causa problemas de sesión en serverless
+  // useEffect(() => {
+  //   // Solo cargar datos si el usuario está autenticado
+  //   if (isAuthenticated && user) {
+  //     loadInitialData()
+  //   }
+  // }, [isAuthenticated, user])
 
   const loadInitialData = async () => {
     try {
