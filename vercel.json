@@ -2,6 +2,13 @@
   "version": 2,
   "builds": [
     {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
       "src": "src/index.js",
       "use": "@vercel/node",
       "config": {
@@ -42,6 +49,26 @@
     {
       "src": "/auth/(.*)",
       "dest": "src/index.js"
+    },
+    {
+      "src": "/login",
+      "dest": "client/dist/index.html"
+    },
+    {
+      "src": "/dashboard(.*)",
+      "dest": "client/dist/index.html"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "client/dist/assets/$1"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "client/dist/favicon.ico"
+    },
+    {
+      "src": "/",
+      "dest": "client/dist/index.html"
     },
     {
       "src": "/(.*)",

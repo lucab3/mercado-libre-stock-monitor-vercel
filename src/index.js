@@ -2281,6 +2281,136 @@ app.use('/api/', (req, res, next) => {
   next();
 });
 
+// ========== ENDPOINTS PARA REACT FRONTEND ==========
+
+// GET /api/products - Obtener todos los productos
+app.get('/api/products', async (req, res) => {
+  try {
+    if (!auth.isAuthenticated()) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const products = require('./api/products');
+    await products.ensureAuthentication();
+    
+    const productIds = await products.getAllProducts();
+    const productDetails = [];
+    
+    // Obtener detalles de los primeros 50 productos para no sobrecargar
+    const limitedIds = productIds.results.slice(0, 50);
+    
+    for (const id of limitedIds) {
+      try {
+        const productData = await products.getProduct(id);
+        productDetails.push({
+          id: productData.id,
+          title: productData.title,
+          seller_sku: productData.seller_sku,
+          available_quantity: productData.available_quantity,
+          status: productData.status,
+          permalink: productData.permalink,
+          thumbnail: productData.pictures?.[0]?.url || null,
+          updated_at: productData.last_updated
+        });
+      } catch (error) {
+        logger.warn(`Error obteniendo producto ${id}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      products: productDetails,
+      total: productIds.results.length,
+      showing: productDetails.length
+    });
+
+  } catch (error) {
+    logger.error(`Error en /api/products: ${error.message}`);
+    res.status(500).json({ error: 'Error obteniendo productos' });
+  }
+});
+
+// GET /api/products/stats - Estadísticas de productos
+app.get('/api/products/stats', async (req, res) => {
+  try {
+    if (!auth.isAuthenticated()) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const monitorStatus = stockMonitor.getStatus();
+    
+    res.json({
+      totalProducts: monitorStatus.totalProducts || 0,
+      lowStockProducts: monitorStatus.lowStockProducts?.length || 0,
+      lastSync: monitorStatus.lastSyncTime,
+      monitoring: monitorStatus.active
+    });
+
+  } catch (error) {
+    logger.error(`Error en /api/products/stats: ${error.message}`);
+    res.status(500).json({ error: 'Error obteniendo estadísticas' });
+  }
+});
+
+// POST /api/monitor/sync - Sincronizar productos
+app.post('/api/monitor/sync', async (req, res) => {
+  try {
+    if (!auth.isAuthenticated()) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    logger.info('🔄 Iniciando sincronización desde React frontend');
+    
+    const products = require('./api/products');
+    await products.ensureAuthentication();
+    
+    const result = await stockMonitor.forceSync();
+    
+    res.json({
+      success: true,
+      message: 'Sincronización completada',
+      result: {
+        totalProducts: result.totalProducts,
+        lowStockProducts: result.lowStockProducts,
+        timestamp: result.timestamp
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Error en /api/monitor/sync: ${error.message}`);
+    res.status(500).json({ error: 'Error en sincronización' });
+  }
+});
+
+// POST /api/auth/logout - Cerrar sesión (formato JSON para React)
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const currentUserId = auth.currentSessionId;
+    if (currentUserId) {
+      logger.info(`🚪 Cerrando sesión para usuario: ${currentUserId} (desde React)`);
+    }
+    
+    auth.logout();
+    stockMonitor.stop();
+    
+    // Limpiar cookie del navegador
+    res.clearCookie('ml-session', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/'
+    });
+
+    res.json({
+      success: true,
+      message: 'Sesión cerrada correctamente'
+    });
+
+  } catch (error) {
+    logger.error(`Error en /api/auth/logout: ${error.message}`);
+    res.status(500).json({ error: 'Error cerrando sesión' });
+  }
+});
+
 // Solo iniciar el servidor si no estamos en Vercel
 if (!process.env.VERCEL) {
   try {
