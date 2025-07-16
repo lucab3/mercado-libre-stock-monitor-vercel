@@ -378,7 +378,7 @@ async function handleAlertSettings(req, res) {
 }
 
 // Export por defecto para Vercel
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Habilitar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
@@ -389,14 +389,4 @@ export default async function handler(req, res) {
   }
 
   return await handleAlerts(req, res);
-}
-
-// También exportar funciones individuales para uso interno
-module.exports = {
-  handleAlerts,
-  handleAlertSettings,
-  getAlerts,
-  markAlertsAsRead,
-  getAlertSettings,
-  updateAlertSettings
 };
