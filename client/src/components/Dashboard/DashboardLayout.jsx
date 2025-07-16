@@ -12,11 +12,14 @@ import SettingsSection from './SettingsSection'
 
 function DashboardLayout() {
   const { actions, loading } = useAppContext()
-  const { user } = useAuthContext()
+  const { user, isAuthenticated } = useAuthContext()
 
   useEffect(() => {
-    loadInitialData()
-  }, [])
+    // Solo cargar datos si el usuario está autenticado
+    if (isAuthenticated && user) {
+      loadInitialData()
+    }
+  }, [isAuthenticated, user])
 
   const loadInitialData = async () => {
     try {

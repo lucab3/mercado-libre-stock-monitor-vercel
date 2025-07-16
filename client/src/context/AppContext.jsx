@@ -93,17 +93,17 @@ function appReducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
 
-  // Auto-refresh setup
-  useEffect(() => {
-    if (state.settings.autoRefresh) {
-      const interval = setInterval(() => {
-        // Refresh data silently
-        refreshData()
-      }, 30000) // 30 seconds
+  // Auto-refresh setup - DESHABILITADO temporalmente para evitar problemas de sesión
+  // useEffect(() => {
+  //   if (state.settings.autoRefresh) {
+  //     const interval = setInterval(() => {
+  //       // Refresh data silently
+  //       refreshData()
+  //     }, 30000) // 30 seconds
 
-      return () => clearInterval(interval)
-    }
-  }, [state.settings.autoRefresh])
+  //     return () => clearInterval(interval)
+  //   }
+  // }, [state.settings.autoRefresh])
 
   const setLoading = (key, value) => {
     dispatch({ type: 'SET_LOADING', payload: { key, value } })
