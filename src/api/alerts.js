@@ -3,9 +3,9 @@
  * Permite obtener, filtrar y configurar alertas
  */
 
-const databaseService = require('../src/services/databaseService');
-const sessionManager = require('../src/utils/sessionManager');
-const logger = require('../src/utils/logger');
+const databaseService = require('../services/databaseService');
+const sessionManager = require('../utils/sessionManager');
+const logger = require('../utils/logger');
 
 /**
  * Obtener alertas con filtros y paginación

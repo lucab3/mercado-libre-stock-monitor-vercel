@@ -1938,7 +1938,7 @@ app.get('/api/products/:id/stock', async (req, res) => {
 
 // Sincronización simple y rápida (nuevo sistema)
 app.get('/api/sync-next', async (req, res) => {
-  const handleSyncNext = require('../api/sync-next');
+  const handleSyncNext = require('./api/sync-next');
   await handleSyncNext(req, res);
 });
 

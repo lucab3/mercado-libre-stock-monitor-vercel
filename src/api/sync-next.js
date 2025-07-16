@@ -3,10 +3,10 @@
  * Una llamada pequeña, rápida y simple que guarda productos nuevos
  */
 
-const products = require('../src/api/products');
-const logger = require('../src/utils/logger');
-const sessionManager = require('../src/utils/sessionManager');
-const databaseService = require('../src/services/databaseService');
+const products = require('./products');
+const logger = require('../utils/logger');
+const sessionManager = require('../utils/sessionManager');
+const databaseService = require('../services/databaseService');
 
 // Función auxiliar para extraer SKU de múltiples fuentes
 function extractSKUFromProduct(productData) {

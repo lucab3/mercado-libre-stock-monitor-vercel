@@ -4,9 +4,9 @@
  * Configurar en vercel.json: "crons": [{"path": "/api/check-stock", "schedule": "*/15 * * * *"}]
  */
 
-const auth = require('../src/api/auth');
-const stockMonitor = require('../src/services/stockMonitor');
-const logger = require('../src/utils/logger');
+const auth = require('./auth');
+const stockMonitor = require('../services/stockMonitor');
+const logger = require('../utils/logger');
 
 module.exports = async (req, res) => {
   try {

@@ -2,9 +2,9 @@
  * Endpoint para limpiar webhooks antiguos y optimizar el procesamiento
  */
 
-const databaseService = require('../src/services/databaseService');
-const sessionManager = require('../src/utils/sessionManager');
-const logger = require('../src/utils/logger');
+const databaseService = require('../services/databaseService');
+const sessionManager = require('../utils/sessionManager');
+const logger = require('../utils/logger');
 
 /**
  * Limpiar webhooks antiguos
