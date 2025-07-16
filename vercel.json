@@ -52,15 +52,15 @@
     },
     {
       "src": "/login",
-      "dest": "client/dist/index.html"
+      "dest": "/index.html"
     },
     {
       "src": "/dashboard(.*)",
-      "dest": "client/dist/index.html"
+      "dest": "/index.html"
     },
     {
       "src": "/assets/(.*)",
-      "dest": "client/dist/assets/$1"
+      "dest": "/assets/$1"
     },
     {
       "src": "/favicon.ico",
@@ -72,7 +72,7 @@
     },
     {
       "src": "/",
-      "dest": "client/dist/index.html"
+      "dest": "/index.html"
     },
     {
       "src": "/(.*)",
