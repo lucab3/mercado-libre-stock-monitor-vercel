@@ -113,9 +113,85 @@ function createApp() {
   // Rutas de monitoreo (requieren auth)
   app.use('/api/monitor', monitorRoutes);
   
-  // TODO: Agregar más rutas modulares
-  // app.use('/api/webhooks', webhookRoutes);
-  // app.use('/health', healthRoutes);
+  // ========== RUTAS CRÍTICAS TEMPORALES ==========
+  // TODO: Migrar a controladores dedicados
+  
+  const webhookProcessor = require('./services/webhookProcessor');
+  const databaseService = require('./services/databaseService');
+  const stockMonitor = require('./services/stockMonitor');
+  
+  // Webhook de ML (crítico)
+  app.post('/api/webhooks/ml', async (req, res) => {
+    try {
+      logger.info('🔔 Webhook ML recibido');
+      const result = await webhookProcessor.processWebhook(req.body);
+      
+      if (result.success) {
+        res.status(200).json({ status: 'processed', result });
+      } else {
+        res.status(400).json({ status: 'error', error: result.error });
+      }
+    } catch (error) {
+      logger.error(`❌ Error procesando webhook: ${error.message}`);
+      res.status(500).json({ status: 'error', error: error.message });
+    }
+  });
+  
+  // API auth status (para compatibilidad)
+  app.get('/api/auth/status', async (req, res) => {
+    try {
+      const sessionCookie = req.cookies['ml-session'];
+      
+      if (!sessionCookie) {
+        return res.json({ authenticated: false, needsAuth: true });
+      }
+      
+      const session = await databaseService.getUserSession(sessionCookie);
+      
+      if (session) {
+        res.json({
+          authenticated: true,
+          user: { id: session.userId },
+          session: { createdAt: session.createdAt }
+        });
+      } else {
+        res.json({ authenticated: false, needsAuth: true });
+      }
+      
+    } catch (error) {
+      logger.error(`Error en auth status: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // API sync-next (usado por el monitoreo)
+  app.get('/api/sync-next', async (req, res) => {
+    try {
+      const sessionCookie = req.cookies['ml-session'];
+      
+      if (!sessionCookie) {
+        return res.status(401).json({ error: 'No autenticado' });
+      }
+      
+      const session = await databaseService.getUserSession(sessionCookie);
+      if (!session) {
+        return res.status(401).json({ error: 'Sesión inválida' });
+      }
+      
+      // Ejecutar sync
+      const result = await stockMonitor.syncAllProducts();
+      
+      if (result.success) {
+        await databaseService.saveSyncControl(session.userId, result.totalProducts);
+      }
+      
+      res.json(result);
+      
+    } catch (error) {
+      logger.error(`Error en sync-next: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
   
   // ========== HEALTH CHECK BÁSICO ==========
   
