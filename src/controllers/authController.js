@@ -89,12 +89,14 @@ class AuthController {
       logger.info(`🔄 Procesando callback con código: ${code.substring(0, 10)}...`);
       
       // Intercambiar código por tokens
-      const tokens = await auth.getTokensFromCode(code);
+      const tokenResponse = await auth.getTokensFromCode(code);
       
-      if (!tokens || !tokens.access_token) {
+      if (!tokenResponse || !tokenResponse.tokens || !tokenResponse.tokens.access_token) {
         logger.error('❌ No se pudieron obtener tokens válidos');
         return res.redirect('/acceso-denegado');
       }
+      
+      const tokens = tokenResponse.tokens;
       
       // Obtener información del usuario
       const userInfo = await auth.getUserInfoWithToken(tokens.access_token);
