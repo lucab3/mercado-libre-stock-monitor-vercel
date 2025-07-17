@@ -14,8 +14,12 @@ function ProductsSection() {
       filtered = filtered.filter(p => p.category_id === productFilters.category)
     }
     
-    // Filtro por stock
-    if (productFilters.stockFilter === 'low') {
+    // Filtro por estado
+    if (productFilters.stockFilter === 'active') {
+      filtered = filtered.filter(p => p.status === 'active')
+    } else if (productFilters.stockFilter === 'paused') {
+      filtered = filtered.filter(p => p.status === 'paused')
+    } else if (productFilters.stockFilter === 'low') {
       filtered = filtered.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
     } else if (productFilters.stockFilter === 'out') {
       filtered = filtered.filter(p => p.available_quantity === 0)
@@ -92,13 +96,15 @@ function ProductsSection() {
             </div>
             
             <div className="col-md-3">
-              <label className="form-label">Filtrar por stock:</label>
+              <label className="form-label">Filtrar por estado:</label>
               <select 
                 className="form-select"
                 value={productFilters.stockFilter}
                 onChange={(e) => handleFilterChange('stockFilter', e.target.value)}
               >
                 <option value="all">Todos</option>
+                <option value="active">Activos</option>
+                <option value="paused">Pausados</option>
                 <option value="low">Stock bajo (≤5)</option>
                 <option value="out">Sin stock</option>
               </select>

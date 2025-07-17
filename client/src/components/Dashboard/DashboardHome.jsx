@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useAppContext } from '../../context/AppContext'
 import { apiService } from '../../services/api'
 import StatsCards from './StatsCards'
@@ -13,6 +13,12 @@ function DashboardHome() {
   const [syncProgress, setSyncProgress] = useState(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage] = useState(10)
+  const [dashboardFilters, setDashboardFilters] = useState({
+    stockLevel: 'all', // all, 5, 4, 3, 2, 1, 0
+    category: 'all',
+    sort: 'default', // default, stock-asc, stock-desc
+    search: ''
+  })
   
   // Considerar datos cargados si hay productos O alertas
   const dataLoaded = products.length > 0 || alerts.length > 0
@@ -121,8 +127,57 @@ function DashboardHome() {
 
   const recentAlerts = alerts.slice(0, 5)
   
-  // Filtrar productos con bajo stock (≤5 unidades) - incluye productos con stock = 0
-  const lowStockProducts = products.filter(p => p.available_quantity <= 5)
+  // Filtrar productos con bajo stock aplicando filtros del dashboard
+  const lowStockProducts = useMemo(() => {
+    let filtered = products.filter(p => p.available_quantity <= 5)
+    
+    // Filtro por nivel de stock específico
+    if (dashboardFilters.stockLevel !== 'all') {
+      const stockLevel = parseInt(dashboardFilters.stockLevel)
+      filtered = filtered.filter(p => p.available_quantity === stockLevel)
+    }
+    
+    // Filtro por categoría
+    if (dashboardFilters.category !== 'all') {
+      filtered = filtered.filter(p => p.category_id === dashboardFilters.category)
+    }
+    
+    // Filtro por búsqueda
+    if (dashboardFilters.search) {
+      const searchLower = dashboardFilters.search.toLowerCase()
+      filtered = filtered.filter(p => 
+        p.title.toLowerCase().includes(searchLower) ||
+        p.seller_sku?.toLowerCase().includes(searchLower) ||
+        p.id.includes(searchLower)
+      )
+    }
+    
+    // Ordenamiento
+    switch (dashboardFilters.sort) {
+      case 'stock-asc':
+        filtered.sort((a, b) => a.available_quantity - b.available_quantity)
+        break
+      case 'stock-desc':
+        filtered.sort((a, b) => b.available_quantity - a.available_quantity)
+        break
+      default:
+        // Mantener orden original
+        break
+    }
+    
+    return filtered
+  }, [products, dashboardFilters])
+  
+  // Obtener categorías únicas para el dropdown
+  const availableCategories = useMemo(() => {
+    const categories = new Set()
+    products.forEach(product => {
+      if (product.category_id) {
+        categories.add(product.category_id)
+      }
+    })
+    return Array.from(categories).sort()
+  }, [products])
   
   // Calcular paginación
   const startIndex = currentPage * itemsPerPage
@@ -132,6 +187,27 @@ function DashboardHome() {
   
   const handlePageChange = (page) => {
     setCurrentPage(page)
+  }
+
+  const handleFilterChange = (filterType, value) => {
+    setDashboardFilters(prev => ({ ...prev, [filterType]: value }))
+    setCurrentPage(0) // Resetear a la primera página cuando cambie el filtro
+  }
+
+  // Función para generar páginas visibles (máximo 5 páginas)
+  const getVisiblePages = () => {
+    const maxVisiblePages = 5
+    const halfVisible = Math.floor(maxVisiblePages / 2)
+    
+    let startPage = Math.max(0, currentPage - halfVisible)
+    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1)
+    
+    // Ajustar si estamos cerca del final
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(0, endPage - maxVisiblePages + 1)
+    }
+    
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i)
   }
 
   return (
@@ -186,6 +262,64 @@ function DashboardHome() {
               </div>
             </div>
             <div className="card-body">
+              {/* Filtros para productos con bajo stock */}
+              <div className="row g-3 mb-3">
+                <div className="col-md-3">
+                  <label className="form-label">Stock específico:</label>
+                  <select 
+                    className="form-select form-select-sm"
+                    value={dashboardFilters.stockLevel}
+                    onChange={(e) => handleFilterChange('stockLevel', e.target.value)}
+                  >
+                    <option value="all">Todos (≤5)</option>
+                    <option value="5">Stock = 5</option>
+                    <option value="4">Stock = 4</option>
+                    <option value="3">Stock = 3</option>
+                    <option value="2">Stock = 2</option>
+                    <option value="1">Stock = 1</option>
+                    <option value="0">Sin stock</option>
+                  </select>
+                </div>
+                
+                <div className="col-md-3">
+                  <label className="form-label">Categoría:</label>
+                  <select 
+                    className="form-select form-select-sm"
+                    value={dashboardFilters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
+                  >
+                    <option value="all">Todas</option>
+                    {availableCategories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="col-md-3">
+                  <label className="form-label">Ordenar por:</label>
+                  <select 
+                    className="form-select form-select-sm"
+                    value={dashboardFilters.sort}
+                    onChange={(e) => handleFilterChange('sort', e.target.value)}
+                  >
+                    <option value="default">Orden original</option>
+                    <option value="stock-asc">Stock: menor a mayor</option>
+                    <option value="stock-desc">Stock: mayor a menor</option>
+                  </select>
+                </div>
+                
+                <div className="col-md-3">
+                  <label className="form-label">Buscar:</label>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    placeholder="Nombre, SKU o ID..."
+                    value={dashboardFilters.search}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                  />
+                </div>
+              </div>
+              
               <ProductsTable products={paginatedLowStockProducts} loading={loading.products} />
               
               {/* Paginación */}
@@ -208,16 +342,49 @@ function DashboardHome() {
                         </button>
                       </li>
                       
-                      {Array.from({ length: totalPages }, (_, i) => (
-                        <li key={i} className={`page-item ${currentPage === i ? 'active' : ''}`}>
+                      {/* Primera página si no está visible */}
+                      {getVisiblePages()[0] > 0 && (
+                        <>
+                          <li className="page-item">
+                            <button className="page-link" onClick={() => handlePageChange(0)}>
+                              1
+                            </button>
+                          </li>
+                          {getVisiblePages()[0] > 1 && (
+                            <li className="page-item disabled">
+                              <span className="page-link">...</span>
+                            </li>
+                          )}
+                        </>
+                      )}
+                      
+                      {/* Páginas visibles */}
+                      {getVisiblePages().map((page) => (
+                        <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
                           <button 
                             className="page-link" 
-                            onClick={() => handlePageChange(i)}
+                            onClick={() => handlePageChange(page)}
                           >
-                            {i + 1}
+                            {page + 1}
                           </button>
                         </li>
                       ))}
+                      
+                      {/* Última página si no está visible */}
+                      {getVisiblePages()[getVisiblePages().length - 1] < totalPages - 1 && (
+                        <>
+                          {getVisiblePages()[getVisiblePages().length - 1] < totalPages - 2 && (
+                            <li className="page-item disabled">
+                              <span className="page-link">...</span>
+                            </li>
+                          )}
+                          <li className="page-item">
+                            <button className="page-link" onClick={() => handlePageChange(totalPages - 1)}>
+                              {totalPages}
+                            </button>
+                          </li>
+                        </>
+                      )}
                       
                       <li className={`page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}`}>
                         <button 

@@ -32,6 +32,7 @@ async function getProducts(req, res) {
         status: product.status,
         permalink: product.permalink,
         productUrl: productUrl, // URL preferida para links
+        category_id: product.category_id, // Agregar category_id para filtros
         thumbnail: null, // No tenemos thumbnails en BD
         updated_at: product.updated_at || product.last_webhook_sync
       };
