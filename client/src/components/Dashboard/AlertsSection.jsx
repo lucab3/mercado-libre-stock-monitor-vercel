@@ -3,13 +3,7 @@ import { useAppContext } from '../../context/AppContext'
 import { apiService } from '../../services/api'
 
 function AlertsSection() {
-  const { alerts, alertFilters, loading, actions } = useAppContext()
-  const [alertCounts, setAlertCounts] = React.useState({
-    total: 0,
-    critical: 0,
-    warning: 0,
-    info: 0
-  })
+  const { alerts, alertFilters, alertCounts, loading, actions } = useAppContext()
 
   useEffect(() => {
     loadAlerts()
@@ -21,9 +15,9 @@ function AlertsSection() {
       const response = await apiService.getAlerts(alertFilters)
       actions.setAlerts(response.alerts || [])
       
-      // Actualizar contadores desde la respuesta del backend
+      // Actualizar contadores globales desde la respuesta del backend
       if (response.summary) {
-        setAlertCounts({
+        actions.setAlertCounts({
           total: response.summary.total || 0,
           critical: response.summary.critical || 0,
           warning: response.summary.warning || 0,

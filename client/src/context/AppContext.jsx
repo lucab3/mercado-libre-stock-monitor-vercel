@@ -8,6 +8,14 @@ const initialState = {
   alerts: [],
   stats: null,
   
+  // Contadores globales de alertas (independientes del filtro)
+  alertCounts: {
+    total: 0,
+    critical: 0,
+    warning: 0,
+    info: 0
+  },
+  
   // Estados de carga
   loading: {
     products: false,
@@ -51,6 +59,9 @@ function appReducer(state, action) {
     // Alertas
     case 'SET_ALERTS':
       return { ...state, alerts: action.payload }
+    
+    case 'SET_ALERT_COUNTS':
+      return { ...state, alertCounts: action.payload }
     
     case 'SET_ALERT_FILTERS':
       return {
@@ -117,6 +128,10 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_ALERTS', payload: alerts })
   }
 
+  const setAlertCounts = (counts) => {
+    dispatch({ type: 'SET_ALERT_COUNTS', payload: counts })
+  }
+
   const setAlertFilters = (filters) => {
     dispatch({ type: 'SET_ALERT_FILTERS', payload: filters })
   }
@@ -163,6 +178,7 @@ export function AppProvider({ children }) {
       setLoading,
       setProducts,
       setAlerts,
+      setAlertCounts,
       setAlertFilters,
       setStats,
       setCurrentSection,

@@ -129,7 +129,7 @@ function DashboardHome() {
         <div className="col-md-8">
           <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center">
-              <h5 className="card-title mb-0">Productos</h5>
+              <h5 className="card-title mb-0">Productos con bajo stock</h5>
               <span className="badge bg-secondary">{products.length}</span>
             </div>
             <div className="card-body">

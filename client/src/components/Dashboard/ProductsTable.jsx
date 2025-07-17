@@ -59,7 +59,18 @@ function ProductsTable({ products, loading }) {
                     />
                   )}
                   <div>
-                    <div className="fw-semibold">{product.title}</div>
+                    <div className="fw-semibold">
+                      <a 
+                        href={`https://articulo.mercadolibre.com.ar/${product.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-decoration-none text-primary"
+                        title="Ver producto en MercadoLibre"
+                      >
+                        {product.title}
+                        <i className="bi bi-box-arrow-up-right ms-1 small"></i>
+                      </a>
+                    </div>
                     <small className="text-muted">{product.id}</small>
                   </div>
                 </div>

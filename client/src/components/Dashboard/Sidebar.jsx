@@ -3,9 +3,9 @@ import { NavLink } from 'react-router-dom'
 import { useAppContext } from '../../context/AppContext'
 
 function Sidebar() {
-  const { alerts, stats } = useAppContext()
+  const { alertCounts, stats } = useAppContext()
   
-  const criticalAlertsCount = alerts.filter(alert => alert.priority === 'critical').length
+  const criticalAlertsCount = alertCounts.critical
   const totalProducts = stats?.totalProducts || 0
 
   return (
@@ -26,7 +26,7 @@ function Sidebar() {
               end
             >
               <i className="bi bi-house me-2"></i>
-              Dashboard
+              Productos con bajo stock
             </NavLink>
           </li>
           
@@ -36,7 +36,7 @@ function Sidebar() {
               to="/dashboard/products"
             >
               <i className="bi bi-box me-2"></i>
-              Productos
+              Todos los productos
               <span className="badge bg-secondary ms-2">{totalProducts}</span>
             </NavLink>
           </li>

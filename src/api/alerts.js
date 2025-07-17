@@ -43,13 +43,18 @@ async function getAlerts(req, res) {
       alertType
     };
 
-    // 4. Obtener alertas desde base de datos
-    const alerts = await databaseService.getStockAlerts(userId, filters);
+    // 4. SIEMPRE obtener todas las alertas para calcular contadores correctos
+    const allAlertsFilters = { limit: 1000, offset: 0, alertType };
+    const allAlerts = await databaseService.getStockAlerts(userId, allAlertsFilters);
     
-    // 5. Clasificar alertas por prioridad ANTES de filtrar
+    // 5. Clasificar TODAS las alertas por prioridad para contadores
+    const allClassifiedAlerts = classifyAlerts(allAlerts);
+    
+    // 6. Obtener alertas con filtros específicos para mostrar
+    const alerts = await databaseService.getStockAlerts(userId, filters);
     const classifiedAlerts = classifyAlerts(alerts);
     
-    // 6. Filtrar por prioridad si se especifica
+    // 7. Filtrar por prioridad si se especifica
     let filteredAlerts = classifiedAlerts;
     if (hasValidPriorityFilter) {
       filteredAlerts = classifiedAlerts.filter(alert => alert.priority === priority);
@@ -72,10 +77,10 @@ async function getAlerts(req, res) {
       alerts: paginatedAlerts,
       counts: alertCounts,
       summary: {
-        total: classifiedAlerts.length, // Total real de todas las alertas
-        critical: classifiedAlerts.filter(a => a.priority === 'critical').length,
-        warning: classifiedAlerts.filter(a => a.priority === 'warning').length,
-        info: classifiedAlerts.filter(a => a.priority === 'informative').length
+        total: allClassifiedAlerts.length, // Total real de todas las alertas
+        critical: allClassifiedAlerts.filter(a => a.priority === 'critical').length,
+        warning: allClassifiedAlerts.filter(a => a.priority === 'warning').length,
+        info: allClassifiedAlerts.filter(a => a.priority === 'informative').length
       },
       pagination: {
         limit: parseInt(limit),
