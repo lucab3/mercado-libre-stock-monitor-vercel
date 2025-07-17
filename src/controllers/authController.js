@@ -12,14 +12,14 @@ const path = require('path');
 class AuthController {
   
   /**
-   * Mostrar página de login
+   * Mostrar página de login (redirigir a React)
    */
   async showLogin(req, res) {
     try {
-      const loginPath = path.join(__dirname, '../public/login.html');
-      res.sendFile(loginPath);
+      // Redirigir al React frontend en lugar del HTML viejo
+      res.redirect('/login');
     } catch (error) {
-      logger.error(`Error mostrando login: ${error.message}`);
+      logger.error(`Error redirigiendo a login: ${error.message}`);
       res.status(500).send('Error cargando página de login');
     }
   }
