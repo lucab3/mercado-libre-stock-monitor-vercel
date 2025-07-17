@@ -1,10 +1,7 @@
 /**
  * Endpoint serverless para obtener información de categorías
- * Usa la misma lógica que funcionaba en la versión HTML
+ * Versión simplificada para testing
  */
-
-const { withAuth } = require('../src/middleware/serverlessAuth');
-const logger = require('../src/utils/logger');
 
 // Mapeo estático como fallback
 const categoryNames = {
@@ -45,53 +42,20 @@ async function getCategoriesInfo(req, res) {
       });
     }
 
-    logger.info(`📂 Obteniendo información de ${categoryIds.length} categorías`);
+    console.log(`📂 API Categories - Obteniendo información de ${categoryIds.length} categorías:`, categoryIds);
 
     const categoriesInfo = {};
     
-    // Usar el ML API Client real como en la versión HTML
-    const MLAPIClient = require('../src/api/ml-api-client');
-    const mlClient = new MLAPIClient();
-    
-    try {
-      // Usar getMultipleCategories que ya maneja lotes y rate limiting
-      const categories = await mlClient.getMultipleCategories(categoryIds);
-      
-      categories.forEach(category => {
-        if (category && category.id) {
-          categoriesInfo[category.id] = {
-            id: category.id,
-            name: category.name,
-            path_from_root: category.path_from_root || [],
-            children_categories: category.children_categories || [],
-            total_items_in_this_category: category.total_items_in_this_category || 0
-          };
-        }
-      });
-      
-      // Para categorías no encontradas, usar fallback
-      categoryIds.forEach(categoryId => {
-        if (!categoriesInfo[categoryId]) {
-          categoriesInfo[categoryId] = {
-            id: categoryId,
-            name: categoryNames[categoryId] || `Categoría ${categoryId}`,
-            path_from_root: []
-          };
-        }
-      });
-      
-    } catch (error) {
-      logger.error(`❌ Error obteniendo categorías de ML API: ${error.message}`);
-      
-      // Fallback completo al mapeo estático
-      categoryIds.forEach(categoryId => {
-        categoriesInfo[categoryId] = {
-          id: categoryId,
-          name: categoryNames[categoryId] || `Categoría ${categoryId}`,
-          path_from_root: []
-        };
-      });
-    }
+    // Usar mapeo estático por ahora
+    categoryIds.forEach(categoryId => {
+      categoriesInfo[categoryId] = {
+        id: categoryId,
+        name: categoryNames[categoryId] || `Categoría ${categoryId}`,
+        path_from_root: []
+      };
+    });
+
+    console.log('📦 API Categories - Respuesta:', categoriesInfo);
 
     res.json({
       success: true,
@@ -100,7 +64,7 @@ async function getCategoriesInfo(req, res) {
     });
 
   } catch (error) {
-    logger.error(`❌ Error en getCategoriesInfo: ${error.message}`);
+    console.error(`❌ API Categories - Error: ${error.message}`);
     res.status(500).json({
       success: false,
       error: 'Error obteniendo información de categorías',
@@ -115,6 +79,8 @@ async function getCategoriesInfo(req, res) {
 async function handleCategories(req, res) {
   const { method } = req;
   
+  console.log(`🌐 API Categories - ${method} request received`);
+  
   switch (method) {
     case 'POST':
       return await getCategoriesInfo(req, res);
@@ -128,5 +94,5 @@ async function handleCategories(req, res) {
   }
 }
 
-// Export con middleware de autenticación
-module.exports = withAuth(handleCategories);
+// Export directo sin middleware
+module.exports = handleCategories;
