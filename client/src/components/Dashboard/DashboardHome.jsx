@@ -11,6 +11,8 @@ function DashboardHome() {
   const { products, alerts, stats, loading, actions } = useAppContext()
   const [monitorStatus, setMonitorStatus] = useState(null)
   const [syncProgress, setSyncProgress] = useState(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [itemsPerPage] = useState(10)
   
   // Considerar datos cargados si hay productos O alertas
   const dataLoaded = products.length > 0 || alerts.length > 0
@@ -119,8 +121,18 @@ function DashboardHome() {
 
   const recentAlerts = alerts.slice(0, 5)
   
-  // Filtrar productos con bajo stock (≤5 unidades)
-  const lowStockProducts = products.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
+  // Filtrar productos con bajo stock (≤5 unidades) - incluye productos con stock = 0
+  const lowStockProducts = products.filter(p => p.available_quantity <= 5)
+  
+  // Calcular paginación
+  const startIndex = currentPage * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedLowStockProducts = lowStockProducts.slice(startIndex, endIndex)
+  const totalPages = Math.ceil(lowStockProducts.length / itemsPerPage)
+  
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+  }
 
   return (
     <div>
@@ -166,10 +178,60 @@ function DashboardHome() {
           <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center">
               <h5 className="card-title mb-0">Productos con bajo stock</h5>
-              <span className="badge bg-secondary">{lowStockProducts.length}</span>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-secondary">{lowStockProducts.length}</span>
+                <a href="/dashboard/products" className="btn btn-sm btn-outline-primary">
+                  Ver todos
+                </a>
+              </div>
             </div>
             <div className="card-body">
-              <ProductsTable products={lowStockProducts.slice(0, 10)} loading={loading.products} />
+              <ProductsTable products={paginatedLowStockProducts} loading={loading.products} />
+              
+              {/* Paginación */}
+              {totalPages > 1 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <div>
+                    <small className="text-muted">
+                      Mostrando {startIndex + 1} a {Math.min(endIndex, lowStockProducts.length)} de {lowStockProducts.length} productos
+                    </small>
+                  </div>
+                  <nav>
+                    <ul className="pagination pagination-sm mb-0">
+                      <li className={`page-item ${currentPage === 0 ? 'disabled' : ''}`}>
+                        <button 
+                          className="page-link" 
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 0}
+                        >
+                          Anterior
+                        </button>
+                      </li>
+                      
+                      {Array.from({ length: totalPages }, (_, i) => (
+                        <li key={i} className={`page-item ${currentPage === i ? 'active' : ''}`}>
+                          <button 
+                            className="page-link" 
+                            onClick={() => handlePageChange(i)}
+                          >
+                            {i + 1}
+                          </button>
+                        </li>
+                      ))}
+                      
+                      <li className={`page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}`}>
+                        <button 
+                          className="page-link" 
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages - 1}
+                        >
+                          Siguiente
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
+              )}
             </div>
           </div>
         </div>
