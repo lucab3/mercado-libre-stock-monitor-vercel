@@ -122,9 +122,24 @@ function AlertsSection() {
             <div className="list-group list-group-flush">
               {alerts.map((alert, index) => {
                 // Generar URL del producto usando la misma lógica que ProductsTable
-                const productUrl = alert.product_id ? 
-                  `https://articulo.mercadolibre.com.ar/${alert.product_id}` : 
-                  null;
+                const generateUrlFromId = (productId) => {
+                  if (!productId) return null;
+                  const countryCode = productId.substring(0, 3); // MLA, MLM, etc.
+                  const productNumber = productId.substring(3);
+                  
+                  const countryDomains = {
+                    'MLA': 'com.ar',
+                    'MLM': 'com.mx', 
+                    'MLB': 'com.br',
+                    'MLC': 'cl',
+                    'MCO': 'com.co'
+                  };
+                  
+                  const domain = countryDomains[countryCode] || 'com.ar';
+                  return `https://articulo.mercadolibre.${domain}/${countryCode}-${productNumber}`;
+                };
+                
+                const productUrl = alert.product_id ? generateUrlFromId(alert.product_id) : null;
                 
                 return (
                   <div key={index} className="list-group-item p-3">
