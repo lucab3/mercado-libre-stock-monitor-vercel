@@ -72,10 +72,10 @@ async function getAlerts(req, res) {
       alerts: paginatedAlerts,
       counts: alertCounts,
       summary: {
-        total: filteredAlerts.length,
+        total: classifiedAlerts.length, // Total real de todas las alertas
         critical: classifiedAlerts.filter(a => a.priority === 'critical').length,
         warning: classifiedAlerts.filter(a => a.priority === 'warning').length,
-        info: classifiedAlerts.filter(a => a.priority === 'info').length
+        info: classifiedAlerts.filter(a => a.priority === 'informative').length
       },
       pagination: {
         limit: parseInt(limit),
@@ -228,7 +228,7 @@ function classifyAlerts(alerts) {
       case 'STOCK_DECREASE':
         return {
           ...baseAlert,
-          priority: alert.new_stock <= 10 ? 'warning' : 'info',
+          priority: alert.new_stock <= 10 ? 'warning' : 'informative',
           color: alert.new_stock <= 10 ? '#fd7e14' : '#6c757d',
           bgColor: alert.new_stock <= 10 ? '#fdefd5' : '#e9ecef',
           icon: '📉',
@@ -240,7 +240,7 @@ function classifyAlerts(alerts) {
       case 'STOCK_INCREASE':
         return {
           ...baseAlert,
-          priority: 'info',
+          priority: 'informative',
           color: '#28a745', // Verde
           bgColor: '#d4edda',
           icon: '📈',
@@ -252,7 +252,7 @@ function classifyAlerts(alerts) {
       default:
         return {
           ...baseAlert,
-          priority: 'info',
+          priority: 'informative',
           color: '#6c757d',
           bgColor: '#e9ecef',
           icon: '📦',

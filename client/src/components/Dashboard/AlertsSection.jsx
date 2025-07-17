@@ -4,6 +4,12 @@ import { apiService } from '../../services/api'
 
 function AlertsSection() {
   const { alerts, alertFilters, loading, actions } = useAppContext()
+  const [alertCounts, setAlertCounts] = React.useState({
+    total: 0,
+    critical: 0,
+    warning: 0,
+    info: 0
+  })
 
   useEffect(() => {
     loadAlerts()
@@ -14,6 +20,16 @@ function AlertsSection() {
       actions.setLoading('alerts', true)
       const response = await apiService.getAlerts(alertFilters)
       actions.setAlerts(response.alerts || [])
+      
+      // Actualizar contadores desde la respuesta del backend
+      if (response.summary) {
+        setAlertCounts({
+          total: response.summary.total || 0,
+          critical: response.summary.critical || 0,
+          warning: response.summary.warning || 0,
+          info: response.summary.info || 0
+        })
+      }
     } catch (error) {
       console.error('Error cargando alertas:', error)
       actions.setError('alerts', error.message)
@@ -41,9 +57,10 @@ function AlertsSection() {
     return new Date(timestamp).toLocaleString()
   }
 
-  const criticalCount = alerts.filter(alert => alert.priority === 'critical').length
-  const warningCount = alerts.filter(alert => alert.priority === 'warning').length
-  const infoCount = alerts.filter(alert => alert.priority === 'informative').length
+  // Los contadores ahora vienen del backend para mostrar totales correctos
+  const criticalCount = alertCounts.critical
+  const warningCount = alertCounts.warning
+  const infoCount = alertCounts.info
 
   return (
     <div>
@@ -59,7 +76,7 @@ function AlertsSection() {
           >
             <i className="bi bi-list me-2"></i>
             Todas
-            <span className="badge bg-secondary ms-2">{alerts.length}</span>
+            <span className="badge bg-secondary ms-2">{alertCounts.total}</span>
           </button>
         </div>
         <div className="col-md-3">
