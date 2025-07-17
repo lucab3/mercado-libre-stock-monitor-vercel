@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { useAppContext } from '../../context/AppContext'
+import { useCategories } from '../../hooks/useCategories'
 import ProductsTable from './ProductsTable'
 
 function ProductsSection() {
@@ -66,6 +67,9 @@ function ProductsSection() {
     return Array.from(categories).sort()
   }, [products])
 
+  // Hook para obtener nombres de categorías
+  const { getCategoryName } = useCategories(availableCategories)
+
   return (
     <div>
       <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -90,7 +94,9 @@ function ProductsSection() {
               >
                 <option value="all">Todas las categorías</option>
                 {availableCategories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                  <option key={category} value={category}>
+                    {getCategoryName(category)}
+                  </option>
                 ))}
               </select>
             </div>

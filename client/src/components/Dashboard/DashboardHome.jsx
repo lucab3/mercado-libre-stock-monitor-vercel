@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useAppContext } from '../../context/AppContext'
+import { useCategories } from '../../hooks/useCategories'
 import { apiService } from '../../services/api'
 import StatsCards from './StatsCards'
 import RecentAlerts from './RecentAlerts'
@@ -178,6 +179,9 @@ function DashboardHome() {
     })
     return Array.from(categories).sort()
   }, [products])
+
+  // Hook para obtener nombres de categorías
+  const { getCategoryName } = useCategories(availableCategories)
   
   // Calcular paginación
   const startIndex = currentPage * itemsPerPage
@@ -290,7 +294,9 @@ function DashboardHome() {
                   >
                     <option value="all">Todas</option>
                     {availableCategories.map(category => (
-                      <option key={category} value={category}>{category}</option>
+                      <option key={category} value={category}>
+                        {getCategoryName(category)}
+                      </option>
                     ))}
                   </select>
                 </div>

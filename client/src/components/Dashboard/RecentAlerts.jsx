@@ -44,23 +44,54 @@ function RecentAlerts({ alerts, loading }) {
 
   return (
     <div className="list-group list-group-flush">
-      {alerts.map((alert, index) => (
-        <div key={index} className="list-group-item p-3">
-          <div className="d-flex align-items-start">
-            <i className={`${getPriorityIcon(alert.priority)} me-3 mt-1`}></i>
-            <div className="flex-grow-1">
-              <div className="d-flex justify-content-between align-items-start">
-                <h6 className="mb-1">{alert.title}</h6>
-                <small className="text-muted">{formatTime(alert.created_at)}</small>
+      {alerts.map((alert, index) => {
+        // Generar URL del producto
+        const productUrl = alert.product_id ? 
+          `https://articulo.mercadolibre.com.ar/${alert.product_id}` : 
+          null;
+        
+        return (
+          <div key={index} className="list-group-item p-3">
+            <div className="d-flex align-items-start">
+              <i className={`${getPriorityIcon(alert.priority)} me-3 mt-1`}></i>
+              <div className="flex-grow-1">
+                <div className="d-flex justify-content-between align-items-start">
+                  {productUrl ? (
+                    <a 
+                      href={productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-decoration-none"
+                    >
+                      <h6 className="mb-1 text-primary">{alert.title}</h6>
+                    </a>
+                  ) : (
+                    <h6 className="mb-1">{alert.title}</h6>
+                  )}
+                  <small className="text-muted">{formatTime(alert.created_at)}</small>
+                </div>
+                <p className="mb-1 small">{alert.message}</p>
+                {alert.seller_sku && (
+                  <small className="text-muted">SKU: {alert.seller_sku}</small>
+                )}
+                {productUrl && (
+                  <div className="mt-2">
+                    <a 
+                      href={productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-sm btn-outline-primary"
+                    >
+                      <i className="bi bi-box-arrow-up-right me-1"></i>
+                      Ver producto
+                    </a>
+                  </div>
+                )}
               </div>
-              <p className="mb-1 small">{alert.message}</p>
-              {alert.seller_sku && (
-                <small className="text-muted">SKU: {alert.seller_sku}</small>
-              )}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   )
 }

@@ -98,6 +98,13 @@ class ApiService {
   async syncNext() {
     return this.request('/api/sync-next')
   }
+
+  async getCategoriesInfo(categoryIds) {
+    return this.request('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify({ categoryIds })
+    })
+  }
 }
 
 export const apiService = new ApiService()
