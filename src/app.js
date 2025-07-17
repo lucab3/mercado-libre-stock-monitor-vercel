@@ -193,6 +193,36 @@ function createApp() {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // API logout (para compatibilidad con React)
+  app.post('/api/auth/logout', async (req, res) => {
+    try {
+      const sessionCookie = req.cookies['ml-session'];
+      
+      if (sessionCookie) {
+        // Revocar en BD
+        await databaseService.revokeUserSession(sessionCookie);
+        logger.info(`🔓 Sesión cerrada: ${sessionCookie.substring(0, 8)}...`);
+      }
+      
+      // Limpiar cookie
+      res.clearCookie('ml-session', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      res.json({
+        success: true,
+        message: 'Sesión cerrada correctamente'
+      });
+      
+    } catch (error) {
+      logger.error(`Error en logout: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
   
   // ========== HEALTH CHECK BÁSICO ==========
   
