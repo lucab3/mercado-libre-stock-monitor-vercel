@@ -118,6 +118,9 @@ function DashboardHome() {
   }
 
   const recentAlerts = alerts.slice(0, 5)
+  
+  // Filtrar productos con bajo stock (≤5 unidades)
+  const lowStockProducts = products.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
 
   return (
     <div>
@@ -163,10 +166,10 @@ function DashboardHome() {
           <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center">
               <h5 className="card-title mb-0">Productos con bajo stock</h5>
-              <span className="badge bg-secondary">{products.length}</span>
+              <span className="badge bg-secondary">{lowStockProducts.length}</span>
             </div>
             <div className="card-body">
-              <ProductsTable products={products.slice(0, 10)} loading={loading.products} />
+              <ProductsTable products={lowStockProducts.slice(0, 10)} loading={loading.products} />
             </div>
           </div>
         </div>

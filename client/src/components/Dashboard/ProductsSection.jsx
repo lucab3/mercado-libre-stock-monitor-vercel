@@ -9,6 +9,11 @@ function ProductsSection() {
   const filteredProducts = useMemo(() => {
     let filtered = [...products]
     
+    // Filtro por categoría
+    if (productFilters.category !== 'all') {
+      filtered = filtered.filter(p => p.category_id === productFilters.category)
+    }
+    
     // Filtro por stock
     if (productFilters.stockFilter === 'low') {
       filtered = filtered.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
@@ -46,6 +51,17 @@ function ProductsSection() {
     actions.setProductFilters({ [filterType]: value })
   }
 
+  // Obtener categorías únicas para el dropdown
+  const availableCategories = useMemo(() => {
+    const categories = new Set()
+    products.forEach(product => {
+      if (product.category_id) {
+        categories.add(product.category_id)
+      }
+    })
+    return Array.from(categories).sort()
+  }, [products])
+
   return (
     <div>
       <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -61,6 +77,20 @@ function ProductsSection() {
       <div className="card mb-3">
         <div className="card-body">
           <div className="row g-3">
+            <div className="col-md-3">
+              <label className="form-label">Filtrar por categoría:</label>
+              <select 
+                className="form-select"
+                value={productFilters.category}
+                onChange={(e) => handleFilterChange('category', e.target.value)}
+              >
+                <option value="all">Todas las categorías</option>
+                {availableCategories.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+            
             <div className="col-md-3">
               <label className="form-label">Filtrar por stock:</label>
               <select 
@@ -87,7 +117,7 @@ function ProductsSection() {
               </select>
             </div>
             
-            <div className="col-md-6">
+            <div className="col-md-3">
               <label className="form-label">Buscar producto:</label>
               <input 
                 type="text" 
