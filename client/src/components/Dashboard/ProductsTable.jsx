@@ -61,7 +61,7 @@ function ProductsTable({ products, loading }) {
                   <div>
                     <div className="fw-semibold">
                       <a 
-                        href={product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`}
+                        href={product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-decoration-none text-primary"

@@ -90,6 +90,14 @@ class ApiService {
       method: 'POST'
     })
   }
+
+  async syncInitial() {
+    return this.request('/api/sync-initial')
+  }
+
+  async syncNext() {
+    return this.request('/api/sync-next')
+  }
 }
 
 export const apiService = new ApiService()

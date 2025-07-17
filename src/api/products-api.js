@@ -20,16 +20,22 @@ async function getProducts(req, res) {
     logger.info(`📦 Productos encontrados: ${products.length}`);
     
     // Formatear productos para el frontend
-    const productDetails = products.map(product => ({
-      id: product.id,
-      title: product.title,
-      seller_sku: product.seller_sku,
-      available_quantity: product.available_quantity,
-      status: product.status,
-      permalink: product.permalink,
-      thumbnail: null, // No tenemos thumbnails en BD
-      updated_at: product.updated_at || product.last_webhook_sync
-    }));
+    const productDetails = products.map(product => {
+      // Generar URL correcta usando el mismo método que el HTML original
+      const productUrl = product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`;
+      
+      return {
+        id: product.id,
+        title: product.title,
+        seller_sku: product.seller_sku,
+        available_quantity: product.available_quantity,
+        status: product.status,
+        permalink: product.permalink,
+        productUrl: productUrl, // URL preferida para links
+        thumbnail: null, // No tenemos thumbnails en BD
+        updated_at: product.updated_at || product.last_webhook_sync
+      };
+    });
     
     res.json({
       success: true,

@@ -38,10 +38,25 @@ function Header({ user }) {
       
       <div className="btn-toolbar mb-2 mb-md-0">
         <div className="btn-group me-3">
-          <div className="notification-bell me-3">
-            <i className="bi bi-bell fs-5"></i>
+          <div className="notification-bell me-3" style={{ position: 'relative', display: 'inline-block' }}>
+            <i className="bi bi-bell fs-5 text-secondary"></i>
             {criticalAlertsCount > 0 && (
-              <span className="notification-badge">{criticalAlertsCount}</span>
+              <span 
+                className="badge bg-danger rounded-pill" 
+                style={{ 
+                  position: 'absolute', 
+                  top: '-5px', 
+                  right: '-5px', 
+                  fontSize: '0.65rem',
+                  minWidth: '18px',
+                  height: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {criticalAlertsCount}
+              </span>
             )}
           </div>
         </div>

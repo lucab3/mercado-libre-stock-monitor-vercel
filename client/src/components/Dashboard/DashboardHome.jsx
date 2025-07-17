@@ -5,10 +5,12 @@ import StatsCards from './StatsCards'
 import RecentAlerts from './RecentAlerts'
 import ProductsTable from './ProductsTable'
 import MonitoringControls from './MonitoringControls'
+import SyncProgress from './SyncProgress'
 
 function DashboardHome() {
   const { products, alerts, stats, loading, actions } = useAppContext()
   const [monitorStatus, setMonitorStatus] = useState(null)
+  const [syncProgress, setSyncProgress] = useState(null)
   
   // Considerar datos cargados si hay productos O alertas
   const dataLoaded = products.length > 0 || alerts.length > 0
@@ -46,19 +48,47 @@ function DashboardHome() {
     }
   }
 
-  const handleSyncProducts = async () => {
+  const handleInitialSync = async () => {
     try {
       actions.setLoading('products', true)
-      await apiService.syncProducts()
+      setSyncProgress(null)
+      
+      // Usar sync-next para sincronización incremental
+      let hasMore = true
+      let totalNewProducts = 0
+      
+      while (hasMore) {
+        const result = await apiService.syncNext()
+        
+        if (result.success) {
+          totalNewProducts += result.progress?.newInThisBatch || 0
+          hasMore = result.hasMore
+          
+          // Actualizar progreso en tiempo real
+          if (result.progress) {
+            setSyncProgress(result.progress)
+          }
+        } else {
+          throw new Error(result.error || 'Error en sincronización')
+        }
+      }
       
       // Recargar productos después del sync
       const productsResponse = await apiService.getProducts()
       actions.setProducts(productsResponse.products || [])
+      
+      // Actualizar stats
+      const statsResponse = await apiService.getProductStats()
+      actions.setStats(statsResponse)
+      
+      console.log(`Sincronización completada: ${totalNewProducts} productos nuevos`)
+      
     } catch (error) {
-      console.error('Error sincronizando productos:', error)
+      console.error('Error en sincronización inicial:', error)
       actions.setError('sync', error.message)
     } finally {
       actions.setLoading('products', false)
+      setSyncProgress(null)
     }
   }
 
@@ -116,11 +146,14 @@ function DashboardHome() {
       )}
       
       <MonitoringControls 
-        monitorStatus={monitorStatus}
-        onStart={handleStartMonitoring}
-        onStop={handleStopMonitoring}
-        onSync={handleSyncProducts}
+        monitorStatus={stats}
+        onInitialSync={handleInitialSync}
         syncLoading={loading.products}
+      />
+      
+      <SyncProgress 
+        progress={syncProgress}
+        isVisible={loading.products && syncProgress !== null}
       />
       
       <StatsCards stats={stats} alerts={alerts} />

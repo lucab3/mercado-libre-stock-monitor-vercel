@@ -165,34 +165,9 @@ function createApp() {
     }
   });
   
-  // API sync-next (usado por el monitoreo)
-  app.get('/api/sync-next', async (req, res) => {
-    try {
-      const sessionCookie = req.cookies['ml-session'];
-      
-      if (!sessionCookie) {
-        return res.status(401).json({ error: 'No autenticado' });
-      }
-      
-      const session = await databaseService.getUserSession(sessionCookie);
-      if (!session) {
-        return res.status(401).json({ error: 'Sesión inválida' });
-      }
-      
-      // Ejecutar sync
-      const result = await stockMonitor.syncAllProducts();
-      
-      if (result.success) {
-        await databaseService.saveSyncControl(session.userId, result.totalProducts);
-      }
-      
-      res.json(result);
-      
-    } catch (error) {
-      logger.error(`Error en sync-next: ${error.message}`);
-      res.status(500).json({ error: error.message });
-    }
-  });
+  // API sync-next (sincronización inicial con prevención de duplicados)
+  const handleSyncNext = require('./api/sync-next');
+  app.get('/api/sync-next', handleSyncNext);
 
   // API logout (para compatibilidad con React)
   app.post('/api/auth/logout', async (req, res) => {
