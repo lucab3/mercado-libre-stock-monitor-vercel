@@ -1,67 +1,20 @@
 /**
  * API endpoint para manejo de alertas de stock
  * Permite obtener, filtrar y configurar alertas
+ * REFACTORIZADO: Usa middleware de autenticación centralizado
  */
 
 const databaseService = require('../services/databaseService');
-const sessionManager = require('../utils/sessionManager');
+const { withAuth } = require('../middleware/serverlessAuth');
 const logger = require('../utils/logger');
-
-// Parse cookies manually since we don't have middleware
-function parseCookies(cookieHeader) {
-  const cookies = {};
-  if (cookieHeader) {
-    cookieHeader.split(';').forEach(cookie => {
-      const [name, value] = cookie.trim().split('=');
-      if (name && value) {
-        cookies[name] = decodeURIComponent(value);
-      }
-    });
-  }
-  return cookies;
-}
 
 /**
  * Obtener alertas con filtros y paginación
  */
 async function getAlerts(req, res) {
   try {
-    // 1. Validar autenticación
-    const cookies = parseCookies(req.headers.cookie);
-    const cookieId = cookies['ml-session'];
-    
-    logger.info(`🔐 API/ALERTS AUTH DEBUG:`, {
-      hasCookieHeader: !!req.headers.cookie,
-      cookieId: cookieId ? cookieId.substring(0, 8) + '...' : null,
-      method: req.method
-    });
-    
-    if (!cookieId) {
-      return res.status(401).json({
-        success: false,
-        error: 'No hay sesión activa',
-        needsAuth: true
-      });
-    }
-
-    // Usar sesiones de BD en lugar de memoria para compatibilidad con serverless
-    const session = await databaseService.getUserSession(cookieId);
-    
-    logger.info(`🔍 SESSION DEBUG:`, {
-      cookieId: cookieId ? cookieId.substring(0, 8) + '...' : null,
-      sessionFound: !!session,
-      sessionUserId: session?.userId
-    });
-    
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sesión inválida',
-        needsAuth: true
-      });
-    }
-
-    const userId = session.userId;
+    // La autenticación ya fue validada por withAuth middleware
+    const userId = req.auth.userId;
     
     // 2. Obtener parámetros de filtros
     const {
@@ -148,25 +101,8 @@ async function getAlerts(req, res) {
  */
 async function markAlertsAsRead(req, res) {
   try {
-    // 1. Validar autenticación
-    const cookies = parseCookies(req.headers.cookie);
-    const cookieId = cookies['ml-session'];
-    if (!cookieId) {
-      return res.status(401).json({
-        success: false,
-        error: 'No hay sesión activa'
-      });
-    }
-
-    const session = await databaseService.getUserSession(cookieId);
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sesión inválida'
-      });
-    }
-
-    const userId = session.userId;
+    // La autenticación ya fue validada por withAuth middleware
+    const userId = req.auth.userId;
     const { alertIds } = req.body;
 
     if (!alertIds || !Array.isArray(alertIds)) {
@@ -199,25 +135,8 @@ async function markAlertsAsRead(req, res) {
  */
 async function getAlertSettings(req, res) {
   try {
-    // 1. Validar autenticación
-    const cookies = parseCookies(req.headers.cookie);
-    const cookieId = cookies['ml-session'];
-    if (!cookieId) {
-      return res.status(401).json({
-        success: false,
-        error: 'No hay sesión activa'
-      });
-    }
-
-    const session = await databaseService.getUserSession(cookieId);
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sesión inválida'
-      });
-    }
-
-    const userId = session.userId;
+    // La autenticación ya fue validada por withAuth middleware
+    const userId = req.auth.userId;
 
     // Configuración por defecto
     const defaultSettings = {
@@ -250,25 +169,8 @@ async function getAlertSettings(req, res) {
  */
 async function updateAlertSettings(req, res) {
   try {
-    // 1. Validar autenticación
-    const cookies = parseCookies(req.headers.cookie);
-    const cookieId = cookies['ml-session'];
-    if (!cookieId) {
-      return res.status(401).json({
-        success: false,
-        error: 'No hay sesión activa'
-      });
-    }
-
-    const session = await databaseService.getUserSession(cookieId);
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sesión inválida'
-      });
-    }
-
-    const userId = session.userId;
+    // La autenticación ya fue validada por withAuth middleware
+    const userId = req.auth.userId;
     const { settings } = req.body;
 
     if (!settings) {
@@ -427,16 +329,5 @@ async function handleAlertSettings(req, res) {
   }
 }
 
-// Export por defecto para Vercel
-module.exports = async function handler(req, res) {
-  // Habilitar CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  return await handleAlerts(req, res);
-};
+// Export por defecto para Vercel con middleware de autenticación centralizado
+module.exports = withAuth(handleAlerts);

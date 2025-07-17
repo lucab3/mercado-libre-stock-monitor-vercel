@@ -47,6 +47,14 @@
       "dest": "src/api/cleanup-webhooks.js"
     },
     {
+      "src": "/api/products",
+      "dest": "src/api/products-api.js"
+    },
+    {
+      "src": "/api/products/stats",
+      "dest": "src/api/products-api.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "src/index.js"
     },
