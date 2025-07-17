@@ -67,7 +67,8 @@ function createApp() {
       const sessionCookie = req.cookies['ml-session'];
       
       if (!sessionCookie) {
-        return res.redirect('/auth/login');
+        // No hay sesión, redirigir al React login
+        return res.redirect('/login');
       }
       
       // Verificar si la sesión es válida
@@ -75,18 +76,17 @@ function createApp() {
       const session = await databaseService.getUserSession(sessionCookie);
       
       if (!session) {
-        // Sesión inválida, limpiar cookie y redirigir
+        // Sesión inválida, limpiar cookie y redirigir al React login
         res.clearCookie('ml-session');
-        return res.redirect('/auth/login');
+        return res.redirect('/login');
       }
       
-      // Sesión válida, mostrar dashboard
-      const dashboardPath = path.join(__dirname, 'public/dashboard.html');
-      res.sendFile(dashboardPath);
+      // Sesión válida, mostrar React dashboard
+      return res.redirect('/dashboard');
       
     } catch (error) {
       logger.error(`Error en página principal: ${error.message}`);
-      res.redirect('/auth/login');
+      res.redirect('/login');
     }
   });
   
@@ -124,7 +124,8 @@ function createApp() {
   app.post('/api/webhooks/ml', async (req, res) => {
     try {
       logger.info('🔔 Webhook ML recibido');
-      const result = await webhookProcessor.processWebhook(req.body);
+      const clientIP = req.ip || req.connection.remoteAddress;
+      const result = await webhookProcessor.handleWebhook(req.body, clientIP, req.headers);
       
       if (result.success) {
         res.status(200).json({ status: 'processed', result });
