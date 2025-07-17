@@ -83,8 +83,8 @@ export function AuthProvider({ children }) {
   const login = async () => {
     try {
       dispatch({ type: 'AUTH_START' })
-      // Redirigir a la URL de autenticación de ML
-      window.location.href = '/auth/login'
+      // Redirigir a la URL de autorización de ML (no login)
+      window.location.href = '/auth/authorize'
     } catch (error) {
       dispatch({ type: 'AUTH_ERROR', payload: error.message })
     }
