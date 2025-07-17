@@ -101,33 +101,29 @@ class AuthController {
       // Obtener información del usuario
       const userInfo = await auth.getUserInfoWithToken(tokens.access_token);
       
-      if (!userInfo) {
+      if (!userInfo || !userInfo.id) {
         logger.error('❌ No se pudo obtener información del usuario');
         return res.redirect('/acceso-denegado');
       }
       
-      const result = {
-        success: true,
-        tokens: tokens,
-        user: userInfo
-      };
+      // Asegurar que el ID es string
+      const userId = userInfo.id.toString();
       
-      if (!result.success) {
-        logger.error(`❌ Error en callback: ${result.error}`);
+      logger.info(`✅ Tokens obtenidos exitosamente para usuario: ${userId}`);
+      
+      // Crear sesión y cookie - usar solo los tokens, no userInfo extra
+      const cookieId = sessionManager.createSession(userId, tokens);
+      
+      // Verificar que cookieId es válido
+      if (!cookieId || typeof cookieId !== 'string') {
+        logger.error('❌ Error: cookieId inválido generado por sessionManager');
         return res.redirect('/acceso-denegado');
       }
-      
-      logger.info(`✅ Callback exitoso para usuario: ${result.user.id}`);
-      
-      // Crear sesión y cookie
-      const cookieId = sessionManager.createSession(result.user.id, result.tokens, {
-        userInfo: result.user
-      });
       
       // Guardar sesión en BD para compatibilidad serverless
       await databaseService.createUserSession(
         cookieId, 
-        result.user.id,
+        userId,
         req.ip,
         req.get('User-Agent')
       );
@@ -140,7 +136,7 @@ class AuthController {
         sameSite: 'lax'
       });
       
-      logger.info(`🔐 Sesión creada: ${cookieId.substring(0, 8)}... para usuario ${result.user.id}`);
+      logger.info(`🔐 Sesión creada: ${cookieId.substring(0, 8)}... para usuario ${userId}`);
       res.redirect('/');
       
     } catch (error) {
