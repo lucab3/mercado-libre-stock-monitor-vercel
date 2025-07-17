@@ -58,7 +58,7 @@ app.use((req, res, next) => {
 // Middleware de seguridad para validar sesiones
 app.use('/api/', async (req, res, next) => {
   // Solo aplicar a rutas que requieren autenticación
-  const protectedRoutes = ['/api/monitor/', '/api/products/', '/api/rate-limit/', '/api/stock-alerts'];
+  const protectedRoutes = ['/api/monitor', '/api/products', '/api/rate-limit', '/api/stock-alerts'];
   const isProtectedRoute = protectedRoutes.some(route => req.path.startsWith(route));
 
   if (isProtectedRoute) {
@@ -105,6 +105,7 @@ app.use('/api/', async (req, res, next) => {
       auth.currentSessionId = session.data.user_id;
       
       logger.info(`✅ SERVERLESS: Sesión válida para usuario ${session.data.user_id}`);
+      logger.info(`✅ AUTH STATE: currentSessionId=${auth.currentSessionId}`);
       
     } catch (error) {
       logger.error(`❌ ERROR en validación de sesión serverless: ${error.message}`);
