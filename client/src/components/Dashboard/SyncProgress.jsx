@@ -3,10 +3,14 @@ import React from 'react'
 function SyncProgress({ progress, isVisible = false }) {
   if (!isVisible || !progress) return null
   
-  const percentage = progress.percentage || 0
-  const current = progress.current || 0
+  // Corregir lógica del progreso
+  const processedInThisBatch = progress.processedInThisBatch || 0
   const total = progress.total || 0
+  const current = progress.current || 0 // productos en BD
   const newInBatch = progress.newInThisBatch || 0
+  
+  // El porcentaje ya viene calculado correctamente del backend
+  const percentage = Math.min(Math.max(progress.percentage || 0, 0), 100)
   
   return (
     <div className="alert alert-info mb-3">
@@ -30,11 +34,14 @@ function SyncProgress({ progress, isVisible = false }) {
       
       <div className="d-flex justify-content-between">
         <small className="text-muted">
-          {current} / {total} productos procesados
+          Procesando lote de {processedInThisBatch} productos
+        </small>
+        <small className="text-muted">
+          {current} productos en BD
         </small>
         {newInBatch > 0 && (
           <small className="text-success">
-            +{newInBatch} nuevos en este lote
+            +{newInBatch} nuevos
           </small>
         )}
       </div>
