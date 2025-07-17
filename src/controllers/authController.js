@@ -29,6 +29,8 @@ class AuthController {
    */
   async redirectToAuth(req, res) {
     try {
+      logger.info('🚀 INICIANDO AUTORIZACIÓN - /auth/authorize llamado');
+      
       if (auth.mockMode) {
         logger.info('🎭 Modo MOCK: Simulando autorización exitosa');
         
@@ -52,11 +54,11 @@ class AuthController {
       
       // Modo real: redirigir a ML
       const authUrl = auth.getAuthUrl();
-      logger.info(`🔐 Redirigiendo a autorización ML: ${authUrl.substring(0, 50)}...`);
+      logger.info(`🔐 REDIRIGIENDO A ML: ${authUrl}`);
       res.redirect(authUrl);
       
     } catch (error) {
-      logger.error(`Error en redirección auth: ${error.message}`);
+      logger.error(`❌ Error en redirección auth: ${error.message}`);
       res.status(500).json({ 
         error: 'Error iniciando autorización',
         message: error.message 
@@ -69,6 +71,9 @@ class AuthController {
    */
   async handleCallback(req, res) {
     try {
+      logger.info('🔄 CALLBACK RECIBIDO - /auth/callback llamado');
+      logger.info(`🔍 Query params: ${JSON.stringify(req.query)}`);
+      
       const { code, error } = req.query;
       
       if (error) {
