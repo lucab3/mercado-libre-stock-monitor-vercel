@@ -6,6 +6,29 @@
 const { withAuth } = require('../src/middleware/serverlessAuth');
 const logger = require('../src/utils/logger');
 
+// Mock de ML API Client para pruebas
+const mockMLClient = {
+  async getCategory(categoryId) {
+    // Simulación de respuesta exitosa
+    const mockResponses = {
+      'MLA10626': { id: 'MLA10626', name: 'Hogar y Jardín', path_from_root: [] },
+      'MLA1648': { id: 'MLA1648', name: 'Computación', path_from_root: [] },
+      'MLA1144': { id: 'MLA1144', name: 'Consolas y Videojuegos', path_from_root: [] },
+      'MLA1000': { id: 'MLA1000', name: 'Electrónicos', path_from_root: [] },
+      'MLA1055': { id: 'MLA1055', name: 'Celulares y Teléfonos', path_from_root: [] }
+    };
+    
+    if (mockResponses[categoryId]) {
+      return mockResponses[categoryId];
+    }
+    
+    // Si no está en mock, intentar con ML API real
+    const MLAPIClient = require('../src/api/ml-api-client');
+    const mlClient = new MLAPIClient();
+    return await mlClient.getCategory(categoryId);
+  }
+};
+
 // Mapeo estático como fallback
 const categoryNames = {
   'MLM1055': 'Celulares y Teléfonos',
@@ -48,7 +71,8 @@ async function getCategoriesInfo(req, res) {
     logger.info(`📂 Obteniendo información de ${categoryIds.length} categorías`);
 
     const categoriesInfo = {};
-    const mlApiClient = require('../src/api/ml-api-client');
+    // Usar mock client por ahora para pruebas
+    const mlClient = mockMLClient;
     
     // Procesar en lotes de 5 para evitar rate limit
     const chunkSize = 5;
@@ -58,7 +82,7 @@ async function getCategoriesInfo(req, res) {
       await Promise.all(chunk.map(async (categoryId) => {
         try {
           // Intentar obtener de la API de ML
-          const categoryInfo = await mlApiClient.getCategory(categoryId);
+          const categoryInfo = await mlClient.getCategory(categoryId);
           if (categoryInfo && categoryInfo.name) {
             categoriesInfo[categoryId] = {
               id: categoryId,

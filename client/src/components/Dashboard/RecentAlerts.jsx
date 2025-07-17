@@ -45,7 +45,7 @@ function RecentAlerts({ alerts, loading }) {
   return (
     <div className="list-group list-group-flush">
       {alerts.map((alert, index) => {
-        // Generar URL del producto
+        // Generar URL del producto usando la misma lógica que ProductsTable
         const productUrl = alert.product_id ? 
           `https://articulo.mercadolibre.com.ar/${alert.product_id}` : 
           null;

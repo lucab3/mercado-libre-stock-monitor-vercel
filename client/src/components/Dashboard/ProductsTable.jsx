@@ -13,6 +13,32 @@ function ProductsTable({ products, loading }) {
     return 'Stock normal'
   }
 
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'active':
+        return 'bg-success'
+      case 'paused':
+        return 'bg-warning'
+      case 'closed':
+        return 'bg-danger'
+      default:
+        return 'bg-secondary'
+    }
+  }
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'active':
+        return 'Activo'
+      case 'paused':
+        return 'Pausado'
+      case 'closed':
+        return 'Cerrado'
+      default:
+        return status || 'Desconocido'
+    }
+  }
+
   if (loading) {
     return (
       <div className="text-center py-4">
@@ -41,7 +67,8 @@ function ProductsTable({ products, loading }) {
             <th>Producto</th>
             <th>SKU</th>
             <th>Stock</th>
-            <th>Estado</th>
+            <th>Estado Stock</th>
+            <th>Estado Publicación</th>
             <th>Última actualización</th>
           </tr>
         </thead>
@@ -84,6 +111,11 @@ function ProductsTable({ products, loading }) {
               <td>
                 <span className={`badge ${getStockBadge(product.available_quantity)}`}>
                   {getStockText(product.available_quantity)}
+                </span>
+              </td>
+              <td>
+                <span className={`badge ${getStatusBadge(product.status)}`}>
+                  {getStatusText(product.status)}
                 </span>
               </td>
               <td>
