@@ -102,9 +102,9 @@ app.use('/api/', async (req, res, next) => {
       
       // Establecer datos de sesión para esta request
       auth.setCurrentCookieId(sessionCookie);
-      auth.currentSessionId = session.data.user_id;
+      auth.currentSessionId = session.userId;
       
-      logger.info(`✅ SERVERLESS: Sesión válida para usuario ${session.data.user_id}`);
+      logger.info(`✅ SERVERLESS: Sesión válida para usuario ${session.userId}`);
       logger.info(`✅ AUTH STATE: currentSessionId=${auth.currentSessionId}`);
       
     } catch (error) {
