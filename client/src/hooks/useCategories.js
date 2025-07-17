@@ -12,8 +12,13 @@ export function useCategories(categoryIds = []) {
   const fetchCategories = useCallback(async (ids) => {
     if (!ids || ids.length === 0) return
 
+    console.log('🔍 useCategories - fetchCategories called with:', ids)
+
     // Filtrar IDs que no están en cache
     const uncachedIds = ids.filter(id => !categoriesCache.has(id))
+    
+    console.log('📦 useCategories - uncachedIds:', uncachedIds)
+    console.log('🗂️ useCategories - cache has:', Array.from(categoriesCache.keys()))
     
     if (uncachedIds.length === 0) {
       // Todos están en cache, actualizar estado
@@ -24,6 +29,7 @@ export function useCategories(categoryIds = []) {
         }
       })
       setCategories(cached)
+      console.log('✅ useCategories - usando cache:', Array.from(cached.entries()))
       return
     }
 
@@ -31,7 +37,9 @@ export function useCategories(categoryIds = []) {
       setLoading(true)
       setError(null)
       
+      console.log('🌐 useCategories - llamando API para:', uncachedIds)
       const response = await apiService.getCategoriesInfo(uncachedIds)
+      console.log('📥 useCategories - respuesta API:', response)
       
       if (response.success) {
         // Actualizar cache
@@ -47,12 +55,14 @@ export function useCategories(categoryIds = []) {
           }
         })
         setCategories(allCategories)
+        console.log('✅ useCategories - categorías finales:', Array.from(allCategories.entries()))
       } else {
         setError(response.error || 'Error obteniendo categorías')
+        console.error('❌ useCategories - error API:', response.error)
       }
     } catch (err) {
       setError(err.message)
-      console.error('Error fetchCategories:', err)
+      console.error('❌ useCategories - error catch:', err)
     } finally {
       setLoading(false)
     }
@@ -68,7 +78,11 @@ export function useCategories(categoryIds = []) {
     if (!categoryId) return categoryId
     
     const category = categories.get(categoryId)
-    return category ? category.name : categoryId
+    const result = category ? category.name : categoryId
+    
+    console.log(`🏷️ getCategoryName(${categoryId}) -> ${result}`, { category, categoriesSize: categories.size })
+    
+    return result
   }, [categories])
 
   const getCategoryInfo = useCallback((categoryId) => {
