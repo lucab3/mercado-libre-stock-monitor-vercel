@@ -14,13 +14,13 @@ function DashboardLayout() {
   const { actions, loading } = useAppContext()
   const { user, isAuthenticated } = useAuthContext()
 
-  // DESHABILITADO: Carga inicial de datos causa problemas de sesión en serverless
-  // useEffect(() => {
-  //   // Solo cargar datos si el usuario está autenticado
-  //   if (isAuthenticated && user) {
-  //     loadInitialData()
-  //   }
-  // }, [isAuthenticated, user])
+  // Carga automática de datos al autenticarse
+  useEffect(() => {
+    // Solo cargar datos si el usuario está autenticado
+    if (isAuthenticated && user) {
+      loadInitialData()
+    }
+  }, [isAuthenticated, user])
 
   const loadInitialData = async () => {
     try {
@@ -37,6 +37,16 @@ function DashboardLayout() {
       actions.setProducts(products.products || [])
       actions.setAlerts(alerts.alerts || [])
       actions.setStats(stats)
+      
+      // Actualizar contadores globales de alertas
+      if (alerts.summary) {
+        actions.setAlertCounts({
+          total: alerts.summary.total || 0,
+          critical: alerts.summary.critical || 0,
+          warning: alerts.summary.warning || 0,
+          info: alerts.summary.info || 0
+        })
+      }
     } catch (error) {
       console.error('Error cargando datos iniciales:', error)
       actions.setError('general', error.message)

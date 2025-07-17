@@ -1,12 +1,30 @@
 import React from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuthContext } from '../../context/AuthContext'
 import { useAppContext } from '../../context/AppContext'
 
 function Header({ user }) {
   const { logout } = useAuthContext()
-  const { alerts } = useAppContext()
+  const { alertCounts } = useAppContext()
+  const location = useLocation()
   
-  const criticalAlerts = alerts.filter(alert => alert.priority === 'critical')
+  // Obtener el título basado en la ruta
+  const getPageTitle = () => {
+    switch(location.pathname) {
+      case '/dashboard':
+        return 'Productos con bajo stock'
+      case '/dashboard/products':
+        return 'Todos los productos'
+      case '/dashboard/alerts':
+        return 'Alertas'
+      case '/dashboard/settings':
+        return 'Configuración'
+      default:
+        return 'Dashboard'
+    }
+  }
+  
+  const criticalAlertsCount = alertCounts.critical
   
   const handleLogout = () => {
     if (window.confirm('¿Estás seguro que deseas cerrar sesión?')) {
@@ -16,14 +34,14 @@ function Header({ user }) {
 
   return (
     <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-      <h1 className="h2">Dashboard</h1>
+      <h1 className="h2">{getPageTitle()}</h1>
       
       <div className="btn-toolbar mb-2 mb-md-0">
         <div className="btn-group me-3">
           <div className="notification-bell me-3">
             <i className="bi bi-bell fs-5"></i>
-            {criticalAlerts.length > 0 && (
-              <span className="notification-badge">{criticalAlerts.length}</span>
+            {criticalAlertsCount > 0 && (
+              <span className="notification-badge">{criticalAlertsCount}</span>
             )}
           </div>
         </div>

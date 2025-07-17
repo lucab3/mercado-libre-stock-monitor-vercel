@@ -31,6 +31,14 @@ const initialState = {
     limit: 20
   },
   
+  // Filtros de productos
+  productFilters: {
+    category: 'all',
+    stockSort: 'default',
+    stockFilter: 'all', // all, low, out
+    searchText: ''
+  },
+  
   // Configuración
   settings: {
     popupsEnabled: true,
@@ -67,6 +75,13 @@ function appReducer(state, action) {
       return {
         ...state,
         alertFilters: { ...state.alertFilters, ...action.payload }
+      }
+    
+    // Filtros de productos
+    case 'SET_PRODUCT_FILTERS':
+      return {
+        ...state,
+        productFilters: { ...state.productFilters, ...action.payload }
       }
     
     // Stats
@@ -136,6 +151,10 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_ALERT_FILTERS', payload: filters })
   }
 
+  const setProductFilters = (filters) => {
+    dispatch({ type: 'SET_PRODUCT_FILTERS', payload: filters })
+  }
+
   const setStats = (stats) => {
     dispatch({ type: 'SET_STATS', payload: stats })
   }
@@ -180,6 +199,7 @@ export function AppProvider({ children }) {
       setAlerts,
       setAlertCounts,
       setAlertFilters,
+      setProductFilters,
       setStats,
       setCurrentSection,
       setSettings,
