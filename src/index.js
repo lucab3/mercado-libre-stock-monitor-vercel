@@ -1780,9 +1780,7 @@ app.post('/api/monitor/check-now', async (req, res) => {
 
 // API para obtener estado de monitoreo (general)
 app.get('/api/monitor/status', async (req, res) => {
-  if (!auth.isAuthenticated()) {
-    return res.status(401).json({ error: 'No autenticado' });
-  }
+  // La autenticación ya fue validada por el middleware
 
   try {
     const monitorStatus = stockMonitor.getStatus();
@@ -2311,7 +2309,9 @@ app.get('/api/products', async (req, res) => {
     // La autenticación ya fue validada por el middleware
     // Obtener productos directamente de la base de datos (no de ML API)
     
+    logger.info(`📦 Obteniendo productos para usuario: ${auth.currentSessionId}`);
     const products = await databaseService.getAllProducts(auth.currentSessionId);
+    logger.info(`📦 Productos encontrados: ${products.length}`);
     
     // Formatear para el frontend
     const productDetails = products.map(product => ({

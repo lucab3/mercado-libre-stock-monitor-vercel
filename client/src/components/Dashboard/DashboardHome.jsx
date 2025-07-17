@@ -9,7 +9,9 @@ import MonitoringControls from './MonitoringControls'
 function DashboardHome() {
   const { products, alerts, stats, loading, actions } = useAppContext()
   const [monitorStatus, setMonitorStatus] = useState(null)
-  const [dataLoaded, setDataLoaded] = useState(false)
+  
+  // Considerar datos cargados si hay productos O alertas
+  const dataLoaded = products.length > 0 || alerts.length > 0
 
   useEffect(() => {
     loadMonitorStatus()
@@ -75,7 +77,6 @@ function DashboardHome() {
       actions.setProducts(productsResponse.products || [])
       actions.setAlerts(alertsResponse.alerts || [])
       actions.setStats(statsResponse)
-      setDataLoaded(true)
     } catch (error) {
       console.error('Error cargando datos:', error)
       actions.setError('general', error.message)
