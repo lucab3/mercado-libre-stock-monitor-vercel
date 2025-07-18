@@ -8,6 +8,8 @@ export function useCategories(categoryIds = []) {
   const [categories, setCategories] = useState(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  
+  console.log('🏗️ useCategories - render with categories.size:', categories.size, 'categoryIds:', categoryIds.length)
 
   const fetchCategories = useCallback(async (ids) => {
     if (!ids || ids.length === 0) return
@@ -56,6 +58,7 @@ export function useCategories(categoryIds = []) {
         })
         setCategories(allCategories)
         console.log('✅ useCategories - categorías finales:', Array.from(allCategories.entries()))
+        console.log('🗂️ useCategories - categories state después de setCategories:', allCategories.size)
       } else {
         setError(response.error || 'Error obteniendo categorías')
         console.error('❌ useCategories - error API:', response.error)
@@ -69,8 +72,12 @@ export function useCategories(categoryIds = []) {
   }, [])
 
   useEffect(() => {
+    console.log('🔄 useCategories - useEffect triggered with categoryIds:', categoryIds)
     if (categoryIds.length > 0) {
+      console.log('📞 useCategories - calling fetchCategories')
       fetchCategories(categoryIds)
+    } else {
+      console.log('⚠️ useCategories - categoryIds is empty, not fetching')
     }
   }, [categoryIds, fetchCategories])
 
