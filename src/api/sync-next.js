@@ -35,34 +35,40 @@ function extractSKUFromProduct(productData) {
 // Función auxiliar para guardar categorías desde los productos
 async function saveCategoriesFromProducts(categoryIds) {
   try {
-    logger.info(`📂 Guardando información de ${categoryIds.length} categorías nuevas`);
+    logger.info(`🔍 CATEGORIES DEBUG: Iniciando guardado de ${categoryIds.length} categorías`);
+    logger.info(`🔍 CATEGORIES DEBUG: IDs a procesar: ${categoryIds.join(', ')}`);
     
     // Verificar qué categorías ya existen
     const existingCategories = await databaseService.getCategoriesByIds(categoryIds);
     const existingIds = new Set(existingCategories.map(c => c.id));
     const newCategoryIds = categoryIds.filter(id => !existingIds.has(id));
     
+    logger.info(`🔍 CATEGORIES DEBUG: Categorías existentes: ${existingCategories.length}, Nuevas: ${newCategoryIds.length}`);
+    
     if (newCategoryIds.length === 0) {
-      logger.info('📂 Todas las categorías ya existen en BD');
+      logger.info('🔍 CATEGORIES DEBUG: Todas las categorías ya existen en BD');
       return;
     }
     
-    logger.info(`📂 Obteniendo ${newCategoryIds.length} categorías nuevas de la API de MercadoLibre`);
+    logger.info(`🔍 CATEGORIES DEBUG: Obteniendo ${newCategoryIds.length} categorías de ML API`);
+    logger.info(`🔍 CATEGORIES DEBUG: Nuevas categorías: ${newCategoryIds.join(', ')}`);
     
     // Obtener información de las categorías desde la API de ML
     const categoryPromises = newCategoryIds.map(async (categoryId) => {
       try {
+        logger.info(`🔍 CATEGORIES DEBUG: Consultando ML API para ${categoryId}`);
         const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
         
         if (!response.ok) {
-          logger.warn(`⚠️ No se pudo obtener categoría ${categoryId}: ${response.status}`);
+          logger.error(`🔍 CATEGORIES DEBUG: Error ML API ${categoryId}: ${response.status} ${response.statusText}`);
           return null;
         }
         
         const categoryData = await response.json();
+        logger.info(`🔍 CATEGORIES DEBUG: ML API respondió para ${categoryId}: ${categoryData.name}`);
         
         // Mapear la información de la categoría
-        return {
+        const mappedCategory = {
           id: categoryData.id,
           name: categoryData.name,
           country_code: categoryData.id.substring(0, 2) === 'ML' ? 
@@ -74,8 +80,11 @@ async function saveCategoriesFromProducts(categoryIds) {
           total_items_in_this_category: categoryData.total_items_in_this_category || 0
         };
         
+        logger.info(`🔍 CATEGORIES DEBUG: Categoria mapeada ${categoryId}: ${mappedCategory.name}`);
+        return mappedCategory;
+        
       } catch (error) {
-        logger.error(`❌ Error obteniendo categoría ${categoryId}: ${error.message}`);
+        logger.error(`🔍 CATEGORIES DEBUG: Error procesando ${categoryId}: ${error.message}`);
         return null;
       }
     });
@@ -83,12 +92,22 @@ async function saveCategoriesFromProducts(categoryIds) {
     const categoriesData = await Promise.all(categoryPromises);
     const validCategories = categoriesData.filter(c => c !== null);
     
+    logger.info(`🔍 CATEGORIES DEBUG: Categorías válidas obtenidas: ${validCategories.length}`);
+    
     // Guardar las categorías en la base de datos
+    let savedCount = 0;
     for (const categoryData of validCategories) {
-      await databaseService.upsertCategory(categoryData);
+      try {
+        logger.info(`🔍 CATEGORIES DEBUG: Guardando en BD ${categoryData.id}: ${categoryData.name}`);
+        await databaseService.upsertCategory(categoryData);
+        savedCount++;
+        logger.info(`🔍 CATEGORIES DEBUG: Guardado exitoso ${categoryData.id}`);
+      } catch (error) {
+        logger.error(`🔍 CATEGORIES DEBUG: Error guardando ${categoryData.id}: ${error.message}`);
+      }
     }
     
-    logger.info(`✅ Guardadas ${validCategories.length} categorías nuevas`);
+    logger.info(`🔍 CATEGORIES DEBUG: Proceso completado. Guardadas: ${savedCount}/${validCategories.length} categorías`);
     
   } catch (error) {
     logger.error(`❌ Error guardando categorías: ${error.message}`);
@@ -203,9 +222,16 @@ async function handleSyncNext(req, res) {
           }
         });
         
+        logger.info(`🔍 SYNC-NEXT DEBUG: Encontradas ${categoriesSet.size} categorías únicas en ${productsData.length} productos`);
+        logger.info(`🔍 SYNC-NEXT DEBUG: Categorías: ${Array.from(categoriesSet).slice(0, 10).join(', ')}`);
+        
         // Guardar categorías si las hay
         if (categoriesSet.size > 0) {
+          logger.info(`🔍 SYNC-NEXT DEBUG: Iniciando guardado de categorías...`);
           await saveCategoriesFromProducts(Array.from(categoriesSet));
+          logger.info(`🔍 SYNC-NEXT DEBUG: Guardado de categorías completado`);
+        } else {
+          logger.info(`🔍 SYNC-NEXT DEBUG: No hay categorías para guardar`);
         }
         
         const productsToSave = productsData.map(productData => {

@@ -1224,10 +1224,14 @@ class DatabaseService {
    */
   async upsertCategory(categoryData) {
     try {
+      logger.info(`🔍 DB DEBUG: Iniciando upsert para categoría ${categoryData.id}: ${categoryData.name}`);
+      
       const dataToInsert = {
         ...categoryData,
         updated_at: new Date().toISOString()
       };
+      
+      logger.info(`🔍 DB DEBUG: Datos a insertar: ${JSON.stringify(dataToInsert)}`);
       
       const result = await supabaseClient.executeQuery(
         async (client) => {
@@ -1241,11 +1245,13 @@ class DatabaseService {
         'upsert_category'
       );
       
-      logger.debug(`📂 Categoría ${categoryData.id} guardada/actualizada`);
+      logger.info(`🔍 DB DEBUG: Resultado del upsert: ${JSON.stringify(result)}`);
+      logger.info(`📂 Categoría ${categoryData.id} guardada/actualizada exitosamente`);
       return result;
       
     } catch (error) {
-      logger.error(`❌ Error guardando categoría ${categoryData.id}: ${error.message}`);
+      logger.error(`🔍 DB DEBUG: Error detallado guardando categoría ${categoryData.id}: ${error.message}`);
+      logger.error(`🔍 DB DEBUG: Stack trace: ${error.stack}`);
       throw error;
     }
   }
