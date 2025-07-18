@@ -100,7 +100,7 @@ class ApiService {
   }
 
   async getCategoriesInfo(categoryIds) {
-    return this.request('/api/categories', {
+    return this.request('/api/categories/info', {
       method: 'POST',
       body: JSON.stringify({ categoryIds })
     })
