@@ -168,6 +168,14 @@ function createApp() {
   // API sync-next (sincronización inicial con prevención de duplicados)
   const handleSyncNext = require('./api/sync-next');
   app.get('/api/sync-next', handleSyncNext);
+  
+  // API categories (obtener información de categorías)
+  const handleCategories = require('../api/categories');
+  app.post('/api/categories', handleCategories);
+  
+  // API populate-categories (poblar tabla de categorías)
+  const handlePopulateCategories = require('../api/populate-categories');
+  app.post('/api/populate-categories', handlePopulateCategories);
 
   // API logout (para compatibilidad con React)
   app.post('/api/auth/logout', async (req, res) => {

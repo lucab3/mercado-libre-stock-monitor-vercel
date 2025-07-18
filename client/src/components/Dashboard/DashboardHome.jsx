@@ -82,6 +82,24 @@ function DashboardHome() {
         }
       }
       
+      // Poblar categorías automáticamente después del sync
+      try {
+        console.log('🔍 Sync completado, poblando categorías automáticamente...')
+        const categoriesResult = await fetch('/api/populate-categories', {
+          method: 'POST',
+          credentials: 'include'
+        })
+        
+        if (categoriesResult.ok) {
+          const categoriesData = await categoriesResult.json()
+          console.log('✅ Categorías pobladas:', categoriesData)
+        } else {
+          console.warn('⚠️ Error poblando categorías:', await categoriesResult.text())
+        }
+      } catch (error) {
+        console.warn('⚠️ Error poblando categorías:', error)
+      }
+      
       // Recargar productos después del sync
       const productsResponse = await apiService.getProducts()
       actions.setProducts(productsResponse.products || [])
