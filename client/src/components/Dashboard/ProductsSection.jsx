@@ -59,15 +59,30 @@ function ProductsSection() {
   // Obtener categorías únicas para el dropdown
   const availableCategories = useMemo(() => {
     const categories = new Set()
+    console.log('🔍 ProductsSection - products data:', products.length, 'products')
+    
+    // Verificar algunos productos de ejemplo
+    products.slice(0, 3).forEach((product, index) => {
+      console.log(`📦 ProductsSection - Product ${index + 1}:`, {
+        id: product.id,
+        title: product.title?.substring(0, 50) + '...',
+        category_id: product.category_id,
+        has_category: !!product.category_id
+      })
+    })
+    
     products.forEach(product => {
       if (product.category_id) {
         categories.add(product.category_id)
       }
     })
-    return Array.from(categories).sort()
+    const result = Array.from(categories).sort()
+    console.log('📊 ProductsSection - availableCategories calculated:', result.length, 'categories:', result.slice(0, 5))
+    return result
   }, [products])
 
   // Hook para obtener nombres de categorías
+  console.log('🎯 ProductsSection - calling useCategories with:', availableCategories.length, 'categories')
   const { getCategoryName } = useCategories(availableCategories)
 
   return (

@@ -72,9 +72,9 @@ export function useCategories(categoryIds = []) {
   }, [])
 
   useEffect(() => {
-    console.log('🔄 useCategories - useEffect triggered with categoryIds:', categoryIds)
+    console.log('🔄 useCategories - useEffect triggered with categoryIds:', categoryIds, 'length:', categoryIds.length)
     if (categoryIds.length > 0) {
-      console.log('📞 useCategories - calling fetchCategories')
+      console.log('📞 useCategories - calling fetchCategories with', categoryIds.length, 'categories')
       fetchCategories(categoryIds)
     } else {
       console.log('⚠️ useCategories - categoryIds is empty, not fetching')
