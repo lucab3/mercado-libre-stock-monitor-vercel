@@ -153,9 +153,9 @@ async function getCategoriesInfo(req, res) {
 }
 
 /**
- * Manejador principal de rutas
+ * Manejador principal de rutas para Vercel
  */
-async function handleCategories(req, res) {
+module.exports = async function handler(req, res) {
   const { method } = req;
   
   console.log(`🌐 API Categories - ${method} request received`);
@@ -171,7 +171,4 @@ async function handleCategories(req, res) {
         allowedMethods: ['POST']
       });
   }
-}
-
-// Export directo sin middleware
-module.exports = handleCategories;
+};
