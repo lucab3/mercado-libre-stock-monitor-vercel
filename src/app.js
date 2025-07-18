@@ -207,13 +207,16 @@ function createApp() {
       
       const categories = [];
       
-      // Obtener información de cada categoría desde ML API (sin token por ahora)
+      // Obtener información de cada categoría desde ML API usando endpoint público
       for (const categoryId of categoryIds) {
         try {
+          // Usar el endpoint público sin autenticación
           const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`, {
+            method: 'GET',
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'StockMonitor/1.0'
+              'User-Agent': 'StockMonitor/1.0',
+              'Content-Type': 'application/json'
             }
           });
           
@@ -225,8 +228,36 @@ function createApp() {
               path_from_root: categoryData.path_from_root || [],
               children_categories: categoryData.children_categories || []
             });
+            console.log(`✅ Categoría obtenida: ${categoryId} - ${categoryData.name}`);
           } else {
-            console.log(`⚠️ Error obteniendo categoría ${categoryId}: ${response.status}`);
+            console.log(`⚠️ Error obteniendo categoría ${categoryId}: ${response.status} ${response.statusText}`);
+            
+            // Intentar con el endpoint de sitio como fallback
+            try {
+              const siteResponse = await fetch(`https://api.mercadolibre.com/sites/MLA/categories`, {
+                method: 'GET',
+                headers: {
+                  'Accept': 'application/json',
+                  'User-Agent': 'StockMonitor/1.0'
+                }
+              });
+              
+              if (siteResponse.ok) {
+                const siteCategories = await siteResponse.json();
+                const foundCategory = siteCategories.find(cat => cat.id === categoryId);
+                if (foundCategory) {
+                  categories.push({
+                    id: foundCategory.id,
+                    name: foundCategory.name,
+                    path_from_root: [],
+                    children_categories: []
+                  });
+                  console.log(`✅ Categoría obtenida desde sitio: ${categoryId} - ${foundCategory.name}`);
+                }
+              }
+            } catch (siteError) {
+              console.log(`⚠️ Error con endpoint de sitio para ${categoryId}:`, siteError.message);
+            }
           }
         } catch (error) {
           console.error(`Error obteniendo categoría ${categoryId}:`, error);
