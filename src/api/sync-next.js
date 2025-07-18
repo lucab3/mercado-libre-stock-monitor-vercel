@@ -32,6 +32,70 @@ function extractSKUFromProduct(productData) {
   return null;
 }
 
+// Función auxiliar para guardar categorías desde los productos
+async function saveCategoriesFromProducts(categoryIds) {
+  try {
+    logger.info(`📂 Guardando información de ${categoryIds.length} categorías nuevas`);
+    
+    // Verificar qué categorías ya existen
+    const existingCategories = await databaseService.getCategoriesByIds(categoryIds);
+    const existingIds = new Set(existingCategories.map(c => c.id));
+    const newCategoryIds = categoryIds.filter(id => !existingIds.has(id));
+    
+    if (newCategoryIds.length === 0) {
+      logger.info('📂 Todas las categorías ya existen en BD');
+      return;
+    }
+    
+    logger.info(`📂 Obteniendo ${newCategoryIds.length} categorías nuevas de la API de MercadoLibre`);
+    
+    // Obtener información de las categorías desde la API de ML
+    const categoryPromises = newCategoryIds.map(async (categoryId) => {
+      try {
+        const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
+        
+        if (!response.ok) {
+          logger.warn(`⚠️ No se pudo obtener categoría ${categoryId}: ${response.status}`);
+          return null;
+        }
+        
+        const categoryData = await response.json();
+        
+        // Mapear la información de la categoría
+        return {
+          id: categoryData.id,
+          name: categoryData.name,
+          country_code: categoryData.id.substring(0, 2) === 'ML' ? 
+            categoryData.id.substring(2, 3) === 'A' ? 'AR' : 
+            categoryData.id.substring(2, 3) === 'M' ? 'MX' : 
+            categoryData.id.substring(2, 3) === 'B' ? 'BR' : 'AR' : 'AR',
+          site_id: categoryData.id.substring(0, 3),
+          path_from_root: categoryData.path_from_root || [],
+          total_items_in_this_category: categoryData.total_items_in_this_category || 0
+        };
+        
+      } catch (error) {
+        logger.error(`❌ Error obteniendo categoría ${categoryId}: ${error.message}`);
+        return null;
+      }
+    });
+    
+    const categoriesData = await Promise.all(categoryPromises);
+    const validCategories = categoriesData.filter(c => c !== null);
+    
+    // Guardar las categorías en la base de datos
+    for (const categoryData of validCategories) {
+      await databaseService.upsertCategory(categoryData);
+    }
+    
+    logger.info(`✅ Guardadas ${validCategories.length} categorías nuevas`);
+    
+  } catch (error) {
+    logger.error(`❌ Error guardando categorías: ${error.message}`);
+    // No lanzar error para que no interrumpa el sync principal
+  }
+}
+
 /**
  * Sync simple: obtener siguiente lote de productos, guardar solo nuevos
  */
@@ -130,6 +194,19 @@ async function handleSyncNext(req, res) {
           const extractedSKU = extractSKUFromProduct(product);
           logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU_original=${product.seller_sku || 'SIN_SKU'}, SKU_extraido=${extractedSKU || 'SIN_SKU'}`);
         });
+        
+        // Extraer categorías únicas de los productos
+        const categoriesSet = new Set();
+        productsData.forEach(product => {
+          if (product.category_id) {
+            categoriesSet.add(product.category_id);
+          }
+        });
+        
+        // Guardar categorías si las hay
+        if (categoriesSet.size > 0) {
+          await saveCategoriesFromProducts(Array.from(categoriesSet));
+        }
         
         const productsToSave = productsData.map(productData => {
           const extractedSKU = extractSKUFromProduct(productData);

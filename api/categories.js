@@ -1,35 +1,13 @@
 /**
  * Endpoint serverless para obtener información de categorías
- * Versión simplificada para testing
+ * Usa la base de datos de Supabase para resolver nombres
  */
 
-// Mapeo estático como fallback
-const categoryNames = {
-  'MLM1055': 'Celulares y Teléfonos',
-  'MLM1648': 'Computación', 
-  'MLM1144': 'Consolas y Videojuegos',
-  'MLM1000': 'Electrónicos',
-  'MLM1403': 'Instrumentos Musicales',
-  'MLM1276': 'Deportes y Fitness',
-  'MLM1430': 'Ropa y Accesorios',
-  'MLM1132': 'Juegos y Juguetes',
-  'MLM1367': 'Industrias y Oficinas',
-  'MLM1039': 'Cámaras y Accesorios',
-  'MLA10626': 'Hogar y Jardín',
-  'MLA1144': 'Consolas y Videojuegos',
-  'MLA1648': 'Computación',
-  'MLA1000': 'Electrónicos',
-  'MLA1055': 'Celulares y Teléfonos',
-  'MLA1403': 'Instrumentos Musicales',
-  'MLA1276': 'Deportes y Fitness',
-  'MLA1430': 'Ropa y Accesorios',
-  'MLA1132': 'Juegos y Juguetes',
-  'MLA1367': 'Industrias y Oficinas',
-  'MLA1039': 'Cámaras y Accesorios'
-};
+const databaseService = require('../src/services/databaseService');
+const logger = require('../src/utils/logger');
 
 /**
- * Obtener información de categorías
+ * Obtener información de categorías desde la base de datos
  */
 async function getCategoriesInfo(req, res) {
   try {
@@ -42,20 +20,34 @@ async function getCategoriesInfo(req, res) {
       });
     }
 
-    console.log(`📂 API Categories - Obteniendo información de ${categoryIds.length} categorías:`, categoryIds);
+    logger.info(`📂 API Categories - Obteniendo información de ${categoryIds.length} categorías:`, categoryIds);
 
+    // Obtener categorías desde la base de datos
+    const categories = await databaseService.getCategoriesByIds(categoryIds);
+    
     const categoriesInfo = {};
     
-    // Usar mapeo estático por ahora
-    categoryIds.forEach(categoryId => {
-      categoriesInfo[categoryId] = {
-        id: categoryId,
-        name: categoryNames[categoryId] || `Categoría ${categoryId}`,
-        path_from_root: []
+    // Mapear las categorías encontradas
+    categories.forEach(category => {
+      categoriesInfo[category.id] = {
+        id: category.id,
+        name: category.name,
+        path_from_root: category.path_from_root || []
       };
     });
 
-    console.log('📦 API Categories - Respuesta:', categoriesInfo);
+    // Para categorías no encontradas, usar nombre genérico
+    categoryIds.forEach(categoryId => {
+      if (!categoriesInfo[categoryId]) {
+        categoriesInfo[categoryId] = {
+          id: categoryId,
+          name: `Categoría ${categoryId}`,
+          path_from_root: []
+        };
+      }
+    });
+
+    logger.info(`📦 API Categories - Respuesta: ${Object.keys(categoriesInfo).length} categorías procesadas`);
 
     res.json({
       success: true,
@@ -64,7 +56,7 @@ async function getCategoriesInfo(req, res) {
     });
 
   } catch (error) {
-    console.error(`❌ API Categories - Error: ${error.message}`);
+    logger.error(`❌ API Categories - Error: ${error.message}`);
     res.status(500).json({
       success: false,
       error: 'Error obteniendo información de categorías',

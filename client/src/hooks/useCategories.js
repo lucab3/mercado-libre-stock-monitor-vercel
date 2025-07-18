@@ -71,25 +71,14 @@ export function useCategories(categoryIds = []) {
     }
   }, [])
 
-  // Usar un enfoque diferente: ejecutar en cada render si hay cambios
+  // Enfoque simplificado: solo ejecutar cuando categoryIds cambie
   useEffect(() => {
-    console.log('🔄 useCategories - useEffect triggered with categoryIds:', categoryIds, 'length:', categoryIds.length)
+    console.log('🔄 useCategories - useEffect triggered with categoryIds:', categoryIds.length)
     if (categoryIds.length > 0) {
       console.log('📞 useCategories - calling fetchCategories with', categoryIds.length, 'categories')
       fetchCategories(categoryIds)
-    } else {
-      console.log('⚠️ useCategories - categoryIds is empty, not fetching')
     }
-  }) // Sin dependencias - se ejecuta en cada render
-  
-  // Backup: ejecutar fetchCategories directamente si categoryIds cambia
-  useEffect(() => {
-    console.log('🔄 useCategories - backup useEffect, categoryIds.length:', categoryIds.length)
-    if (categoryIds.length > 0) {
-      console.log('🚀 useCategories - backup calling fetchCategories')
-      fetchCategories(categoryIds)
-    }
-  }, [categoryIds.length]) // Solo depende de la longitud
+  }, [categoryIds.length, fetchCategories]) // Depende de la longitud y del callback
 
   const getCategoryName = useCallback((categoryId) => {
     if (!categoryId) return categoryId

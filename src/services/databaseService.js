@@ -1186,6 +1186,69 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES CATEGORÍAS
+  // ==========================================
+
+  /**
+   * Obtener categorías por IDs
+   */
+  async getCategoriesByIds(categoryIds) {
+    try {
+      if (!categoryIds || categoryIds.length === 0) {
+        return [];
+      }
+
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('categories')
+            .select('*')
+            .in('id', categoryIds);
+        },
+        'get_categories_by_ids'
+      );
+      
+      logger.info(`📂 Obtenidas ${result.data?.length || 0} categorías de ${categoryIds.length} solicitadas`);
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo categorías por IDs: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Guardar/actualizar categoría
+   */
+  async upsertCategory(categoryData) {
+    try {
+      const dataToInsert = {
+        ...categoryData,
+        updated_at: new Date().toISOString()
+      };
+      
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('categories')
+            .upsert(dataToInsert, { 
+              onConflict: 'id',
+              returning: 'minimal'
+            });
+        },
+        'upsert_category'
+      );
+      
+      logger.debug(`📂 Categoría ${categoryData.id} guardada/actualizada`);
+      return result;
+      
+    } catch (error) {
+      logger.error(`❌ Error guardando categoría ${categoryData.id}: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton
