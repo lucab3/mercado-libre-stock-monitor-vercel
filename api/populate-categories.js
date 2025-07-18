@@ -4,12 +4,31 @@
  */
 
 const databaseService = require('../src/services/databaseService');
-const { withAuth } = require('../src/middleware/serverlessAuth');
+const sessionManager = require('../src/utils/sessionManager');
 const logger = require('../src/utils/logger');
 
 async function populateCategories(req, res) {
   try {
-    const userId = req.auth.userId;
+    // Validar autenticación
+    const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
+    if (!cookieId) {
+      return res.status(401).json({
+        success: false,
+        error: 'No hay sesión activa',
+        needsAuth: true
+      });
+    }
+
+    const session = sessionManager.getSessionByCookie(cookieId);
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sesión inválida',
+        needsAuth: true
+      });
+    }
+
+    const userId = session.userId;
     
     logger.info(`🔍 POPULATE-CATEGORIES: Iniciando población de categorías para usuario ${userId}`);
     
@@ -134,4 +153,20 @@ async function populateCategories(req, res) {
   }
 }
 
-module.exports = withAuth(populateCategories);
+module.exports = async function handler(req, res) {
+  const { method } = req;
+  
+  console.log(`🌐 API populate-categories - ${method} request received`);
+  
+  switch (method) {
+    case 'POST':
+      return await populateCategories(req, res);
+    
+    default:
+      return res.status(405).json({
+        success: false,
+        error: 'Método no permitido',
+        allowedMethods: ['POST']
+      });
+  }
+};
