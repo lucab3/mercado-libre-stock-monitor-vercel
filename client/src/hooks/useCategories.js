@@ -79,7 +79,7 @@ export function useCategories(categoryIds = []) {
     } else {
       console.log('⚠️ useCategories - categoryIds is empty, not fetching')
     }
-  }, [categoryIds, fetchCategories])
+  }, [categoryIds.length, JSON.stringify(categoryIds), fetchCategories]) // Usar JSON.stringify para forzar detección de cambios
 
   const getCategoryName = useCallback((categoryId) => {
     if (!categoryId) return categoryId
