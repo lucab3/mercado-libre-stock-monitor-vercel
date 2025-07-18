@@ -173,9 +173,67 @@ function createApp() {
   const handleCategories = require('../api/categories');
   app.post('/api/categories', handleCategories);
   
-  // API populate-categories (poblar tabla de categorías)
-  const handlePopulateCategories = require('../api/populate-categories');
-  app.post('/api/populate-categories', handlePopulateCategories);
+  // API categories/info (obtener información detallada de categorías desde ML)
+  app.post('/api/categories/info', async (req, res) => {
+    try {
+      const { categoryIds } = req.body;
+      
+      if (!categoryIds || !Array.isArray(categoryIds)) {
+        return res.status(400).json({
+          success: false,
+          error: 'categoryIds debe ser un array'
+        });
+      }
+      
+      const sessionManager = require('./utils/sessionManager');
+      const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
+      const session = sessionManager.getSessionByCookie(cookieId);
+      
+      if (!session || !session.accessToken) {
+        return res.status(401).json({
+          success: false,
+          error: 'No se encontró token de acceso válido'
+        });
+      }
+      
+      const categories = [];
+      
+      // Obtener información de cada categoría desde ML API
+      for (const categoryId of categoryIds) {
+        try {
+          const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`, {
+            headers: {
+              'Authorization': `Bearer ${session.accessToken}`
+            }
+          });
+          
+          if (response.ok) {
+            const categoryData = await response.json();
+            categories.push({
+              id: categoryData.id,
+              name: categoryData.name,
+              path_from_root: categoryData.path_from_root || [],
+              children_categories: categoryData.children_categories || []
+            });
+          }
+        } catch (error) {
+          console.error(`Error obteniendo categoría ${categoryId}:`, error);
+        }
+      }
+      
+      res.json({
+        success: true,
+        categories: categories
+      });
+      
+    } catch (error) {
+      console.error('Error en /api/categories/info:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor'
+      });
+    }
+  });
 
   // API logout (para compatibilidad con React)
   app.post('/api/auth/logout', async (req, res) => {
