@@ -118,11 +118,17 @@ async function saveCategoriesFromProducts(categoryIds) {
 // Función para poblar categorías automáticamente después del sync
 async function populateCategoriesAfterSync(userId) {
   try {
-    logger.info(`🔍 AUTO-POPULATE: Iniciando población automática de categorías para usuario ${userId}`);
+    logger.info(`🔍 AUTO-POPULATE DEBUG: ===== INICIANDO FUNCIÓN POPULATE CATEGORIES =====`);
+    logger.info(`🔍 AUTO-POPULATE DEBUG: userId: ${userId}`);
+    logger.info(`🔍 AUTO-POPULATE DEBUG: Obteniendo productos de la base de datos...`);
     
     // 1. Obtener todas las categorías únicas de los productos existentes
     const products = await databaseService.getAllProducts(userId);
+    logger.info(`🔍 AUTO-POPULATE DEBUG: Productos obtenidos: ${products.length}`);
+    
     const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
+    logger.info(`🔍 AUTO-POPULATE DEBUG: Categorías únicas extraídas: ${categoryIds.length}`);
+    logger.info(`🔍 AUTO-POPULATE DEBUG: Primeras 10 categorías: ${categoryIds.slice(0, 10).join(', ')}`);
     
     logger.info(`🔍 AUTO-POPULATE: Encontradas ${categoryIds.length} categorías únicas en ${products.length} productos`);
     
@@ -376,8 +382,12 @@ async function handleSyncNext(req, res) {
       await databaseService.saveSyncControl(userId, totalInDB);
       
       // 10. Poblar categorías automáticamente cuando termine el scan
-      logger.info(`🔍 SYNC-NEXT: Scan completado, iniciando poblado automático de categorías`);
+      logger.info(`🔍 SYNC-NEXT DEBUG: Scan completado, hasMore=${hasMore}, iniciando poblado automático de categorías`);
+      logger.info(`🔍 SYNC-NEXT DEBUG: Ejecutando populateCategoriesAfterSync para usuario ${userId}`);
       await populateCategoriesAfterSync(userId);
+      logger.info(`🔍 SYNC-NEXT DEBUG: populateCategoriesAfterSync completado para usuario ${userId}`);
+    } else {
+      logger.info(`🔍 SYNC-NEXT DEBUG: Scan NO completado, hasMore=${hasMore}, no se ejecuta poblado de categorías`);
     }
 
     const response = {
