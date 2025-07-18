@@ -115,6 +115,94 @@ async function saveCategoriesFromProducts(categoryIds) {
   }
 }
 
+// Función para poblar categorías automáticamente después del sync
+async function populateCategoriesAfterSync(userId) {
+  try {
+    logger.info(`🔍 AUTO-POPULATE: Iniciando población automática de categorías para usuario ${userId}`);
+    
+    // 1. Obtener todas las categorías únicas de los productos existentes
+    const products = await databaseService.getAllProducts(userId);
+    const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
+    
+    logger.info(`🔍 AUTO-POPULATE: Encontradas ${categoryIds.length} categorías únicas en ${products.length} productos`);
+    
+    if (categoryIds.length === 0) {
+      logger.info(`🔍 AUTO-POPULATE: No hay categorías para procesar`);
+      return;
+    }
+    
+    // 2. Verificar cuáles ya existen en la tabla categories
+    const existingCategories = await databaseService.getCategoriesByIds(categoryIds);
+    const existingIds = new Set(existingCategories.map(c => c.id));
+    const newCategoryIds = categoryIds.filter(id => !existingIds.has(id));
+    
+    logger.info(`🔍 AUTO-POPULATE: ${existingCategories.length} ya existen, ${newCategoryIds.length} son nuevas`);
+    
+    if (newCategoryIds.length === 0) {
+      logger.info(`🔍 AUTO-POPULATE: Todas las categorías ya existen en la base de datos`);
+      return;
+    }
+    
+    // 3. Obtener información de las categorías desde ML API
+    let savedCount = 0;
+    
+    logger.info(`🔍 AUTO-POPULATE: Consultando ML API para ${newCategoryIds.length} categorías`);
+    
+    // Procesar en lotes para no saturar la API
+    const batchSize = 3; // Reducido para no impactar el tiempo de respuesta
+    for (let i = 0; i < newCategoryIds.length; i += batchSize) {
+      const batch = newCategoryIds.slice(i, i + batchSize);
+      
+      for (const categoryId of batch) {
+        try {
+          logger.info(`🔍 AUTO-POPULATE: Consultando ${categoryId}`);
+          const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
+          
+          if (!response.ok) {
+            logger.warn(`⚠️ AUTO-POPULATE: Error ML API ${categoryId}: ${response.status}`);
+            continue;
+          }
+          
+          const categoryData = await response.json();
+          
+          // Mapear información de la categoría
+          const categoryInfo = {
+            id: categoryData.id,
+            name: categoryData.name,
+            country_code: categoryData.id.substring(0, 2) === 'ML' ? 
+              categoryData.id.substring(2, 3) === 'A' ? 'AR' : 
+              categoryData.id.substring(2, 3) === 'M' ? 'MX' : 
+              categoryData.id.substring(2, 3) === 'B' ? 'BR' : 'AR' : 'AR',
+            site_id: categoryData.id.substring(0, 3),
+            path_from_root: categoryData.path_from_root || [],
+            total_items_in_this_category: categoryData.total_items_in_this_category || 0
+          };
+          
+          // Guardar en base de datos
+          await databaseService.upsertCategory(categoryInfo);
+          savedCount++;
+          
+          logger.info(`✅ AUTO-POPULATE: Guardada ${categoryId}: ${categoryData.name}`);
+          
+        } catch (error) {
+          logger.error(`❌ AUTO-POPULATE: Error con ${categoryId}: ${error.message}`);
+        }
+      }
+      
+      // Pequeña pausa entre lotes
+      if (i + batchSize < newCategoryIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+    
+    logger.info(`🎉 AUTO-POPULATE: Completado - ${savedCount} categorías guardadas de ${newCategoryIds.length} nuevas`);
+    
+  } catch (error) {
+    logger.error(`❌ AUTO-POPULATE: Error general: ${error.message}`);
+    // No lanzar error para que no interrumpa el sync principal
+  }
+}
+
 /**
  * Sync simple: obtener siguiente lote de productos, guardar solo nuevos
  */
@@ -286,6 +374,10 @@ async function handleSyncNext(req, res) {
     if (!hasMore) {
       logger.info(`📅 Sync completo - guardando control temporal para usuario ${userId}`);
       await databaseService.saveSyncControl(userId, totalInDB);
+      
+      // 10. Poblar categorías automáticamente cuando termine el scan
+      logger.info(`🔍 SYNC-NEXT: Scan completado, iniciando poblado automático de categorías`);
+      await populateCategoriesAfterSync(userId);
     }
 
     const response = {
