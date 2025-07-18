@@ -185,25 +185,35 @@ function createApp() {
         });
       }
       
-      const sessionManager = require('./utils/sessionManager');
+      // Validar autenticación usando la misma lógica que sync-next
       const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
-      const session = sessionManager.getSessionByCookie(cookieId);
-      
-      if (!session || !session.accessToken) {
+      if (!cookieId) {
         return res.status(401).json({
           success: false,
-          error: 'No se encontró token de acceso válido'
+          error: 'No hay sesión activa',
+          needsAuth: true
+        });
+      }
+
+      const sessionManager = require('./utils/sessionManager');
+      const session = sessionManager.getSessionByCookie(cookieId);
+      if (!session) {
+        return res.status(401).json({
+          success: false,
+          error: 'Sesión inválida',
+          needsAuth: true
         });
       }
       
       const categories = [];
       
-      // Obtener información de cada categoría desde ML API
+      // Obtener información de cada categoría desde ML API (sin token por ahora)
       for (const categoryId of categoryIds) {
         try {
           const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`, {
             headers: {
-              'Authorization': `Bearer ${session.accessToken}`
+              'Accept': 'application/json',
+              'User-Agent': 'StockMonitor/1.0'
             }
           });
           
@@ -215,6 +225,8 @@ function createApp() {
               path_from_root: categoryData.path_from_root || [],
               children_categories: categoryData.children_categories || []
             });
+          } else {
+            console.log(`⚠️ Error obteniendo categoría ${categoryId}: ${response.status}`);
           }
         } catch (error) {
           console.error(`Error obteniendo categoría ${categoryId}:`, error);
