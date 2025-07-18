@@ -65,121 +65,92 @@ async function populateCategories(req, res) {
       });
     }
     
-    // 3. Usar mapeo estático (ML API da error de permisos)
-    const categoryNames = {
-      'MLA60569': 'Almacenamiento',
-      'MLA372015': 'Tarjetas de Video',
-      'MLA429387': 'Procesadores',
-      'MLA30756': 'Memoria RAM',
-      'MLA417317': 'Motherboards',
-      'MLA372016': 'Tarjetas de Red',
-      'MLA30810': 'Fuentes de Poder',
-      'MLA1045': 'Notebooks',
-      'MLA380668': 'Cables y Adaptadores',
-      'MLA380663': 'Teclados',
-      'MLA372014': 'Tarjetas de Sonido',
-      'MLA3697': 'Monitores',
-      'MLA417042': 'Gabinetes',
-      'MLA413321': 'Coolers',
-      'MLA431208': 'Mouses',
-      'MLA1042': 'PC de Escritorio',
-      'MLA48898': 'Impresoras',
-      'MLA413480': 'Parlantes',
-      'MLA91758': 'Auriculares',
-      'MLA417170': 'Webcams',
-      'MLA407128': 'Tablets',
-      'MLA1055': 'Celulares y Teléfonos',
-      'MLA30949': 'Smartphones',
-      'MLA60635': 'Smartwatches',
-      'MLA411422': 'Consolas',
-      'MLA414103': 'Videojuegos',
-      'MLA431207': 'Micrófonos',
-      'MLA372009': 'Tarjetas de Memoria',
-      'MLA44408': 'Cargadores',
-      'MLA413475': 'Altavoces',
-      'MLA412530': 'Controladores',
-      'MLA413463': 'Auriculares Gaming',
-      'MLA30763': 'Procesadores Gráficos',
-      'MLA431019': 'Fundas y Estuches',
-      'MLA58727': 'Cámaras Web',
-      'MLA431218': 'Mousepads',
-      'MLA416985': 'Sillas Gaming',
-      'MLA4625': 'Soportes',
-      'MLA431206': 'Ventiladores',
-      'MLA373345': 'Memorias USB',
-      'MLA431209': 'Luces LED',
-      'MLA380665': 'Cables HDMI',
-      'MLA430611': 'Streaming',
-      'MLA435492': 'Proyectores',
-      'MLA372999': 'Drivers',
-      'MLA30788': 'Discos Duros',
-      'MLA412586': 'Accesorios Gaming',
-      'MLA30811': 'UPS',
-      'MLA434737': 'Cámaras Digitales',
-      'MLA69930': 'Televisores',
-      'MLA12812': 'Electrodomésticos',
-      'MLA392132': 'Accesorios para Celulares',
-      'MLA91746': 'Parlantes Bluetooth',
-      'MLA372007': 'Tarjetas WiFi',
-      'MLA412582': 'Joysticks',
-      'MLA455196': 'Reproductores',
-      'MLA412362': 'Controles Remotos',
-      'MLA456926': 'Drones',
-      'MLA380652': 'Adaptadores',
-      'MLA430537': 'Bases de Carga',
-      'MLA47781': 'Cámaras de Seguridad',
-      'MLA1659': 'Componentes Electrónicos',
-      'MLA30764': 'Memorias de Video',
-      'MLA30798': 'Tarjetas Madre',
-      'MLA455202': 'Equipos de Audio',
-      'MLA30789': 'Discos SSD',
-      'MLA383867': 'Estabilizadores',
-      'MLA387583': 'Lectores de Tarjetas',
-      'MLA412529': 'Mandos',
-      'MLA2893': 'Radios',
-      'MLA5337': 'Batería y Energía',
-      'MLA90322': 'Equipos de Sonido',
-      'MLA413548': 'Sillas de Oficina',
-      'MLA6049': 'Pilas y Baterías',
-      'MLA10072': 'Limpieza',
-      'MLA417778': 'Refrigeración',
-      'MLA435491': 'Iluminación',
-      'MLA372030': 'Conectores',
-      'MLA1652': 'Herramientas',
-      'MLA30809': 'Reguladores',
-      'MLA352001': 'Convertidores',
-      'MLA378182': 'Extensores',
-      'MLA380650': 'Splitters',
-      'MLA412006': 'Switches',
-      'MLA413985': 'Routers',
-      'MLA438566': 'Antenas',
-      'MLA30759': 'Tarjetas Gráficas',
-      'MLA412577': 'Bases y Soportes',
-      'MLA416524': 'Organizadores',
-      'MLA442422': 'Protectores',
-      'MLA5959': 'Limpiadores',
-      'MLA60567': 'Accesorios',
-      'MLA380657': 'Distribuidores',
-      'MLA429749': 'Sensores',
-      'MLA457051': 'Herramientas de Red',
-      'MLA1714': 'Telescopios',
-      'MLA408023': 'Lentes',
-      'MLA416680': 'Trípodes',
-      'MLA434918': 'Filtros',
-      'MLA73039': 'Flashes'
-    };
-    
+    // 3. Obtener categorías usando search de items ML API
     const results = [];
     const errors = [];
     
-    logger.info(`🔍 POPULATE-CATEGORIES: Usando mapeo estático para ${newCategoryIds.length} categorías`);
+    logger.info(`🔍 POPULATE-CATEGORIES: Obteniendo categorías desde ML API usando search`);
     
-    // Procesar categorías usando mapeo estático
-    for (const categoryId of newCategoryIds) {
-      try {
-        const categoryName = categoryNames[categoryId];
-        
-        if (categoryName) {
+    try {
+      // Usar nuestro endpoint de productos que ya tiene acceso a ML API
+      const sessionManager = require('../src/utils/sessionManager');
+      const session = sessionManager.getSessionByCookie(req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1]);
+      
+      if (!session || !session.accessToken) {
+        throw new Error('No se encontró token de acceso válido');
+      }
+      
+      // Consultar los items del usuario para obtener categorías de los filters
+      const response = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?limit=100`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      logger.info(`🔍 POPULATE-CATEGORIES: Respuesta search items: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error(`🔍 POPULATE-CATEGORIES: Error en search: ${errorText}`);
+        throw new Error(`Error en search: ${response.status} ${response.statusText}`);
+      }
+      
+      const searchData = await response.json();
+      logger.info(`🔍 POPULATE-CATEGORIES: Obtenidos ${searchData.results?.length || 0} items`);
+      
+      // Extraer categorías de los items
+      const categoriesFromItems = new Set();
+      if (searchData.results) {
+        searchData.results.forEach(item => {
+          if (item.category_id) {
+            categoriesFromItems.add(item.category_id);
+          }
+        });
+      }
+      
+      logger.info(`🔍 POPULATE-CATEGORIES: Categorías encontradas en items: ${categoriesFromItems.size}`);
+      
+      // Procesar cada categoría única encontrada
+      for (const categoryId of Array.from(categoriesFromItems)) {
+        try {
+          // Hacer búsqueda por categoría para obtener info en filters
+          const categorySearchResponse = await fetch(`https://api.mercadolibre.com/sites/MLA/search?category=${categoryId}&limit=1`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!categorySearchResponse.ok) {
+            logger.warn(`⚠️ POPULATE-CATEGORIES: Error search categoría ${categoryId}: ${categorySearchResponse.status}`);
+            continue;
+          }
+          
+          const categorySearchData = await categorySearchResponse.json();
+          
+          // Buscar info de categoría en filters
+          let categoryName = null;
+          let pathFromRoot = [];
+          
+          if (categorySearchData.filters) {
+            const categoryFilter = categorySearchData.filters.find(f => f.id === 'category');
+            if (categoryFilter && categoryFilter.values) {
+              const categoryValue = categoryFilter.values.find(v => v.id === categoryId);
+              if (categoryValue) {
+                categoryName = categoryValue.name;
+                pathFromRoot = categoryValue.path_from_root || [];
+              }
+            }
+          }
+          
+          // Si no encontramos en filters, usar nombre genérico
+          if (!categoryName) {
+            categoryName = `Categoría ${categoryId}`;
+            logger.warn(`⚠️ POPULATE-CATEGORIES: No se encontró nombre para ${categoryId}, usando genérico`);
+          }
+          
           // Mapear información de la categoría
           const categoryInfo = {
             id: categoryId,
@@ -189,7 +160,7 @@ async function populateCategories(req, res) {
               categoryId.substring(2, 3) === 'M' ? 'MX' : 
               categoryId.substring(2, 3) === 'B' ? 'BR' : 'AR' : 'AR',
             site_id: categoryId.substring(0, 3),
-            path_from_root: [],
+            path_from_root: pathFromRoot,
             total_items_in_this_category: 0
           };
           
@@ -203,8 +174,22 @@ async function populateCategories(req, res) {
           });
           
           logger.info(`✅ POPULATE-CATEGORIES: Guardada ${categoryId}: ${categoryName}`);
-        } else {
-          // Categoría no encontrada en mapeo estático
+          
+        } catch (error) {
+          logger.error(`❌ POPULATE-CATEGORIES: Error procesando ${categoryId}: ${error.message}`);
+          errors.push({
+            categoryId: categoryId,
+            error: error.message
+          });
+        }
+      }
+      
+    } catch (error) {
+      logger.error(`❌ POPULATE-CATEGORIES: Error general en search: ${error.message}`);
+      
+      // Fallback: procesar categorías que encontramos en productos con nombre genérico
+      for (const categoryId of newCategoryIds.slice(0, 10)) { // Limitamos a 10 para no saturar
+        try {
           const fallbackName = `Categoría ${categoryId}`;
           const categoryInfo = {
             id: categoryId,
@@ -227,13 +212,13 @@ async function populateCategories(req, res) {
           });
           
           logger.info(`⚠️ POPULATE-CATEGORIES: Guardada con nombre genérico ${categoryId}: ${fallbackName}`);
+        } catch (fallbackError) {
+          logger.error(`❌ POPULATE-CATEGORIES: Error en fallback ${categoryId}: ${fallbackError.message}`);
+          errors.push({
+            categoryId: categoryId,
+            error: fallbackError.message
+          });
         }
-      } catch (error) {
-        logger.error(`❌ POPULATE-CATEGORIES: Error con ${categoryId}: ${error.message}`);
-        errors.push({
-          categoryId: categoryId,
-          error: error.message
-        });
       }
     }
     
