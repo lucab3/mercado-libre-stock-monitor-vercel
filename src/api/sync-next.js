@@ -8,6 +8,9 @@ const logger = require('../utils/logger');
 const sessionManager = require('../utils/sessionManager');
 const databaseService = require('../services/databaseService');
 
+// Importar la función híbrida de categorías
+const { getCategoriesWithHybridStrategy } = require('../../api/categories');
+
 // Función auxiliar para extraer SKU de múltiples fuentes
 function extractSKUFromProduct(productData) {
   // 1. Verificar seller_sku directo
@@ -32,103 +35,38 @@ function extractSKUFromProduct(productData) {
   return null;
 }
 
-// Función auxiliar para guardar categorías desde los productos
+// Función auxiliar para guardar categorías desde los productos (usando estrategia híbrida)
 async function saveCategoriesFromProducts(categoryIds) {
   try {
-    logger.info(`🔍 CATEGORIES DEBUG: Iniciando guardado de ${categoryIds.length} categorías`);
-    logger.info(`🔍 CATEGORIES DEBUG: IDs a procesar: ${categoryIds.join(', ')}`);
+    logger.info(`🔍 SYNC CATEGORIES: Iniciando procesamiento de ${categoryIds.length} categorías`);
+    logger.info(`🔍 SYNC CATEGORIES: IDs a procesar: ${categoryIds.join(', ')}`);
     
-    // Verificar qué categorías ya existen
-    const existingCategories = await databaseService.getCategoriesByIds(categoryIds);
-    const existingIds = new Set(existingCategories.map(c => c.id));
-    const newCategoryIds = categoryIds.filter(id => !existingIds.has(id));
+    // Usar la estrategia híbrida (BD primero, luego ML API)
+    const result = await getCategoriesWithHybridStrategy(categoryIds);
     
-    logger.info(`🔍 CATEGORIES DEBUG: Categorías existentes: ${existingCategories.length}, Nuevas: ${newCategoryIds.length}`);
+    logger.info(`🔍 SYNC CATEGORIES: Procesamiento completado:`);
+    logger.info(`   • Total procesadas: ${result.stats.total}`);
+    logger.info(`   • Desde BD: ${result.stats.database}`);
+    logger.info(`   • Desde ML API: ${result.stats.api}`);
     
-    if (newCategoryIds.length === 0) {
-      logger.info('🔍 CATEGORIES DEBUG: Todas las categorías ya existen en BD');
-      return;
-    }
-    
-    logger.info(`🔍 CATEGORIES DEBUG: Obteniendo ${newCategoryIds.length} categorías de ML API`);
-    logger.info(`🔍 CATEGORIES DEBUG: Nuevas categorías: ${newCategoryIds.join(', ')}`);
-    
-    // Obtener información de las categorías desde la API de ML
-    const categoryPromises = newCategoryIds.map(async (categoryId) => {
-      try {
-        logger.info(`🔍 CATEGORIES DEBUG: Consultando ML API para ${categoryId}`);
-        const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
-        
-        if (!response.ok) {
-          logger.error(`🔍 CATEGORIES DEBUG: Error ML API ${categoryId}: ${response.status} ${response.statusText}`);
-          return null;
-        }
-        
-        const categoryData = await response.json();
-        logger.info(`🔍 CATEGORIES DEBUG: ML API respondió para ${categoryId}: ${categoryData.name}`);
-        
-        // Mapear la información de la categoría
-        const mappedCategory = {
-          id: categoryData.id,
-          name: categoryData.name,
-          country_code: categoryData.id.substring(0, 2) === 'ML' ? 
-            categoryData.id.substring(2, 3) === 'A' ? 'AR' : 
-            categoryData.id.substring(2, 3) === 'M' ? 'MX' : 
-            categoryData.id.substring(2, 3) === 'B' ? 'BR' : 'AR' : 'AR',
-          site_id: categoryData.id.substring(0, 3),
-          path_from_root: categoryData.path_from_root || [],
-          total_items_in_this_category: categoryData.total_items_in_this_category || 0
-        };
-        
-        logger.info(`🔍 CATEGORIES DEBUG: Categoria mapeada ${categoryId}: ${mappedCategory.name}`);
-        return mappedCategory;
-        
-      } catch (error) {
-        logger.error(`🔍 CATEGORIES DEBUG: Error procesando ${categoryId}: ${error.message}`);
-        return null;
-      }
-    });
-    
-    const categoriesData = await Promise.all(categoryPromises);
-    const validCategories = categoriesData.filter(c => c !== null);
-    
-    logger.info(`🔍 CATEGORIES DEBUG: Categorías válidas obtenidas: ${validCategories.length}`);
-    
-    // Guardar las categorías en la base de datos
-    let savedCount = 0;
-    for (const categoryData of validCategories) {
-      try {
-        logger.info(`🔍 CATEGORIES DEBUG: Guardando en BD ${categoryData.id}: ${categoryData.name}`);
-        await databaseService.upsertCategory(categoryData);
-        savedCount++;
-        logger.info(`🔍 CATEGORIES DEBUG: Guardado exitoso ${categoryData.id}`);
-      } catch (error) {
-        logger.error(`🔍 CATEGORIES DEBUG: Error guardando ${categoryData.id}: ${error.message}`);
-      }
-    }
-    
-    logger.info(`🔍 CATEGORIES DEBUG: Proceso completado. Guardadas: ${savedCount}/${validCategories.length} categorías`);
+    return result.stats;
     
   } catch (error) {
-    logger.error(`❌ Error guardando categorías: ${error.message}`);
+    logger.error(`🔍 SYNC CATEGORIES: Error en saveCategoriesFromProducts: ${error.message}`);
+    logger.error(`🔍 SYNC CATEGORIES: Stack trace: ${error.stack}`);
     // No lanzar error para que no interrumpa el sync principal
   }
 }
 
-// Función para poblar categorías automáticamente después del sync
+// Función para poblar categorías automáticamente después del sync (usando estrategia híbrida)
 async function populateCategoriesAfterSync(userId) {
   try {
-    logger.info(`🔍 AUTO-POPULATE DEBUG: ===== INICIANDO FUNCIÓN POPULATE CATEGORIES =====`);
-    logger.info(`🔍 AUTO-POPULATE DEBUG: userId: ${userId}`);
-    logger.info(`🔍 AUTO-POPULATE DEBUG: Obteniendo productos de la base de datos...`);
+    logger.info(`🔍 AUTO-POPULATE: ===== INICIANDO FUNCIÓN POPULATE CATEGORIES =====`);
+    logger.info(`🔍 AUTO-POPULATE: userId: ${userId}`);
     
     // 1. Obtener todas las categorías únicas de los productos existentes
     const products = await databaseService.getAllProducts(userId);
-    logger.info(`🔍 AUTO-POPULATE DEBUG: Productos obtenidos: ${products.length}`);
-    
     const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
-    logger.info(`🔍 AUTO-POPULATE DEBUG: Categorías únicas extraídas: ${categoryIds.length}`);
-    logger.info(`🔍 AUTO-POPULATE DEBUG: Primeras 10 categorías: ${categoryIds.slice(0, 10).join(', ')}`);
     
     logger.info(`🔍 AUTO-POPULATE: Encontradas ${categoryIds.length} categorías únicas en ${products.length} productos`);
     
@@ -137,71 +75,15 @@ async function populateCategoriesAfterSync(userId) {
       return;
     }
     
-    // 2. Verificar cuáles ya existen en la tabla categories
-    const existingCategories = await databaseService.getCategoriesByIds(categoryIds);
-    const existingIds = new Set(existingCategories.map(c => c.id));
-    const newCategoryIds = categoryIds.filter(id => !existingIds.has(id));
+    // 2. Usar la estrategia híbrida para procesar todas las categorías
+    const result = await getCategoriesWithHybridStrategy(categoryIds);
     
-    logger.info(`🔍 AUTO-POPULATE: ${existingCategories.length} ya existen, ${newCategoryIds.length} son nuevas`);
+    logger.info(`🎉 AUTO-POPULATE: Completado exitosamente:`);
+    logger.info(`   • Total procesadas: ${result.stats.total}`);
+    logger.info(`   • Ya existían en BD: ${result.stats.database}`);  
+    logger.info(`   • Obtenidas de ML API: ${result.stats.api}`);
     
-    if (newCategoryIds.length === 0) {
-      logger.info(`🔍 AUTO-POPULATE: Todas las categorías ya existen en la base de datos`);
-      return;
-    }
-    
-    // 3. Obtener información de las categorías desde ML API
-    let savedCount = 0;
-    
-    logger.info(`🔍 AUTO-POPULATE: Consultando ML API para ${newCategoryIds.length} categorías`);
-    
-    // Procesar en lotes para no saturar la API
-    const batchSize = 3; // Reducido para no impactar el tiempo de respuesta
-    for (let i = 0; i < newCategoryIds.length; i += batchSize) {
-      const batch = newCategoryIds.slice(i, i + batchSize);
-      
-      for (const categoryId of batch) {
-        try {
-          logger.info(`🔍 AUTO-POPULATE: Consultando ${categoryId}`);
-          const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
-          
-          if (!response.ok) {
-            logger.warn(`⚠️ AUTO-POPULATE: Error ML API ${categoryId}: ${response.status}`);
-            continue;
-          }
-          
-          const categoryData = await response.json();
-          
-          // Mapear información de la categoría
-          const categoryInfo = {
-            id: categoryData.id,
-            name: categoryData.name,
-            country_code: categoryData.id.substring(0, 2) === 'ML' ? 
-              categoryData.id.substring(2, 3) === 'A' ? 'AR' : 
-              categoryData.id.substring(2, 3) === 'M' ? 'MX' : 
-              categoryData.id.substring(2, 3) === 'B' ? 'BR' : 'AR' : 'AR',
-            site_id: categoryData.id.substring(0, 3),
-            path_from_root: categoryData.path_from_root || [],
-            total_items_in_this_category: categoryData.total_items_in_this_category || 0
-          };
-          
-          // Guardar en base de datos
-          await databaseService.upsertCategory(categoryInfo);
-          savedCount++;
-          
-          logger.info(`✅ AUTO-POPULATE: Guardada ${categoryId}: ${categoryData.name}`);
-          
-        } catch (error) {
-          logger.error(`❌ AUTO-POPULATE: Error con ${categoryId}: ${error.message}`);
-        }
-      }
-      
-      // Pequeña pausa entre lotes
-      if (i + batchSize < newCategoryIds.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
-    
-    logger.info(`🎉 AUTO-POPULATE: Completado - ${savedCount} categorías guardadas de ${newCategoryIds.length} nuevas`);
+    return result.stats;
     
   } catch (error) {
     logger.error(`❌ AUTO-POPULATE: Error general: ${error.message}`);

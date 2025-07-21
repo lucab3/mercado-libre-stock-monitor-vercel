@@ -1,114 +1,118 @@
 /**
  * Endpoint serverless para obtener información de categorías
- * Usa la base de datos de Supabase para resolver nombres
+ * Estrategia híbrida: BD primero, luego ML API como fallback
  */
 
-// Mapeo estático como fallback mientras se arreglan las dependencias
-const categoryNames = {
-  'MLA60569': 'Almacenamiento',
-  'MLA372015': 'Tarjetas de Video',
-  'MLA429387': 'Procesadores',
-  'MLA30756': 'Memoria RAM',
-  'MLA417317': 'Motherboards',
-  'MLA372016': 'Tarjetas de Red',
-  'MLA30810': 'Fuentes de Poder',
-  'MLA1045': 'Notebooks',
-  'MLA380668': 'Cables y Adaptadores',
-  'MLA380663': 'Teclados',
-  'MLA372014': 'Tarjetas de Sonido',
-  'MLA3697': 'Monitores',
-  'MLA417042': 'Gabinetes',
-  'MLA413321': 'Coolers',
-  'MLA431208': 'Mouses',
-  'MLA1042': 'PC de Escritorio',
-  'MLA48898': 'Impresoras',
-  'MLA413480': 'Parlantes',
-  'MLA91758': 'Auriculares',
-  'MLA417170': 'Webcams',
-  'MLA407128': 'Tablets',
-  'MLA1055': 'Celulares y Teléfonos',
-  'MLA30949': 'Smartphones',
-  'MLA60635': 'Smartwatches',
-  'MLA411422': 'Consolas',
-  'MLA414103': 'Videojuegos',
-  'MLA431207': 'Micrófonos',
-  'MLA372009': 'Tarjetas de Memoria',
-  'MLA44408': 'Cargadores',
-  'MLA413475': 'Altavoces',
-  'MLA412530': 'Controladores',
-  'MLA413463': 'Auriculares Gaming',
-  'MLA30763': 'Procesadores Gráficos',
-  'MLA431019': 'Fundas y Estuches',
-  'MLA58727': 'Cámaras Web',
-  'MLA431218': 'Mousepads',
-  'MLA416985': 'Sillas Gaming',
-  'MLA4625': 'Soportes',
-  'MLA431206': 'Ventiladores',
-  'MLA373345': 'Memorias USB',
-  'MLA431209': 'Luces LED',
-  'MLA380665': 'Cables HDMI',
-  'MLA430611': 'Streaming',
-  'MLA435492': 'Proyectores',
-  'MLA372999': 'Drivers',
-  'MLA30788': 'Discos Duros',
-  'MLA412586': 'Accesorios Gaming',
-  'MLA30811': 'UPS',
-  'MLA434737': 'Cámaras Digitales',
-  'MLA69930': 'Televisores',
-  'MLA12812': 'Electrodomésticos',
-  'MLA392132': 'Accesorios para Celulares',
-  'MLA91746': 'Parlantes Bluetooth',
-  'MLA372007': 'Tarjetas WiFi',
-  'MLA412582': 'Joysticks',
-  'MLA455196': 'Reproductores',
-  'MLA412362': 'Controles Remotos',
-  'MLA456926': 'Drones',
-  'MLA380652': 'Adaptadores',
-  'MLA430537': 'Bases de Carga',
-  'MLA47781': 'Cámaras de Seguridad',
-  'MLA1659': 'Componentes Electrónicos',
-  'MLA30764': 'Memorias de Video',
-  'MLA30798': 'Tarjetas Madre',
-  'MLA455202': 'Equipos de Audio',
-  'MLA30789': 'Discos SSD',
-  'MLA383867': 'Estabilizadores',
-  'MLA387583': 'Lectores de Tarjetas',
-  'MLA412529': 'Mandos',
-  'MLA2893': 'Radios',
-  'MLA5337': 'Batería y Energía',
-  'MLA90322': 'Equipos de Sonido',
-  'MLA413548': 'Sillas de Oficina',
-  'MLA6049': 'Pilas y Baterías',
-  'MLA10072': 'Limpieza',
-  'MLA417778': 'Refrigeración',
-  'MLA435491': 'Iluminación',
-  'MLA372030': 'Conectores',
-  'MLA1652': 'Herramientas',
-  'MLA30809': 'Reguladores',
-  'MLA352001': 'Convertidores',
-  'MLA378182': 'Extensores',
-  'MLA380650': 'Splitters',
-  'MLA412006': 'Switches',
-  'MLA413985': 'Routers',
-  'MLA438566': 'Antenas',
-  'MLA30759': 'Tarjetas Gráficas',
-  'MLA412577': 'Bases y Soportes',
-  'MLA416524': 'Organizadores',
-  'MLA442422': 'Protectores',
-  'MLA5959': 'Limpiadores',
-  'MLA60567': 'Accesorios',
-  'MLA380657': 'Distribuidores',
-  'MLA429749': 'Sensores',
-  'MLA457051': 'Herramientas de Red',
-  'MLA1714': 'Telescopios',
-  'MLA408023': 'Lentes',
-  'MLA416680': 'Trípodes',
-  'MLA434918': 'Filtros',
-  'MLA73039': 'Flashes'
-};
+const databaseService = require('../src/services/databaseService');
 
 /**
- * Obtener información de categorías 
+ * Función compartida para obtener categorías con estrategia híbrida
+ * Esta función puede ser usada desde cualquier parte de la aplicación
+ */
+async function getCategoriesWithHybridStrategy(categoryIds) {
+  if (!categoryIds || categoryIds.length === 0) {
+    return {};
+  }
+
+  console.log(`📂 Hybrid Categories - Procesando ${categoryIds.length} categorías`);
+
+  const categoriesInfo = {};
+  
+  // PASO 1: Consultar primero en la BD
+  console.log('🔍 Consultando categorías en BD...');
+  const dbCategories = await databaseService.getCategoriesByIds(categoryIds);
+  const foundInDb = new Set();
+  
+  dbCategories.forEach(category => {
+    foundInDb.add(category.id);
+    categoriesInfo[category.id] = {
+      id: category.id,
+      name: category.name,
+      path_from_root: category.path_from_root || []
+    };
+  });
+  
+  console.log(`📦 Encontradas ${foundInDb.size} de ${categoryIds.length} categorías en BD`);
+  
+  // PASO 2: Para las que no están en BD, consultar ML API
+  const missingCategoryIds = categoryIds.filter(id => !foundInDb.has(id));
+  
+  if (missingCategoryIds.length > 0) {
+    console.log(`🌐 Consultando ${missingCategoryIds.length} categorías en ML API...`);
+    
+    const categoryPromises = missingCategoryIds.map(async (categoryId) => {
+      const categoryData = await fetchCategoryFromML(categoryId);
+      
+      if (categoryData) {
+        // Guardar en BD para próximas consultas
+        try {
+          await databaseService.upsertCategory(categoryData);
+          console.log(`💾 Categoría ${categoryId} guardada en BD`);
+        } catch (dbError) {
+          console.warn(`⚠️ Error guardando categoría ${categoryId} en BD:`, dbError.message);
+        }
+        
+        // Agregar a respuesta
+        categoriesInfo[categoryId] = {
+          id: categoryData.id,
+          name: categoryData.name,
+          path_from_root: categoryData.path_from_root
+        };
+      } else {
+        // Fallback si la API de ML también falla
+        categoriesInfo[categoryId] = {
+          id: categoryId,
+          name: `Categoría ${categoryId}`,
+          path_from_root: []
+        };
+      }
+    });
+
+    await Promise.all(categoryPromises);
+  }
+
+  console.log(`📦 Hybrid Categories - Procesadas ${Object.keys(categoriesInfo).length} categorías`);
+  console.log(`   • ${foundInDb.size} desde BD, ${missingCategoryIds.length} desde ML API`);
+
+  return {
+    categories: categoriesInfo,
+    stats: {
+      total: Object.keys(categoriesInfo).length,
+      database: foundInDb.size,
+      api: missingCategoryIds.length
+    }
+  };
+}
+
+/**
+ * Obtener información de categoría desde la API de MercadoLibre
+ */
+async function fetchCategoryFromML(categoryId) {
+  try {
+    const response = await fetch(`https://api.mercadolibre.com/categories/${categoryId}`);
+    
+    if (!response.ok) {
+      console.warn(`⚠️ API Categories - ML API error for ${categoryId}: ${response.status}`);
+      return null;
+    }
+    
+    const categoryData = await response.json();
+    return {
+      id: categoryData.id,
+      name: categoryData.name,
+      country_code: 'AR', // Asumiendo Argentina por defecto
+      site_id: 'MLA',
+      path_from_root: categoryData.path_from_root || [],
+      total_items_in_this_category: categoryData.total_items_in_this_category || 0
+    };
+  } catch (error) {
+    console.warn(`⚠️ API Categories - Error fetching ${categoryId}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Obtener información de categorías (Híbrido: BD + ML API)
  */
 async function getCategoriesInfo(req, res) {
   try {
@@ -123,23 +127,17 @@ async function getCategoriesInfo(req, res) {
 
     console.log(`📂 API Categories - Obteniendo información de ${categoryIds.length} categorías:`, categoryIds);
 
-    const categoriesInfo = {};
-    
-    // Usar mapeo estático por ahora
-    categoryIds.forEach(categoryId => {
-      categoriesInfo[categoryId] = {
-        id: categoryId,
-        name: categoryNames[categoryId] || `Categoría ${categoryId}`,
-        path_from_root: []
-      };
-    });
-
-    console.log(`📦 API Categories - Respuesta: ${Object.keys(categoriesInfo).length} categorías procesadas`);
+    // Usar la función compartida híbrida
+    const result = await getCategoriesWithHybridStrategy(categoryIds);
 
     res.json({
       success: true,
-      categories: categoriesInfo,
-      total: Object.keys(categoriesInfo).length
+      categories: result.categories,
+      total: result.stats.total,
+      source: {
+        database: result.stats.database,
+        api: result.stats.api
+      }
     });
 
   } catch (error) {
@@ -172,3 +170,7 @@ module.exports = async function handler(req, res) {
       });
   }
 };
+
+// Exportar también la función compartida para uso interno
+module.exports.getCategoriesWithHybridStrategy = getCategoriesWithHybridStrategy;
+module.exports.fetchCategoryFromML = fetchCategoryFromML;
