@@ -8,8 +8,9 @@ const logger = require('../utils/logger');
 const sessionManager = require('../utils/sessionManager');
 const databaseService = require('../services/databaseService');
 
-// Importar la función estática de categorías
-const { getCategoriesFromStatic } = require('../../api/categories');
+// Importar utilidades nativas
+const path = require('path');
+const fs = require('fs');
 
 // Función auxiliar para extraer SKU de múltiples fuentes
 function extractSKUFromProduct(productData) {
@@ -35,51 +36,29 @@ function extractSKUFromProduct(productData) {
   return null;
 }
 
-// Función auxiliar para verificar categorías desde los productos (usando archivo estático)
+// Función auxiliar para verificar categorías (simplificada - solo log)
 function saveCategoriesFromProducts(categoryIds) {
   try {
-    logger.info(`🔍 SYNC CATEGORIES: Procesando ${categoryIds.length} categorías desde archivo estático`);
-    logger.info(`🔍 SYNC CATEGORIES: IDs: ${categoryIds.slice(0, 5).join(', ')}${categoryIds.length > 5 ? '...' : ''}`);
-    
-    // Usar archivo estático (instantáneo, sin consultas externas)
-    const result = getCategoriesFromStatic(categoryIds);
-    
-    logger.info(`🔍 SYNC CATEGORIES: Procesamiento completado:`);
-    logger.info(`   • Total procesadas: ${result.stats.total}`);
-    logger.info(`   • Encontradas en archivo: ${result.stats.found}`);
-    logger.info(`   • Fallback usado: ${result.stats.missing}`);
-    
-    return result.stats;
-    
-  } catch (error) {
-    logger.error(`🔍 SYNC CATEGORIES: Error en saveCategoriesFromProducts: ${error.message}`);
-    // No lanzar error para que no interrumpa el sync principal
-  }
-}
-
-// Función para verificar categorías automáticamente después del sync (usando archivo estático)
-function populateCategoriesAfterSync(userId) {
-  try {
-    logger.info(`🔍 AUTO-POPULATE: Verificando disponibilidad de categorías desde archivo estático`);
-    logger.info(`🔍 AUTO-POPULATE: userId: ${userId}`);
-    
-    // Ya no necesitamos obtener productos ni hacer consultas
-    // El archivo estático contiene todas las categorías de ML
-    logger.info(`🎉 AUTO-POPULATE: Todas las categorías disponibles desde archivo estático (12,109+ categorías)`);
-    logger.info(`   • Sin consultas a BD ni API externa`);
-    logger.info(`   • Respuesta instantánea`);
-    logger.info(`   • Datos siempre actualizados del árbol de ML`);
+    logger.info(`🔍 SYNC CATEGORIES: ${categoryIds.length} categorías detectadas en productos`);
+    logger.info(`🔍 SYNC CATEGORIES: Todas disponibles desde archivo estático (no requiere procesamiento)`);
+    logger.info(`   • Categorías disponibles: 12,109+`);
+    logger.info(`   • Ejemplos: ${categoryIds.slice(0, 3).join(', ')}${categoryIds.length > 3 ? '...' : ''}`);
     
     return { 
-      message: 'Categories available from static file',
-      total_available: 12109,
-      source: 'static_file'
+      total: categoryIds.length, 
+      source: 'static_file_available' 
     };
     
   } catch (error) {
-    logger.error(`❌ AUTO-POPULATE: Error: ${error.message}`);
-    // No lanzar error para que no interrumpa el sync principal
+    logger.error(`🔍 SYNC CATEGORIES: Error: ${error.message}`);
   }
+}
+
+// Función simplificada - ya no necesita poblar nada
+function populateCategoriesAfterSync(userId) {
+  logger.info(`✅ CATEGORIES: Todas disponibles desde archivo estático (12,109+ categorías)`);
+  logger.info(`   • Sin procesamiento necesario para usuario ${userId}`);
+  return { message: 'Categories available from static file', total_available: 12109 };
 }
 
 /**

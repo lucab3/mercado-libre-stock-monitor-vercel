@@ -29,7 +29,7 @@ class DatabaseService {
         async (client) => {
           let query = client
             .from(this.tableName)
-            .select('*')
+            .select('id,title,seller_sku,category_id,available_quantity,price,status,health,permalink,updated_at,created_at')
             .eq('user_id', userId);
           
           if (status) {
@@ -70,7 +70,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from(this.tableName)
-            .select('*')
+            .select('id,title,seller_sku,category_id,available_quantity,price,status,updated_at')
             .eq('user_id', userId)
             // Removed status filter - show all products regardless of status
             .lte('available_quantity', threshold)
@@ -731,7 +731,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from('tokens_storage')
-            .select('*')
+            .select('access_token_encrypted,refresh_token_encrypted,token_type,expires_at,scope')
             .eq('user_id', userId)
             .single();
         },
@@ -1172,9 +1172,8 @@ class DatabaseService {
         async (client) => {
           return await client
             .from(this.tableName)
-            .select('*')
-            .eq('user_id', userId)
-            .order('updated_at', { ascending: false });
+            .select('id,category_id')
+            .eq('user_id', userId);
         },
         'get_all_products'
       );
