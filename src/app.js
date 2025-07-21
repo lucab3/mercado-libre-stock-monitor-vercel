@@ -203,7 +203,7 @@ function createApp() {
       const products = await databaseService.getProducts(userId);
       logger.info(`📦 Productos encontrados: ${products.length}`);
       
-      // Formatear productos para el frontend
+      // Formatear productos para el frontend con todos los campos necesarios
       const productDetails = products.map(product => ({
         id: product.id,
         title: product.title,
@@ -214,8 +214,9 @@ function createApp() {
         permalink: product.permalink,
         category_id: product.category_id,
         condition: product.condition,
+        listing_type_id: product.listing_type_id,
         health: product.health,
-        updated_at: product.updated_at || product.created_at
+        updated_at: product.updated_at || product.last_webhook_update || product.last_api_sync || product.created_at
       }));
       
       res.json({
@@ -271,7 +272,7 @@ function createApp() {
         activeProducts: products.filter(p => p.status === 'active').length,
         pausedProducts: products.filter(p => p.status === 'paused').length,
         lastSync: products.length > 0 ? 
-          Math.max(...products.map(p => new Date(p.updated_at || p.created_at || 0).getTime())) : 
+          Math.max(...products.map(p => new Date(p.updated_at || p.last_webhook_update || p.last_api_sync || p.created_at || 0).getTime())) : 
           null
       };
       

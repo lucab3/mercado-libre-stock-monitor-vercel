@@ -29,7 +29,7 @@ class DatabaseService {
         async (client) => {
           let query = client
             .from(this.tableName)
-            .select('id,title,seller_sku,category_id,available_quantity,price,status,health,permalink,updated_at,created_at')
+            .select('id,title,seller_sku,category_id,available_quantity,price,status,health,permalink,condition,listing_type_id,last_webhook_sync,last_api_sync,last_webhook_update,updated_at,created_at')
             .eq('user_id', userId);
           
           if (status) {
@@ -70,7 +70,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from(this.tableName)
-            .select('id,title,seller_sku,category_id,available_quantity,price,status,updated_at')
+            .select('id,title,seller_sku,category_id,available_quantity,price,status,health,permalink,condition,listing_type_id,last_webhook_sync,last_api_sync,last_webhook_update,updated_at,created_at')
             .eq('user_id', userId)
             // Removed status filter - show all products regardless of status
             .lte('available_quantity', threshold)
