@@ -169,7 +169,125 @@ function createApp() {
   const handleSyncNext = require('./api/sync-next');
   app.get('/api/sync-next', handleSyncNext);
   
-  // API categories eliminado - ahora solo se usa /api/categories/info
+  // API categories/info (obtener nombres de categorías desde archivo JSON estático)
+  const categoriesInfoHandler = require('../api/categories/info');
+  app.post('/api/categories/info', categoriesInfoHandler);
+
+  // API products (obtener productos desde BD con filtros de bajo stock)
+  app.get('/api/products', async (req, res) => {
+    try {
+      const sessionCookie = req.cookies['ml-session'];
+      
+      if (!sessionCookie) {
+        return res.status(401).json({
+          success: false,
+          error: 'No hay sesión activa',
+          needsAuth: true
+        });
+      }
+      
+      const session = await databaseService.getUserSession(sessionCookie);
+      if (!session) {
+        return res.status(401).json({
+          success: false,
+          error: 'Sesión inválida',
+          needsAuth: true
+        });
+      }
+      
+      const userId = session.userId;
+      logger.info(`📦 Obteniendo productos para usuario: ${userId}`);
+      
+      // Obtener productos desde BD
+      const products = await databaseService.getProducts(userId);
+      logger.info(`📦 Productos encontrados: ${products.length}`);
+      
+      // Formatear productos para el frontend
+      const productDetails = products.map(product => ({
+        id: product.id,
+        title: product.title,
+        seller_sku: product.seller_sku,
+        available_quantity: product.available_quantity,
+        price: product.price,
+        status: product.status,
+        permalink: product.permalink,
+        category_id: product.category_id,
+        condition: product.condition,
+        health: product.health,
+        updated_at: product.updated_at || product.created_at
+      }));
+      
+      res.json({
+        success: true,
+        products: productDetails,
+        total: products.length,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: 'Error obteniendo productos',
+        message: error.message
+      });
+    }
+  });
+
+  // API products/stats (estadísticas de productos)
+  app.get('/api/products/stats', async (req, res) => {
+    try {
+      const sessionCookie = req.cookies['ml-session'];
+      
+      if (!sessionCookie) {
+        return res.status(401).json({
+          success: false,
+          error: 'No hay sesión activa',
+          needsAuth: true
+        });
+      }
+      
+      const session = await databaseService.getUserSession(sessionCookie);
+      if (!session) {
+        return res.status(401).json({
+          success: false,
+          error: 'Sesión inválida',
+          needsAuth: true
+        });
+      }
+      
+      const userId = session.userId;
+      logger.info(`📊 Obteniendo estadísticas para usuario: ${userId}`);
+      
+      // Obtener productos y calcular estadísticas
+      const products = await databaseService.getProducts(userId);
+      const lowStockProducts = await databaseService.getLowStockProducts(userId, 5);
+      
+      const stats = {
+        totalProducts: products.length,
+        lowStockProducts: lowStockProducts.length,
+        activeProducts: products.filter(p => p.status === 'active').length,
+        pausedProducts: products.filter(p => p.status === 'paused').length,
+        lastSync: products.length > 0 ? 
+          Math.max(...products.map(p => new Date(p.updated_at || p.created_at || 0).getTime())) : 
+          null
+      };
+      
+      res.json({
+        success: true,
+        ...stats,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo estadísticas: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: 'Error obteniendo estadísticas',
+        message: error.message
+      });
+    }
+  });
 
   // API logout (para compatibilidad con React)
   app.post('/api/auth/logout', async (req, res) => {
