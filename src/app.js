@@ -220,18 +220,15 @@ function createApp() {
       }));
       
       res.json({
-        success: true,
         products: productDetails,
         total: products.length,
-        timestamp: new Date().toISOString()
+        showing: productDetails.length
       });
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);
-      res.status(500).json({
-        success: false,
-        error: 'Error obteniendo productos',
-        message: error.message
+      res.status(500).json({ 
+        error: 'Error obteniendo productos' 
       });
     }
   });
