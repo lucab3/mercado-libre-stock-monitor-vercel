@@ -359,6 +359,35 @@ class DatabaseService {
   // ==========================================
 
   /**
+   * Limpiar webhooks procesados más antiguos que X días
+   */
+  async cleanupProcessedWebhooks(daysOld = 7) {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+      
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.webhookTableName)
+            .delete()
+            .eq('processed', true)
+            .lt('processed_at', cutoffDate.toISOString());
+        },
+        'cleanup_processed_webhooks'
+      );
+      
+      const deletedCount = result.count || 0;
+      logger.info(`🧹 Eliminados ${deletedCount} webhooks procesados antiguos (>${daysOld} días) - Optimización egress`);
+      return deletedCount;
+      
+    } catch (error) {
+      logger.error(`❌ Error limpiando webhooks procesados: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Ejecutar limpieza automática
    */
   async runMaintenance() {
@@ -375,6 +404,9 @@ class DatabaseService {
         async (client) => await client.rpc('cleanup_old_scans'),
         'cleanup_scans'
       );
+      
+      // Limpiar webhooks procesados antiguos para optimizar egress
+      await this.cleanupProcessedWebhooks(7);
       
       logger.info('✅ Mantenimiento automático completado');
       
@@ -430,10 +462,41 @@ class DatabaseService {
   // ==========================================
 
   /**
+   * Limpiar todos los webhooks de un usuario específico
+   */
+  async clearUserWebhooks(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.webhookTableName)
+            .delete()
+            .eq('user_id', userId);
+        },
+        'clear_user_webhooks'
+      );
+      
+      const deletedCount = result.count || 0;
+      logger.info(`🧹 Eliminados ${deletedCount} webhooks para usuario ${userId} - Optimización egress Supabase`);
+      return deletedCount;
+      
+    } catch (error) {
+      logger.error(`❌ Error limpiando webhooks para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Inicializar o resetear scan para un usuario
+   * Incluye limpieza de webhooks para optimizar Supabase egress
    */
   async initUserScan(userId) {
     try {
+      // 1. Limpiar webhooks existentes del usuario para reducir egress
+      logger.info(`🧹 Limpiando webhooks existentes para usuario ${userId}...`);
+      await this.clearUserWebhooks(userId);
+      
+      // 2. Inicializar scan
       await supabaseClient.executeQuery(
         async (client) => {
           return await client.rpc('init_user_scan', { p_user_id: userId });
@@ -441,7 +504,7 @@ class DatabaseService {
         'init_user_scan'
       );
       
-      logger.info(`✅ Scan inicializado para usuario: ${userId}`);
+      logger.info(`✅ Scan inicializado para usuario: ${userId} (webhooks limpiados para optimización)`);
       
     } catch (error) {
       logger.error(`❌ Error inicializando scan para usuario ${userId}: ${error.message}`);
