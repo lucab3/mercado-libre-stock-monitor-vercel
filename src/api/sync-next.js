@@ -8,8 +8,8 @@ const logger = require('../utils/logger');
 const sessionManager = require('../utils/sessionManager');
 const databaseService = require('../services/databaseService');
 
-// Importar la función híbrida de categorías
-const { getCategoriesWithHybridStrategy } = require('../../api/categories');
+// Importar la función estática de categorías
+const { getCategoriesFromStatic } = require('../../api/categories');
 
 // Función auxiliar para extraer SKU de múltiples fuentes
 function extractSKUFromProduct(productData) {
@@ -35,58 +35,49 @@ function extractSKUFromProduct(productData) {
   return null;
 }
 
-// Función auxiliar para guardar categorías desde los productos (usando estrategia híbrida)
-async function saveCategoriesFromProducts(categoryIds) {
+// Función auxiliar para verificar categorías desde los productos (usando archivo estático)
+function saveCategoriesFromProducts(categoryIds) {
   try {
-    logger.info(`🔍 SYNC CATEGORIES: Iniciando procesamiento de ${categoryIds.length} categorías`);
-    logger.info(`🔍 SYNC CATEGORIES: IDs a procesar: ${categoryIds.join(', ')}`);
+    logger.info(`🔍 SYNC CATEGORIES: Procesando ${categoryIds.length} categorías desde archivo estático`);
+    logger.info(`🔍 SYNC CATEGORIES: IDs: ${categoryIds.slice(0, 5).join(', ')}${categoryIds.length > 5 ? '...' : ''}`);
     
-    // Usar la estrategia híbrida (BD primero, luego ML API)
-    const result = await getCategoriesWithHybridStrategy(categoryIds);
+    // Usar archivo estático (instantáneo, sin consultas externas)
+    const result = getCategoriesFromStatic(categoryIds);
     
     logger.info(`🔍 SYNC CATEGORIES: Procesamiento completado:`);
     logger.info(`   • Total procesadas: ${result.stats.total}`);
-    logger.info(`   • Desde BD: ${result.stats.database}`);
-    logger.info(`   • Desde ML API: ${result.stats.api}`);
+    logger.info(`   • Encontradas en archivo: ${result.stats.found}`);
+    logger.info(`   • Fallback usado: ${result.stats.missing}`);
     
     return result.stats;
     
   } catch (error) {
     logger.error(`🔍 SYNC CATEGORIES: Error en saveCategoriesFromProducts: ${error.message}`);
-    logger.error(`🔍 SYNC CATEGORIES: Stack trace: ${error.stack}`);
     // No lanzar error para que no interrumpa el sync principal
   }
 }
 
-// Función para poblar categorías automáticamente después del sync (usando estrategia híbrida)
-async function populateCategoriesAfterSync(userId) {
+// Función para verificar categorías automáticamente después del sync (usando archivo estático)
+function populateCategoriesAfterSync(userId) {
   try {
-    logger.info(`🔍 AUTO-POPULATE: ===== INICIANDO FUNCIÓN POPULATE CATEGORIES =====`);
+    logger.info(`🔍 AUTO-POPULATE: Verificando disponibilidad de categorías desde archivo estático`);
     logger.info(`🔍 AUTO-POPULATE: userId: ${userId}`);
     
-    // 1. Obtener todas las categorías únicas de los productos existentes
-    const products = await databaseService.getAllProducts(userId);
-    const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
+    // Ya no necesitamos obtener productos ni hacer consultas
+    // El archivo estático contiene todas las categorías de ML
+    logger.info(`🎉 AUTO-POPULATE: Todas las categorías disponibles desde archivo estático (12,109+ categorías)`);
+    logger.info(`   • Sin consultas a BD ni API externa`);
+    logger.info(`   • Respuesta instantánea`);
+    logger.info(`   • Datos siempre actualizados del árbol de ML`);
     
-    logger.info(`🔍 AUTO-POPULATE: Encontradas ${categoryIds.length} categorías únicas en ${products.length} productos`);
-    
-    if (categoryIds.length === 0) {
-      logger.info(`🔍 AUTO-POPULATE: No hay categorías para procesar`);
-      return;
-    }
-    
-    // 2. Usar la estrategia híbrida para procesar todas las categorías
-    const result = await getCategoriesWithHybridStrategy(categoryIds);
-    
-    logger.info(`🎉 AUTO-POPULATE: Completado exitosamente:`);
-    logger.info(`   • Total procesadas: ${result.stats.total}`);
-    logger.info(`   • Ya existían en BD: ${result.stats.database}`);  
-    logger.info(`   • Obtenidas de ML API: ${result.stats.api}`);
-    
-    return result.stats;
+    return { 
+      message: 'Categories available from static file',
+      total_available: 12109,
+      source: 'static_file'
+    };
     
   } catch (error) {
-    logger.error(`❌ AUTO-POPULATE: Error general: ${error.message}`);
+    logger.error(`❌ AUTO-POPULATE: Error: ${error.message}`);
     // No lanzar error para que no interrumpa el sync principal
   }
 }

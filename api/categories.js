@@ -1,85 +1,62 @@
 /**
  * Endpoint serverless para obtener información de categorías
- * Estrategia híbrida: BD primero, luego ML API como fallback
+ * Usa archivo JSON estático del árbol completo de ML
  */
 
-const databaseService = require('../src/services/databaseService');
+const path = require('path');
+const fs = require('fs');
+
+// Cargar categorías desde archivo JSON estático
+let categoriesData = null;
+
+function loadCategoriesData() {
+  if (!categoriesData) {
+    const categoriesPath = path.join(process.cwd(), 'src/data/categories.json');
+    categoriesData = JSON.parse(fs.readFileSync(categoriesPath, 'utf8'));
+    console.log(`📂 Categorías cargadas: ${Object.keys(categoriesData).length} categorías desde archivo estático`);
+  }
+  return categoriesData;
+}
 
 /**
- * Función compartida para obtener categorías con estrategia híbrida
- * Esta función puede ser usada desde cualquier parte de la aplicación
+ * Función para obtener categorías desde archivo JSON estático
  */
-async function getCategoriesWithHybridStrategy(categoryIds) {
+function getCategoriesFromStatic(categoryIds) {
   if (!categoryIds || categoryIds.length === 0) {
     return {};
   }
 
-  console.log(`📂 Hybrid Categories - Procesando ${categoryIds.length} categorías`);
+  console.log(`📂 Static Categories - Procesando ${categoryIds.length} categorías`);
 
+  const allCategories = loadCategoriesData();
   const categoriesInfo = {};
   
-  // PASO 1: Consultar primero en la BD
-  console.log('🔍 Consultando categorías en BD...');
-  const dbCategories = await databaseService.getCategoriesByIds(categoryIds);
-  const foundInDb = new Set();
-  
-  dbCategories.forEach(category => {
-    foundInDb.add(category.id);
-    categoriesInfo[category.id] = {
-      id: category.id,
-      name: category.name,
-      path_from_root: category.path_from_root || []
-    };
+  categoryIds.forEach(categoryId => {
+    const categoryData = allCategories[categoryId];
+    if (categoryData) {
+      categoriesInfo[categoryId] = {
+        id: categoryData.id,
+        name: categoryData.name,
+        path_from_root: categoryData.path_from_root || []
+      };
+    } else {
+      // Fallback para categorías no encontradas
+      categoriesInfo[categoryId] = {
+        id: categoryId,
+        name: `Categoría ${categoryId}`,
+        path_from_root: []
+      };
+    }
   });
-  
-  console.log(`📦 Encontradas ${foundInDb.size} de ${categoryIds.length} categorías en BD`);
-  
-  // PASO 2: Para las que no están en BD, consultar ML API
-  const missingCategoryIds = categoryIds.filter(id => !foundInDb.has(id));
-  
-  if (missingCategoryIds.length > 0) {
-    console.log(`🌐 Consultando ${missingCategoryIds.length} categorías en ML API...`);
-    
-    const categoryPromises = missingCategoryIds.map(async (categoryId) => {
-      const categoryData = await fetchCategoryFromML(categoryId);
-      
-      if (categoryData) {
-        // Guardar en BD para próximas consultas
-        try {
-          await databaseService.upsertCategory(categoryData);
-          console.log(`💾 Categoría ${categoryId} guardada en BD`);
-        } catch (dbError) {
-          console.warn(`⚠️ Error guardando categoría ${categoryId} en BD:`, dbError.message);
-        }
-        
-        // Agregar a respuesta
-        categoriesInfo[categoryId] = {
-          id: categoryData.id,
-          name: categoryData.name,
-          path_from_root: categoryData.path_from_root
-        };
-      } else {
-        // Fallback si la API de ML también falla
-        categoriesInfo[categoryId] = {
-          id: categoryId,
-          name: `Categoría ${categoryId}`,
-          path_from_root: []
-        };
-      }
-    });
 
-    await Promise.all(categoryPromises);
-  }
-
-  console.log(`📦 Hybrid Categories - Procesadas ${Object.keys(categoriesInfo).length} categorías`);
-  console.log(`   • ${foundInDb.size} desde BD, ${missingCategoryIds.length} desde ML API`);
+  console.log(`📦 Static Categories - Procesadas ${Object.keys(categoriesInfo).length} categorías desde archivo estático`);
 
   return {
     categories: categoriesInfo,
     stats: {
       total: Object.keys(categoriesInfo).length,
-      database: foundInDb.size,
-      api: missingCategoryIds.length
+      found: categoryIds.filter(id => allCategories[id]).length,
+      missing: categoryIds.filter(id => !allCategories[id]).length
     }
   };
 }
@@ -112,7 +89,7 @@ async function fetchCategoryFromML(categoryId) {
 }
 
 /**
- * Obtener información de categorías (Híbrido: BD + ML API)
+ * Obtener información de categorías desde archivo JSON estático
  */
 async function getCategoriesInfo(req, res) {
   try {
@@ -127,16 +104,16 @@ async function getCategoriesInfo(req, res) {
 
     console.log(`📂 API Categories - Obteniendo información de ${categoryIds.length} categorías:`, categoryIds);
 
-    // Usar la función compartida híbrida
-    const result = await getCategoriesWithHybridStrategy(categoryIds);
+    // Usar archivo JSON estático (súper rápido, sin consultas externas)
+    const result = getCategoriesFromStatic(categoryIds);
 
     res.json({
       success: true,
       categories: result.categories,
       total: result.stats.total,
       source: {
-        database: result.stats.database,
-        api: result.stats.api
+        static: result.stats.found,
+        fallback: result.stats.missing
       }
     });
 
@@ -171,6 +148,6 @@ module.exports = async function handler(req, res) {
   }
 };
 
-// Exportar también la función compartida para uso interno
-module.exports.getCategoriesWithHybridStrategy = getCategoriesWithHybridStrategy;
-module.exports.fetchCategoryFromML = fetchCategoryFromML;
+// Exportar también la función estática para uso interno
+module.exports.getCategoriesFromStatic = getCategoriesFromStatic;
+module.exports.loadCategoriesData = loadCategoriesData;
