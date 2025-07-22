@@ -34,7 +34,7 @@ function DashboardLayout() {
         apiService.getProductStats()
       ])
 
-      actions.setProducts(products.products || [])
+      actions.setProducts(products || [])
       actions.setAlerts(alerts.alerts || [])
       actions.setStats(stats)
       

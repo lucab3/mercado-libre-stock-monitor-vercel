@@ -184,7 +184,7 @@ export function AppProvider({ children }) {
         apiService.getAlerts(state.alertFilters)
       ])
 
-      setProducts(products.products || [])
+      setProducts(products || [])
       setAlerts(alerts.alerts || [])
     } catch (error) {
       console.error('Error refreshing data:', error)

@@ -222,14 +222,8 @@ function createApp() {
         updated_at: product.updated_at || product.last_webhook_update || product.last_api_sync || product.created_at
       }));
       
-      const response = {
-        products: productDetails,
-        total: products.length,
-        showing: productDetails.length
-      };
-      
-      logger.info(`📦 Enviando respuesta: ${response.total} productos, primeros 2:`, response.products.slice(0, 2).map(p => ({ id: p.id, title: p.title })));
-      res.json(response);
+      logger.info(`📦 Enviando respuesta: ${products.length} productos, primeros 2:`, productDetails.slice(0, 2).map(p => ({ id: p.id, title: p.title })));
+      res.json(productDetails);
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);
