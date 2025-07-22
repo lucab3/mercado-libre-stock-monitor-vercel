@@ -84,7 +84,7 @@ function DashboardHome() {
       
       // Recargar productos después del sync
       const productsResponse = await apiService.getProducts()
-      actions.setProducts(productsResponse || [])
+      actions.setProducts(productsResponse.products || [])
       
       // Actualizar stats
       const statsResponse = await apiService.getProductStats()
@@ -113,7 +113,7 @@ function DashboardHome() {
         apiService.getProductStats()
       ])
 
-      actions.setProducts(productsResponse || [])
+      actions.setProducts(productsResponse.products || [])
       actions.setAlerts(alertsResponse.alerts || [])
       actions.setStats(statsResponse)
     } catch (error) {
@@ -130,6 +130,12 @@ function DashboardHome() {
   
   // Filtrar productos con bajo stock aplicando filtros del dashboard
   const lowStockProducts = useMemo(() => {
+    // Asegurar que products es un array válido
+    if (!Array.isArray(products)) {
+      console.error('Products no es un array:', products);
+      return [];
+    }
+    
     let filtered = products.filter(p => p.available_quantity <= 5)
     
     // Filtro por nivel de stock específico
@@ -172,11 +178,16 @@ function DashboardHome() {
   // Obtener categorías únicas para el dropdown
   const availableCategories = useMemo(() => {
     const categories = new Set()
-    products.forEach(product => {
-      if (product.category_id) {
-        categories.add(product.category_id)
-      }
-    })
+    
+    // Asegurar que products es un array válido
+    if (Array.isArray(products)) {
+      products.forEach(product => {
+        if (product.category_id) {
+          categories.add(product.category_id)
+        }
+      })
+    }
+    
     return Array.from(categories).sort()
   }, [products])
 

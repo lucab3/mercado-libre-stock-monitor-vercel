@@ -173,9 +173,10 @@ function createApp() {
   const categoriesInfoHandler = require('../api/categories/info');
   app.post('/api/categories/info', categoriesInfoHandler);
 
-  // API products (obtener productos desde BD con filtros de bajo stock)
+  // API products (obtener productos desde BD con filtros de bajo stock)  
   app.get('/api/products', async (req, res) => {
     try {
+      console.log('🔍 /api/products endpoint called - CONSOLE LOG');
       logger.info('🔍 /api/products endpoint called');
       const sessionCookie = req.cookies['ml-session'];
       logger.info(`🔍 sessionCookie: ${sessionCookie ? sessionCookie.substring(0, 10) + '...' : 'NONE'}`);
@@ -222,8 +223,14 @@ function createApp() {
         updated_at: product.updated_at || product.last_webhook_update || product.last_api_sync || product.created_at
       }));
       
-      logger.info(`📦 Enviando respuesta: ${products.length} productos, primeros 2:`, productDetails.slice(0, 2).map(p => ({ id: p.id, title: p.title })));
-      res.json(productDetails);
+      const response = {
+        products: productDetails,
+        total: products.length,
+        showing: productDetails.length
+      };
+      
+      logger.info(`📦 Enviando respuesta: ${response.total} productos, primeros 2:`, response.products.slice(0, 2).map(p => ({ id: p.id, title: p.title })));
+      res.json(response);
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);

@@ -136,7 +136,10 @@ export function AppProvider({ children }) {
   }
 
   const setProducts = (products) => {
-    dispatch({ type: 'SET_PRODUCTS', payload: products })
+    // Asegurar que products siempre sea un array
+    const validProducts = Array.isArray(products) ? products : [];
+    console.log('🔍 setProducts llamado con:', products, 'convertido a:', validProducts);
+    dispatch({ type: 'SET_PRODUCTS', payload: validProducts })
   }
 
   const setAlerts = (alerts) => {
@@ -184,7 +187,7 @@ export function AppProvider({ children }) {
         apiService.getAlerts(state.alertFilters)
       ])
 
-      setProducts(products || [])
+      setProducts(products.products || [])
       setAlerts(alerts.alerts || [])
     } catch (error) {
       console.error('Error refreshing data:', error)
