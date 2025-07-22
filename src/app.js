@@ -176,7 +176,9 @@ function createApp() {
   // API products (obtener productos desde BD con filtros de bajo stock)
   app.get('/api/products', async (req, res) => {
     try {
+      logger.info('🔍 /api/products endpoint called');
       const sessionCookie = req.cookies['ml-session'];
+      logger.info(`🔍 sessionCookie: ${sessionCookie ? sessionCookie.substring(0, 10) + '...' : 'NONE'}`);
       
       if (!sessionCookie) {
         return res.status(401).json({
@@ -197,11 +199,12 @@ function createApp() {
       
       // CRITICAL: Usar sessionCookie como userId (igual que legacy)
       const userId = sessionCookie;
-      logger.info(`📦 Obteniendo productos para usuario: ${userId}`);
+      logger.info(`📦 Obteniendo productos para usuario: ${userId.substring(0, 10)}...`);
       
       // Obtener productos desde BD usando método que retorna todos los campos
       const products = await databaseService.getProducts(userId);
       logger.info(`📦 Productos encontrados: ${products.length}`);
+      logger.info(`📦 Primeros 3 productos:`, products.slice(0, 3).map(p => ({ id: p.id, title: p.title, status: p.status })));
       
       // Formatear productos para el frontend con todos los campos necesarios
       const productDetails = products.map(product => ({
@@ -219,11 +222,14 @@ function createApp() {
         updated_at: product.updated_at || product.last_webhook_update || product.last_api_sync || product.created_at
       }));
       
-      res.json({
+      const response = {
         products: productDetails,
         total: products.length,
         showing: productDetails.length
-      });
+      };
+      
+      logger.info(`📦 Enviando respuesta: ${response.total} productos, primeros 2:`, response.products.slice(0, 2).map(p => ({ id: p.id, title: p.title })));
+      res.json(response);
       
     } catch (error) {
       logger.error(`❌ Error obteniendo productos: ${error.message}`);
