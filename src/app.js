@@ -198,9 +198,9 @@ function createApp() {
         });
       }
       
-      // CRITICAL: Usar sessionCookie como userId (igual que legacy)
-      const userId = sessionCookie;
-      logger.info(`📦 Obteniendo productos para usuario: ${userId.substring(0, 10)}...`);
+      // CRITICAL: Usar userId de la sesión en lugar de sessionCookie  
+      const userId = session.userId;
+      logger.info(`📦 Obteniendo productos para usuario: ${userId} (sesión: ${sessionCookie.substring(0, 10)}...)`);
       
       // Obtener productos desde BD usando método que retorna todos los campos
       const products = await databaseService.getProducts(userId);
@@ -262,9 +262,9 @@ function createApp() {
         });
       }
       
-      // CRITICAL: Usar sessionCookie como userId (igual que legacy)  
-      const userId = sessionCookie;
-      logger.info(`📊 Obteniendo estadísticas para usuario: ${userId}`);
+      // CRITICAL: Usar userId de la sesión en lugar de sessionCookie
+      const userId = session.userId;
+      logger.info(`📊 Obteniendo estadísticas para usuario: ${userId} (sesión: ${sessionCookie.substring(0, 10)}...)`);
       
       // Obtener productos y calcular estadísticas
       const products = await databaseService.getProducts(userId);

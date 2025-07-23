@@ -136,8 +136,15 @@ export function AppProvider({ children }) {
   }
 
   const setProducts = (products) => {
-    // Asegurar que products siempre sea un array
-    const validProducts = Array.isArray(products) ? products : [];
+    // Manejar ambos formatos: array directo o objeto con .products
+    let validProducts = [];
+    
+    if (Array.isArray(products)) {
+      validProducts = products;
+    } else if (products && Array.isArray(products.products)) {
+      validProducts = products.products;
+    }
+    
     console.log('🔍 setProducts llamado con:', products, 'convertido a:', validProducts);
     dispatch({ type: 'SET_PRODUCTS', payload: validProducts })
   }
