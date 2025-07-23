@@ -4,9 +4,9 @@
  */
 
 const auth = require('../api/auth');
-const sessionManager = require('../utils/sessionManager');
 const databaseService = require('../services/databaseService');
 const logger = require('../utils/logger');
+const crypto = require('crypto');
 const path = require('path');
 
 class AuthController {
@@ -36,10 +36,17 @@ class AuthController {
         
         // En modo mock, crear sesión directamente
         const mockUserId = '123456789';
-        const cookieId = sessionManager.createSession(mockUserId, {
+        const mockTokens = {
           access_token: 'mock_token_123',
           expires_at: Date.now() + (6 * 60 * 60 * 1000)
-        });
+        };
+        
+        // Generar cookieId único
+        const cookieId = crypto.randomBytes(32).toString('hex');
+        
+        // Guardar tokens y sesión en BD
+        await databaseService.saveTokens(mockUserId, mockTokens);
+        await databaseService.createUserSession(cookieId, mockUserId, req.ip, req.get('User-Agent'));
         
         // Establecer cookie
         res.cookie('ml-session', cookieId, {
@@ -111,16 +118,17 @@ class AuthController {
       
       logger.info(`✅ Tokens obtenidos exitosamente para usuario: ${userId}`);
       
-      // Crear sesión y cookie - usar solo los tokens, no userInfo extra
-      const cookieId = sessionManager.createSession(userId, tokens);
+      // Generar cookieId único para la sesión
+      const cookieId = crypto.randomBytes(32).toString('hex');
       
       // Verificar que cookieId es válido
       if (!cookieId || typeof cookieId !== 'string') {
-        logger.error('❌ Error: cookieId inválido generado por sessionManager');
+        logger.error('❌ Error: cookieId inválido generado');
         return res.redirect('/acceso-denegado');
       }
       
-      // Guardar sesión en BD para compatibilidad serverless
+      // Guardar tokens y sesión en BD (única fuente de verdad)
+      await databaseService.saveTokens(userId, tokens);
       await databaseService.createUserSession(
         cookieId, 
         userId,
@@ -153,10 +161,7 @@ class AuthController {
       const sessionCookie = req.cookies['ml-session'];
       
       if (sessionCookie) {
-        // Limpiar de memoria
-        sessionManager.clearSession(sessionCookie);
-        
-        // Revocar en BD
+        // Revocar sesión en BD (única fuente de verdad)
         await databaseService.revokeUserSession(sessionCookie);
         
         logger.info(`🔓 Sesión cerrada: ${sessionCookie.substring(0, 8)}...`);
@@ -189,7 +194,7 @@ class AuthController {
       const isAuthenticated = !!req.user;
       
       if (isAuthenticated) {
-        const session = sessionManager.getSession(req.user.sessionId);
+        const session = await databaseService.getUserSession(req.user.sessionId);
         
         res.json({
           authenticated: true,
@@ -199,7 +204,7 @@ class AuthController {
           },
           session: {
             createdAt: session?.createdAt,
-            lastActivity: session?.lastActivity
+            lastActivity: session?.lastUsed
           }
         });
       } else {
