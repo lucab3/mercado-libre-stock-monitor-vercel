@@ -84,7 +84,7 @@ function DashboardHome() {
       
       // Recargar productos después del sync
       const productsResponse = await apiService.getProducts()
-      actions.setProducts(productsResponse.products || [])
+      actions.setProducts(productsResponse)
       
       // Actualizar stats
       const statsResponse = await apiService.getProductStats()
@@ -113,7 +113,7 @@ function DashboardHome() {
         apiService.getProductStats()
       ])
 
-      actions.setProducts(productsResponse.products || [])
+      actions.setProducts(productsResponse)
       actions.setAlerts(alertsResponse.alerts || [])
       actions.setStats(statsResponse)
     } catch (error) {
