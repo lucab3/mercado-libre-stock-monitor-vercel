@@ -1235,7 +1235,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from(this.tableName)
-            .select('id,category_id')
+            .select('*')
             .eq('user_id', userId);
         },
         'get_all_products'
