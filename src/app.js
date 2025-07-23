@@ -61,6 +61,17 @@ function createApp() {
   
   // ========== RUTAS PRINCIPALES ==========
   
+  // Health check endpoint (movido desde /api/healthcheck.js)
+  app.get('/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      message: 'El servicio está funcionando correctamente',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'production',
+      vercel: true
+    });
+  });
+  
   // Página principal - redirigir según autenticación
   app.get('/', async (req, res) => {
     try {
@@ -326,17 +337,6 @@ function createApp() {
     }
   });
   
-  // ========== HEALTH CHECK BÁSICO ==========
-  
-  app.get('/health', (req, res) => {
-    res.json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      version: require('../package.json').version
-    });
-  });
   
   // ========== MANEJO DE ERRORES ==========
   
