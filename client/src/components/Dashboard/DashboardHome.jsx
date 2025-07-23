@@ -272,11 +272,75 @@ function DashboardHome() {
       
       <StatsCards stats={stats} alerts={alerts} />
       
+      {/* Botones de departamentos */}
+      <div className="row mt-4">
+        <div className="col-12">
+          <DepartmentButtons />
+        </div>
+      </div>
+      
+      {/* Filtros de categorías múltiples */}
+      <div className="row mt-3">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body py-3">
+              <div className="row g-3 align-items-end">
+                <div className="col-md-4">
+                  <MultiCategorySelector
+                    availableCategories={availableCategories}
+                    selectedCategories={dashboardFilters.categories}
+                    onChange={(categories) => handleFilterChange('categories', categories)}
+                    label="Filtrar por categorías:"
+                    maxHeight="300px"
+                  />
+                </div>
+                <div className="col-md-2">
+                  <button
+                    className="btn btn-outline-secondary w-100"
+                    type="button"
+                    onClick={() => handleFilterChange('categories', [])}
+                    disabled={dashboardFilters.categories.length === 0}
+                    title="Limpiar selección de categorías"
+                  >
+                    <i className="bi bi-x-circle me-1"></i>
+                    Limpiar
+                  </button>
+                </div>
+                <div className="col-md-6">
+                  {dashboardFilters.categories.length > 0 && (
+                    <div>
+                      <small className="text-muted d-block mb-1">Categorías seleccionadas:</small>
+                      <div className="d-flex flex-wrap gap-1">
+                        {dashboardFilters.categories.map(categoryId => (
+                          <span key={categoryId} className="badge bg-primary d-flex align-items-center">
+                            {getCategoryName(categoryId)}
+                            <button
+                              type="button"
+                              className="btn-close btn-close-white ms-1"
+                              style={{ fontSize: '0.6em' }}
+                              onClick={() => {
+                                const newCategories = dashboardFilters.categories.filter(id => id !== categoryId)
+                                handleFilterChange('categories', newCategories)
+                              }}
+                              title="Quitar categoría"
+                            ></button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div className="row mt-4">
         <div className="col-md-8">
           <div className="card">
             <div className="card-header">
-              <div className="d-flex justify-content-between align-items-center mb-2">
+              <div className="d-flex justify-content-between align-items-center">
                 <h5 className="card-title mb-0">
                   {isFiltered ? `${departmentName} - Productos con bajo stock` : 'Productos con bajo stock'}
                 </h5>
@@ -293,13 +357,11 @@ function DashboardHome() {
                   </a>
                 </div>
               </div>
-              
-              <DepartmentButtons />
             </div>
             <div className="card-body">
               {/* Filtros para productos con bajo stock */}
               <div className="row g-3 mb-3">
-                <div className="col-md-3">
+                <div className="col-md-4">
                   <label className="form-label">Stock específico:</label>
                   <select 
                     className="form-select form-select-sm"
@@ -316,17 +378,7 @@ function DashboardHome() {
                   </select>
                 </div>
                 
-                <div className="col-md-3">
-                  <MultiCategorySelector
-                    availableCategories={availableCategories}
-                    selectedCategories={dashboardFilters.categories}
-                    onChange={(categories) => handleFilterChange('categories', categories)}
-                    label="Categorías:"
-                    maxHeight="200px"
-                  />
-                </div>
-                
-                <div className="col-md-3">
+                <div className="col-md-4">
                   <label className="form-label">Ordenar por:</label>
                   <select 
                     className="form-select form-select-sm"
@@ -339,7 +391,7 @@ function DashboardHome() {
                   </select>
                 </div>
                 
-                <div className="col-md-3">
+                <div className="col-md-4">
                   <label className="form-label">Buscar:</label>
                   <div className="input-group input-group-sm">
                     <input 
@@ -349,17 +401,17 @@ function DashboardHome() {
                       value={dashboardFilters.search}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
-                    {(dashboardFilters.categories.length > 0 || dashboardFilters.search || dashboardFilters.stockLevel !== 'all' || dashboardFilters.sort !== 'default') && (
+                    {(dashboardFilters.search || dashboardFilters.stockLevel !== 'all' || dashboardFilters.sort !== 'default') && (
                       <button
                         className="btn btn-outline-secondary"
                         type="button"
-                        onClick={() => setDashboardFilters({
+                        onClick={() => setDashboardFilters(prev => ({
+                          ...prev,
                           stockLevel: 'all',
-                          categories: [],
                           sort: 'default',
                           search: ''
-                        })}
-                        title="Limpiar todos los filtros"
+                        }))}
+                        title="Limpiar filtros de tabla"
                       >
                         <i className="bi bi-x-circle"></i>
                       </button>
