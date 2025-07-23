@@ -124,25 +124,34 @@ function MultiCategorySelector({
                   return (
                     <div key={categoryId} className="col-12">
                       <div 
-                        className={`form-check ${isSelected ? 'bg-light' : ''} p-2 rounded`}
+                        className={`form-check d-flex align-items-center ${isSelected ? 'bg-primary bg-opacity-10 border border-primary' : 'bg-light'} p-3 rounded`}
                         style={{ cursor: 'pointer' }}
                         onClick={() => handleCategoryToggle(categoryId)}
                       >
                         <input
-                          className="form-check-input"
+                          className="form-check-input me-3"
                           type="checkbox"
                           id={`category-${categoryId}`}
                           checked={isSelected}
                           onChange={() => handleCategoryToggle(categoryId)}
+                          style={{ 
+                            width: '20px', 
+                            height: '20px',
+                            cursor: 'pointer',
+                            borderWidth: '2px'
+                          }}
                         />
                         <label 
-                          className="form-check-label flex-fill" 
+                          className={`form-check-label flex-fill ${isSelected ? 'fw-medium text-primary' : ''}`} 
                           htmlFor={`category-${categoryId}`}
                           style={{ cursor: 'pointer' }}
                           title={categoryId}
                         >
                           {getCategoryName(categoryId)}
                         </label>
+                        {isSelected && (
+                          <i className="bi bi-check-circle-fill text-primary ms-2" style={{ fontSize: '16px' }}></i>
+                        )}
                       </div>
                     </div>
                   )
