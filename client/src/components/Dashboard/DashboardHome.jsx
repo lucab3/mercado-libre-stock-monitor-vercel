@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useAppContext } from '../../context/AppContext'
 import { useCategories } from '../../hooks/useCategories'
+import { useDepartmentFilter } from '../../hooks/useDepartmentFilter'
 import { apiService } from '../../services/api'
 import StatsCards from './StatsCards'
 import RecentAlerts from './RecentAlerts'
 import ProductsTable from './ProductsTable'
 import MonitoringControls from './MonitoringControls'
 import SyncProgress from './SyncProgress'
+import DepartmentButtons from './DepartmentButtons'
+import MultiCategorySelector from './MultiCategorySelector'
 
 function DashboardHome() {
   const { products, alerts, stats, loading, actions } = useAppContext()
@@ -16,7 +19,7 @@ function DashboardHome() {
   const [itemsPerPage] = useState(10)
   const [dashboardFilters, setDashboardFilters] = useState({
     stockLevel: 'all', // all, 5, 4, 3, 2, 1, 0
-    category: 'all',
+    categories: [], // Array de categorías seleccionadas (vacío = todas)
     sort: 'default', // default, stock-asc, stock-desc
     search: ''
   })
@@ -128,15 +131,18 @@ function DashboardHome() {
 
   const recentAlerts = alerts.slice(0, 5)
   
+  // Aplicar filtro de departamento primero
+  const { filteredProducts: departmentFilteredProducts, departmentName, isFiltered } = useDepartmentFilter(products)
+  
   // Filtrar productos con bajo stock aplicando filtros del dashboard
   const lowStockProducts = useMemo(() => {
-    // Asegurar que products es un array válido
-    if (!Array.isArray(products)) {
-      console.error('Products no es un array:', products);
+    // Asegurar que departmentFilteredProducts es un array válido
+    if (!Array.isArray(departmentFilteredProducts)) {
+      console.error('departmentFilteredProducts no es un array:', departmentFilteredProducts);
       return [];
     }
     
-    let filtered = products.filter(p => p.available_quantity <= 5)
+    let filtered = departmentFilteredProducts.filter(p => p.available_quantity <= 5)
     
     // Filtro por nivel de stock específico
     if (dashboardFilters.stockLevel !== 'all') {
@@ -144,9 +150,11 @@ function DashboardHome() {
       filtered = filtered.filter(p => p.available_quantity === stockLevel)
     }
     
-    // Filtro por categoría
-    if (dashboardFilters.category !== 'all') {
-      filtered = filtered.filter(p => p.category_id === dashboardFilters.category)
+    // Filtro por categorías múltiples
+    if (dashboardFilters.categories.length > 0) {
+      filtered = filtered.filter(p => 
+        p.category_id && dashboardFilters.categories.includes(p.category_id)
+      )
     }
     
     // Filtro por búsqueda
@@ -173,15 +181,15 @@ function DashboardHome() {
     }
     
     return filtered
-  }, [products, dashboardFilters])
+  }, [departmentFilteredProducts, dashboardFilters])
   
   // Obtener categorías únicas para el dropdown
   const availableCategories = useMemo(() => {
     const categories = new Set()
     
-    // Asegurar que products es un array válido
-    if (Array.isArray(products)) {
-      products.forEach(product => {
+    // Asegurar que departmentFilteredProducts es un array válido
+    if (Array.isArray(departmentFilteredProducts)) {
+      departmentFilteredProducts.forEach(product => {
         if (product.category_id) {
           categories.add(product.category_id)
         }
@@ -189,7 +197,7 @@ function DashboardHome() {
     }
     
     return Array.from(categories).sort()
-  }, [products])
+  }, [departmentFilteredProducts])
 
   // Hook para obtener nombres de categorías
   const { getCategoryName } = useCategories(availableCategories)
@@ -267,14 +275,26 @@ function DashboardHome() {
       <div className="row mt-4">
         <div className="col-md-8">
           <div className="card">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <h5 className="card-title mb-0">Productos con bajo stock</h5>
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-secondary">{lowStockProducts.length}</span>
-                <a href="/dashboard/products" className="btn btn-sm btn-outline-primary">
-                  Ver todos
-                </a>
+            <div className="card-header">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h5 className="card-title mb-0">
+                  {isFiltered ? `${departmentName} - Productos con bajo stock` : 'Productos con bajo stock'}
+                </h5>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-secondary">{lowStockProducts.length}</span>
+                  {dashboardFilters.categories.length > 0 && (
+                    <span className="badge bg-primary">
+                      <i className="bi bi-funnel me-1"></i>
+                      {dashboardFilters.categories.length} categoría{dashboardFilters.categories.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  <a href="/dashboard/products" className="btn btn-sm btn-outline-primary">
+                    Ver todos
+                  </a>
+                </div>
               </div>
+              
+              <DepartmentButtons />
             </div>
             <div className="card-body">
               {/* Filtros para productos con bajo stock */}
@@ -297,19 +317,13 @@ function DashboardHome() {
                 </div>
                 
                 <div className="col-md-3">
-                  <label className="form-label">Categoría:</label>
-                  <select 
-                    className="form-select form-select-sm"
-                    value={dashboardFilters.category}
-                    onChange={(e) => handleFilterChange('category', e.target.value)}
-                  >
-                    <option value="all">Todas</option>
-                    {availableCategories.map(category => (
-                      <option key={category} value={category}>
-                        {getCategoryName(category)}
-                      </option>
-                    ))}
-                  </select>
+                  <MultiCategorySelector
+                    availableCategories={availableCategories}
+                    selectedCategories={dashboardFilters.categories}
+                    onChange={(categories) => handleFilterChange('categories', categories)}
+                    label="Categorías:"
+                    maxHeight="200px"
+                  />
                 </div>
                 
                 <div className="col-md-3">
@@ -327,13 +341,30 @@ function DashboardHome() {
                 
                 <div className="col-md-3">
                   <label className="form-label">Buscar:</label>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    placeholder="Nombre, SKU o ID..."
-                    value={dashboardFilters.search}
-                    onChange={(e) => handleFilterChange('search', e.target.value)}
-                  />
+                  <div className="input-group input-group-sm">
+                    <input 
+                      type="text" 
+                      className="form-control"
+                      placeholder="Nombre, SKU o ID..."
+                      value={dashboardFilters.search}
+                      onChange={(e) => handleFilterChange('search', e.target.value)}
+                    />
+                    {(dashboardFilters.categories.length > 0 || dashboardFilters.search || dashboardFilters.stockLevel !== 'all' || dashboardFilters.sort !== 'default') && (
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        onClick={() => setDashboardFilters({
+                          stockLevel: 'all',
+                          categories: [],
+                          sort: 'default',
+                          search: ''
+                        })}
+                        title="Limpiar todos los filtros"
+                      >
+                        <i className="bi bi-x-circle"></i>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               

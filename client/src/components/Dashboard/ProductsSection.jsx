@@ -1,18 +1,26 @@
 import React, { useMemo } from 'react'
 import { useAppContext } from '../../context/AppContext'
 import { useCategories } from '../../hooks/useCategories'
+import { useDepartmentFilter } from '../../hooks/useDepartmentFilter'
 import ProductsTable from './ProductsTable'
+import DepartmentButtons from './DepartmentButtons'
+import MultiCategorySelector from './MultiCategorySelector'
 
 function ProductsSection() {
   const { products, loading, productFilters, actions } = useAppContext()
+  
+  // Aplicar filtro de departamento primero
+  const { filteredProducts: departmentFilteredProducts, departmentName, isFiltered } = useDepartmentFilter(products)
 
   // Filtrar y ordenar productos
   const filteredProducts = useMemo(() => {
-    let filtered = [...products]
+    let filtered = [...departmentFilteredProducts]
     
-    // Filtro por categoría
-    if (productFilters.category !== 'all') {
-      filtered = filtered.filter(p => p.category_id === productFilters.category)
+    // Filtro por categorías múltiples
+    if (productFilters.categories.length > 0) {
+      filtered = filtered.filter(p => 
+        p.category_id && productFilters.categories.includes(p.category_id)
+      )
     }
     
     // Filtro por estado
@@ -50,7 +58,7 @@ function ProductsSection() {
     }
     
     return filtered
-  }, [products, productFilters])
+  }, [departmentFilteredProducts, productFilters])
 
   const handleFilterChange = (filterType, value) => {
     actions.setProductFilters({ [filterType]: value })
@@ -59,10 +67,10 @@ function ProductsSection() {
   // Obtener categorías únicas para el dropdown
   const availableCategories = useMemo(() => {
     const categories = new Set()
-    console.log('🔍 ProductsSection - products data:', products.length, 'products')
+    console.log('🔍 ProductsSection - products data:', departmentFilteredProducts.length, 'products (filtered by department)')
     
     // Verificar algunos productos de ejemplo
-    products.slice(0, 3).forEach((product, index) => {
+    departmentFilteredProducts.slice(0, 3).forEach((product, index) => {
       console.log(`📦 ProductsSection - Product ${index + 1}:`, {
         id: product.id,
         title: product.title?.substring(0, 50) + '...',
@@ -71,7 +79,7 @@ function ProductsSection() {
       })
     })
     
-    products.forEach(product => {
+    departmentFilteredProducts.forEach(product => {
       if (product.category_id) {
         categories.add(product.category_id)
       }
@@ -79,7 +87,7 @@ function ProductsSection() {
     const result = Array.from(categories).sort()
     console.log('📊 ProductsSection - availableCategories calculated:', result.length, 'categories:', result.slice(0, 5))
     return result
-  }, [products])
+  }, [departmentFilteredProducts])
 
   // Hook para obtener nombres de categorías
   console.log('🎯 ProductsSection - calling useCategories with:', availableCategories.length, 'categories')
@@ -88,32 +96,39 @@ function ProductsSection() {
   return (
     <div>
       <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 className="h2">Todos los productos</h1>
+        <h1 className="h2">
+          {isFiltered ? `${departmentName}` : 'Todos los productos'}
+        </h1>
         <div className="btn-toolbar mb-2 mb-md-0">
-          <span className="badge bg-secondary fs-6">
-            {filteredProducts.length} de {products.length} productos
-          </span>
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-secondary fs-6">
+              {filteredProducts.length} de {departmentFilteredProducts.length} productos
+              {isFiltered && ` (${departmentFilteredProducts.length} de ${products.length} total)`}
+            </span>
+            {productFilters.categories.length > 0 && (
+              <span className="badge bg-primary">
+                <i className="bi bi-funnel me-1"></i>
+                {productFilters.categories.length} categoría{productFilters.categories.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
         </div>
       </div>
+      
+      <DepartmentButtons />
 
       {/* Filtros */}
       <div className="card mb-3">
         <div className="card-body">
           <div className="row g-3">
             <div className="col-md-3">
-              <label className="form-label">Filtrar por categoría:</label>
-              <select 
-                className="form-select"
-                value={productFilters.category}
-                onChange={(e) => handleFilterChange('category', e.target.value)}
-              >
-                <option value="all">Todas las categorías</option>
-                {availableCategories.map(category => (
-                  <option key={category} value={category}>
-                    {getCategoryName(category)}
-                  </option>
-                ))}
-              </select>
+              <MultiCategorySelector
+                availableCategories={availableCategories}
+                selectedCategories={productFilters.categories}
+                onChange={(categories) => handleFilterChange('categories', categories)}
+                label="Filtrar por categorías:"
+                maxHeight="250px"
+              />
             </div>
             
             <div className="col-md-3">
@@ -146,13 +161,30 @@ function ProductsSection() {
             
             <div className="col-md-3">
               <label className="form-label">Buscar producto:</label>
-              <input 
-                type="text" 
-                className="form-control"
-                placeholder="Buscar por nombre, SKU o ID..."
-                value={productFilters.searchText}
-                onChange={(e) => handleFilterChange('searchText', e.target.value)}
-              />
+              <div className="input-group">
+                <input 
+                  type="text" 
+                  className="form-control"
+                  placeholder="Buscar por nombre, SKU o ID..."
+                  value={productFilters.searchText}
+                  onChange={(e) => handleFilterChange('searchText', e.target.value)}
+                />
+                {(productFilters.categories.length > 0 || productFilters.searchText || productFilters.stockFilter !== 'all' || productFilters.stockSort !== 'default') && (
+                  <button
+                    className="btn btn-outline-secondary"
+                    type="button"
+                    onClick={() => actions.setProductFilters({
+                      categories: [],
+                      stockSort: 'default',
+                      stockFilter: 'all',
+                      searchText: ''
+                    })}
+                    title="Limpiar todos los filtros"
+                  >
+                    <i className="bi bi-x-circle"></i>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -34,6 +34,28 @@ class ApiService {
     return this.request('/api/products/stats')
   }
 
+  // Departments
+  async getDepartmentsConfig() {
+    try {
+      const response = await this.request('/api/departments')
+      return response
+    } catch (error) {
+      console.error('Error obteniendo configuración de departamentos:', error)
+      // Retornar configuración por defecto si hay error
+      return {
+        success: true,
+        departments: []
+      }
+    }
+  }
+
+  async saveDepartmentsConfig(departments) {
+    return await this.request('/api/departments', {
+      method: 'POST',
+      body: JSON.stringify({ departments })
+    })
+  }
+
   // Alerts
   async getAlerts(filters = {}) {
     const params = new URLSearchParams()

@@ -33,7 +33,7 @@ const initialState = {
   
   // Filtros de productos
   productFilters: {
-    category: 'all',
+    categories: [], // Array de categorías seleccionadas (vacío = todas)
     stockSort: 'default',
     stockFilter: 'all', // all, low, out
     searchText: ''
@@ -45,6 +45,12 @@ const initialState = {
     soundEnabled: false,
     criticalOnly: false,
     autoRefresh: true
+  },
+  
+  // Configuración de departamentos personalizados
+  departments: {
+    config: [], // Array de departamentos configurados
+    selectedDepartment: 'all' // Departamento actualmente seleccionado
   },
   
   // Errores
@@ -97,6 +103,19 @@ function appReducer(state, action) {
       return {
         ...state,
         settings: { ...state.settings, ...action.payload }
+      }
+    
+    // Departamentos
+    case 'SET_DEPARTMENTS_CONFIG':
+      return {
+        ...state,
+        departments: { ...state.departments, config: action.payload }
+      }
+    
+    case 'SET_SELECTED_DEPARTMENT':
+      return {
+        ...state,
+        departments: { ...state.departments, selectedDepartment: action.payload }
       }
     
     // Errores
@@ -165,6 +184,15 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_PRODUCT_FILTERS', payload: filters })
   }
 
+  const toggleProductCategory = (categoryId) => {
+    const currentCategories = state.productFilters.categories
+    const newCategories = currentCategories.includes(categoryId)
+      ? currentCategories.filter(id => id !== categoryId)
+      : [...currentCategories, categoryId]
+    
+    setProductFilters({ categories: newCategories })
+  }
+
   const setStats = (stats) => {
     dispatch({ type: 'SET_STATS', payload: stats })
   }
@@ -175,6 +203,14 @@ export function AppProvider({ children }) {
 
   const setSettings = (settings) => {
     dispatch({ type: 'SET_SETTINGS', payload: settings })
+  }
+
+  const setDepartmentsConfig = (config) => {
+    dispatch({ type: 'SET_DEPARTMENTS_CONFIG', payload: config })
+  }
+
+  const setSelectedDepartment = (department) => {
+    dispatch({ type: 'SET_SELECTED_DEPARTMENT', payload: department })
   }
 
   const setError = (key, error) => {
@@ -210,9 +246,12 @@ export function AppProvider({ children }) {
       setAlertCounts,
       setAlertFilters,
       setProductFilters,
+      toggleProductCategory,
       setStats,
       setCurrentSection,
       setSettings,
+      setDepartmentsConfig,
+      setSelectedDepartment,
       setError,
       clearError,
       refreshData

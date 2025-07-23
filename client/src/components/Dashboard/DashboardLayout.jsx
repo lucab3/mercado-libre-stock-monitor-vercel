@@ -28,15 +28,17 @@ function DashboardLayout() {
       actions.setLoading('alerts', true)
       actions.setLoading('stats', true)
 
-      const [products, alerts, stats] = await Promise.all([
+      const [products, alerts, stats, departmentsConfig] = await Promise.all([
         apiService.getProducts(),
         apiService.getAlerts(),
-        apiService.getProductStats()
+        apiService.getProductStats(),
+        apiService.getDepartmentsConfig()
       ])
 
       actions.setProducts(products)
       actions.setAlerts(alerts.alerts || [])
       actions.setStats(stats)
+      actions.setDepartmentsConfig(departmentsConfig.departments || [])
       
       // Actualizar contadores globales de alertas
       if (alerts.summary) {

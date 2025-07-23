@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAppContext } from '../../context/AppContext'
 import { apiService } from '../../services/api'
+import DepartmentConfig from './DepartmentConfig'
 
 function SettingsSection() {
   const { settings, actions } = useAppContext()
@@ -77,6 +78,10 @@ function SettingsSection() {
       </div>
 
       <div className="row">
+        <div className="col-12 mb-4">
+          <DepartmentConfig />
+        </div>
+        
         <div className="col-md-8">
           <div className="card">
             <div className="card-header">

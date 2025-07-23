@@ -55,6 +55,10 @@
       "dest": "src/api/products-api.js"
     },
     {
+      "src": "/api/departments",
+      "dest": "src/api/departments.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "src/index.js"
     },
