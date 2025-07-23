@@ -5,7 +5,6 @@
 
 const products = require('./products');
 const logger = require('../utils/logger');
-const sessionManager = require('../utils/sessionManager');
 const databaseService = require('../services/databaseService');
 
 // Importar utilidades nativas
@@ -69,7 +68,7 @@ async function handleSyncNext(req, res) {
   logger.info('🔄 Sync-next iniciado');
 
   try {
-    // 1. Validar autenticación
+    // 1. Validar autenticación usando BD
     const cookieId = req.headers.cookie?.match(/ml-session=([^;]+)/)?.[1];
     if (!cookieId) {
       return res.status(401).json({
@@ -79,11 +78,11 @@ async function handleSyncNext(req, res) {
       });
     }
 
-    const session = sessionManager.getSessionByCookie(cookieId);
+    const session = await databaseService.getUserSession(cookieId);
     if (!session) {
       return res.status(401).json({
         success: false,
-        error: 'Sesión inválida',
+        error: 'Sesión inválida o expirada',
         needsAuth: true
       });
     }
