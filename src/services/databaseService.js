@@ -470,7 +470,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from(this.webhookTableName)
-            .delete()
+            .delete({ count: 'exact' })
             .eq('user_id', userId);
         },
         'clear_user_webhooks'
