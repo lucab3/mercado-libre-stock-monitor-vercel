@@ -3,7 +3,6 @@
  */
 
 const databaseService = require('../services/databaseService');
-const sessionManager = require('../utils/sessionManager');
 const logger = require('../utils/logger');
 
 // Parse cookies manually since we don't have middleware
