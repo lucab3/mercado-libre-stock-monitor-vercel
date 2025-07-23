@@ -1317,6 +1317,127 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // ==========================================
+  // OPERACIONES SYNC INTELIGENTE
+  // ==========================================
+
+  /**
+   * Obtener productos por IDs para comparación (solo campos necesarios)
+   * Optimizado para reducir egress - solo campos críticos
+   */
+  async getProductsForComparison(productIds, userId) {
+    try {
+      if (!productIds || productIds.length === 0) {
+        return [];
+      }
+
+      // Procesar en lotes si hay muchos productos
+      const BATCH_SIZE = 500;
+      if (productIds.length > BATCH_SIZE) {
+        logger.info(`🔄 Comparación en lotes: ${productIds.length} productos en lotes de ${BATCH_SIZE}`);
+        const batches = [];
+        for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+          batches.push(productIds.slice(i, i + BATCH_SIZE));
+        }
+        
+        const allResults = [];
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          const result = await supabaseClient.executeQuery(
+            async (client) => {
+              return await client
+                .from(this.tableName)
+                .select('id, available_quantity, price, status, title, seller_sku') // Solo campos para comparación
+                .eq('user_id', userId)
+                .in('id', batch);
+            },
+            `get_products_comparison_batch_${i + 1}`
+          );
+          
+          if (result.data) {
+            allResults.push(...result.data);
+          }
+        }
+        
+        return allResults;
+      }
+
+      // Para lotes pequeños, consulta directa
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('id, available_quantity, price, status, title, seller_sku') // Solo campos críticos
+            .eq('user_id', userId)
+            .in('id', productIds);
+        },
+        'get_products_for_comparison'
+      );
+      
+      logger.debug(`🔍 Obtenidos ${result.data?.length || 0} productos para comparación (campos: id, stock, precio, status)`);
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos para comparación: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar productos de forma optimizada (solo campos que cambiaron)
+   */
+  async updateProductsOptimized(updates) {
+    try {
+      if (!updates || updates.length === 0) {
+        return { success: true, count: 0 };
+      }
+
+      // Procesar en lotes para evitar timeouts
+      const batchSize = 100;
+      let totalUpdated = 0;
+      
+      for (let i = 0; i < updates.length; i += batchSize) {
+        const batch = updates.slice(i, i + batchSize);
+        
+        // Usar Promise.all para updates paralelos en el lote
+        const promises = batch.map(update => 
+          supabaseClient.executeQuery(
+            async (client) => {
+              return await client
+                .from(this.tableName)
+                .update({
+                  available_quantity: update.available_quantity,
+                  price: update.price,
+                  status: update.status,
+                  title: update.title,
+                  seller_sku: update.seller_sku,
+                  last_api_sync: update.last_api_sync,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', update.id);
+            },
+            `update_product_${update.id}`
+          )
+        );
+        
+        await Promise.all(promises);
+        totalUpdated += batch.length;
+        
+        // Pequeña pausa entre lotes
+        if (i + batchSize < updates.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+      
+      logger.info(`📝 Actualizados ${totalUpdated} productos con cambios (optimizado)`);
+      return { success: true, count: totalUpdated };
+      
+    } catch (error) {
+      logger.error(`❌ Error actualizando productos optimizado: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton

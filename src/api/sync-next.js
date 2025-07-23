@@ -11,7 +11,137 @@ const databaseService = require('../services/databaseService');
 const path = require('path');
 const fs = require('fs');
 
-// Función auxiliar para extraer SKU de múltiples fuentes
+// ==========================================
+// FUNCIONES INTERNAS PARA SYNC INTELIGENTE
+// ==========================================
+
+/**
+ * Función interna: Procesar actualizaciones de productos
+ * Compara ML vs BD y solo actualiza lo que cambió
+ */
+async function processProductUpdates(productIds, userId) {
+  logger.info(`🔄 Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
+  
+  // 1. Obtener datos actuales de ML para este lote
+  const mlProductsData = await products.getMultipleProducts(productIds, false, userId);
+  
+  if (!mlProductsData || mlProductsData.length === 0) {
+    logger.warn(`⚠️ No se obtuvieron datos de ML para ${productIds.length} productos`);
+    return 0;
+  }
+
+  // 2. Obtener datos actuales de BD (solo campos para comparación)
+  const dbProducts = await databaseService.getProductsForComparison(productIds, userId);
+  
+  // 3. Comparar y clasificar productos
+  const result = compareProducts(mlProductsData, dbProducts, userId);
+  
+  // 4. Procesar categorías de productos nuevos/actualizados
+  const allRelevantProducts = [...result.newProducts, ...result.updatedProducts];
+  if (allRelevantProducts.length > 0) {
+    const categoriesSet = new Set();
+    allRelevantProducts.forEach(product => {
+      if (product.category_id) {
+        categoriesSet.add(product.category_id);
+      }
+    });
+    
+    if (categoriesSet.size > 0) {
+      logger.info(`🔍 Procesando ${categoriesSet.size} categorías del lote`);
+      await saveCategoriesFromProducts(Array.from(categoriesSet));
+    }
+  }
+  
+  // 5. Procesar cambios en BD
+  let totalSaved = 0;
+  
+  if (result.newProducts.length > 0) {
+    await databaseService.upsertMultipleProducts(result.newProducts);
+    totalSaved += result.newProducts.length;
+    logger.info(`💾 Guardados ${result.newProducts.length} productos nuevos`);
+  }
+  
+  if (result.updatedProducts.length > 0) {
+    await databaseService.updateProductsOptimized(result.updatedProducts);
+    totalSaved += result.updatedProducts.length;
+    logger.info(`📝 Actualizados ${result.updatedProducts.length} productos con cambios de stock/precio`);
+  }
+  
+  logger.info(`📊 Resumen lote: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
+  
+  return totalSaved;
+}
+
+/**
+ * Función interna: Comparar productos ML vs BD
+ */
+function compareProducts(mlProducts, dbProducts, userId) {
+  const dbProductsMap = new Map(dbProducts.map(p => [p.id, p]));
+  const newProducts = [];
+  const updatedProducts = [];
+  let unchangedCount = 0;
+  
+  mlProducts.forEach(mlProduct => {
+    const dbProduct = dbProductsMap.get(mlProduct.id);
+    
+    if (!dbProduct) {
+      // Producto nuevo - mapear completo
+      newProducts.push(mapProductForDB(mlProduct, userId));
+    } else if (hasStockChanges(mlProduct, dbProduct)) {
+      // Solo campos que cambiaron
+      updatedProducts.push({
+        id: mlProduct.id,
+        available_quantity: mlProduct.available_quantity || 0,
+        price: mlProduct.price,
+        status: mlProduct.status,
+        title: mlProduct.title, // Título puede cambiar
+        seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
+        last_api_sync: new Date().toISOString()
+      });
+    } else {
+      unchangedCount++;
+    }
+  });
+  
+  return { newProducts, updatedProducts, unchangedCount };
+}
+
+/**
+ * Función interna: Verificar si hay cambios relevantes
+ */
+function hasStockChanges(mlProduct, dbProduct) {
+  return mlProduct.available_quantity !== dbProduct.available_quantity ||
+         mlProduct.price !== dbProduct.price ||
+         mlProduct.status !== dbProduct.status ||
+         mlProduct.title !== dbProduct.title ||
+         extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku;
+}
+
+/**
+ * Función interna: Mapear producto ML a formato BD
+ */
+function mapProductForDB(productData, userId) {
+  const extractedSKU = extractSKUFromProduct(productData);
+  return {
+    id: productData.id,
+    user_id: userId,
+    title: productData.title,
+    seller_sku: extractedSKU,
+    available_quantity: productData.available_quantity || 0,
+    price: productData.price,
+    status: productData.status,
+    permalink: productData.permalink,
+    category_id: productData.category_id,
+    condition: productData.condition,
+    listing_type_id: productData.listing_type_id,
+    health: productData.health,
+    last_api_sync: new Date().toISOString()
+  };
+}
+
+/**
+ * Función auxiliar para extraer SKU de múltiples fuentes
+ */
 function extractSKUFromProduct(productData) {
   // 1. Verificar seller_sku directo
   if (productData.seller_sku) {
@@ -90,7 +220,12 @@ async function handleSyncNext(req, res) {
     const userId = session.userId;
     logger.info(`🔄 Sync-next para usuario: ${userId}`);
 
-    // 2. Obtener estado actual del scan
+    // 2. Limpiar webhooks acumulados SIEMPRE al inicio del sync
+    logger.info(`🧹 Limpiando webhooks acumulados para usuario ${userId}...`);
+    const deletedCount = await databaseService.clearUserWebhooks(userId);
+    logger.info(`✅ Eliminados ${deletedCount} webhooks - optimización egress Supabase`);
+
+    // 3. Obtener estado actual del scan
     let scanState = await databaseService.getScanState(userId);
     
     const isFirstCall = !scanState || !scanState.scroll_id;
@@ -103,7 +238,7 @@ async function handleSyncNext(req, res) {
       logger.info(`🔄 Continuando scan desde scroll_id: ${scanState.scroll_id.substring(0, 20)}...`);
     }
 
-    // 3. Llamar ML API para obtener siguiente lote
+    // 4. Llamar ML API para obtener siguiente lote
     const mlResult = isFirstCall
       ? await products.getAllProducts(userId)
       : await products.continueProductScan(userId);
@@ -139,75 +274,10 @@ async function handleSyncNext(req, res) {
     const productIds = mlResult.results;
     logger.info(`📦 Obtenidos ${productIds.length} IDs de ML API`);
 
-    // 5. Filtrar productos que ya existen en BD
-    const existingProducts = await databaseService.getProductsByIds(productIds, userId);
-    const existingIds = new Set(existingProducts.map(p => p.id));
-    const newProductIds = productIds.filter(id => !existingIds.has(id));
-    
-    logger.info(`🆕 ${newProductIds.length} productos nuevos de ${productIds.length} total`);
-
-    // 6. Obtener detalles y guardar solo productos nuevos
+    // 5. Procesar productos con sync inteligente (nuevos + actualizaciones)
     let savedCount = 0;
-    if (newProductIds.length > 0) {
-      const productsData = await products.getMultipleProducts(newProductIds, false, userId);
-      
-      if (productsData.length > 0) {
-        // DEBUG: Log para verificar SKUs antes del mapeo
-        logger.info(`🔍 DEBUG SKU - Productos obtenidos: ${productsData.length}`);
-        productsData.slice(0, 3).forEach((product, index) => {
-          const extractedSKU = extractSKUFromProduct(product);
-          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU_original=${product.seller_sku || 'SIN_SKU'}, SKU_extraido=${extractedSKU || 'SIN_SKU'}`);
-        });
-        
-        // Extraer categorías únicas de los productos
-        const categoriesSet = new Set();
-        productsData.forEach(product => {
-          if (product.category_id) {
-            categoriesSet.add(product.category_id);
-          }
-        });
-        
-        logger.info(`🔍 SYNC-NEXT DEBUG: Encontradas ${categoriesSet.size} categorías únicas en ${productsData.length} productos`);
-        logger.info(`🔍 SYNC-NEXT DEBUG: Categorías: ${Array.from(categoriesSet).slice(0, 10).join(', ')}`);
-        
-        // Guardar categorías si las hay
-        if (categoriesSet.size > 0) {
-          logger.info(`🔍 SYNC-NEXT DEBUG: Iniciando guardado de categorías...`);
-          await saveCategoriesFromProducts(Array.from(categoriesSet));
-          logger.info(`🔍 SYNC-NEXT DEBUG: Guardado de categorías completado`);
-        } else {
-          logger.info(`🔍 SYNC-NEXT DEBUG: No hay categorías para guardar`);
-        }
-        
-        const productsToSave = productsData.map(productData => {
-          const extractedSKU = extractSKUFromProduct(productData);
-          return {
-            id: productData.id,
-            user_id: userId,
-            title: productData.title,
-            seller_sku: extractedSKU, // CORREGIDO: Usar SKU extraído
-            available_quantity: productData.available_quantity || 0,
-            price: productData.price,
-            status: productData.status,
-            permalink: productData.permalink,
-            category_id: productData.category_id,
-            condition: productData.condition,
-            listing_type_id: productData.listing_type_id,
-            health: productData.health,
-            last_api_sync: new Date().toISOString()
-          };
-        });
-
-        // DEBUG: Log para verificar SKUs después del mapeo
-        logger.info(`🔍 DEBUG SKU - Productos mapeados para guardar: ${productsToSave.length}`);
-        productsToSave.slice(0, 3).forEach((product, index) => {
-          logger.info(`   Producto ${index + 1}: ID=${product.id}, SKU=${product.seller_sku || 'SIN_SKU'}`);
-        });
-
-        await databaseService.upsertMultipleProducts(productsToSave);
-        savedCount = productsToSave.length;
-        logger.info(`💾 Guardados ${savedCount} productos nuevos`);
-      }
+    if (productIds.length > 0) {
+      savedCount = await processProductUpdates(productIds, userId);
     }
 
     // 7. Actualizar progreso en scan_control
