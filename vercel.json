@@ -31,22 +31,6 @@
       "dest": "src/index.js"
     },
     {
-      "src": "/api/alerts",
-      "dest": "src/api/alerts.js"
-    },
-    {
-      "src": "/api/stock-alerts",
-      "dest": "src/api/alerts.js"
-    },
-    {
-      "src": "/api/alert-settings",
-      "dest": "src/api/alert-settings.js"
-    },
-    {
-      "src": "/api/cleanup-webhooks",
-      "dest": "src/api/cleanup-webhooks.js"
-    },
-    {
       "src": "/api/products",
       "dest": "src/api/products-api.js"
     },
@@ -56,7 +40,7 @@
     },
     {
       "src": "/api/departments",
-      "dest": "src/api/departments.js"
+      "dest": "src/api/products-api.js"
     },
     {
       "src": "/api/(.*)",
