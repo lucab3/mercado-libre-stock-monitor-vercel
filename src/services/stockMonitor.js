@@ -3,7 +3,7 @@
  * Versión migrada desde memoria a base de datos
  */
 
-const products = require('../api/products');
+const products = require('../api/ml-api-products-service');
 const Product = require('../models/product');
 const notifier = require('../utils/notifier');
 const logger = require('../utils/logger');
