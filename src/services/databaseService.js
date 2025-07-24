@@ -62,6 +62,76 @@ class DatabaseService {
   }
 
   /**
+   * Obtener productos para comparación (solo campos necesarios para reducir egress)
+   */
+  async getProductsForComparison(productIds, userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('id, available_quantity, price, status, title, seller_sku')
+            .eq('user_id', userId)
+            .in('id', productIds);
+        },
+        'get_products_for_comparison'
+      );
+      
+      logger.info(`📋 Obtenidos ${result.data?.length || 0} productos de BD para comparación`);
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo productos para comparación: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar productos optimizado (solo campos que cambiaron)
+   */
+  async updateProductsOptimized(updatedProducts) {
+    if (!updatedProducts || updatedProducts.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    try {
+      const batchSize = 100;
+      const results = [];
+      
+      for (let i = 0; i < updatedProducts.length; i += batchSize) {
+        const batch = updatedProducts.slice(i, i + batchSize);
+        
+        // Agregar timestamp de actualización
+        const batchWithTimestamps = batch.map(product => ({
+          ...product,
+          updated_at: new Date().toISOString()
+        }));
+        
+        const result = await supabaseClient.executeQuery(
+          async (client) => {
+            return await client
+              .from(this.tableName)
+              .upsert(batchWithTimestamps, { 
+                onConflict: 'id',
+                returning: 'minimal'
+              });
+          },
+          `update_optimized_batch_${Math.floor(i / batchSize + 1)}`
+        );
+        
+        results.push(result);
+      }
+      
+      logger.info(`📝 Actualizados ${updatedProducts.length} productos con cambios optimizados`);
+      return { success: true, count: updatedProducts.length, results };
+      
+    } catch (error) {
+      logger.error(`❌ Error actualizando productos optimizados: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Obtener productos con stock bajo
    */
   async getLowStockProducts(userId, threshold = 5) {
