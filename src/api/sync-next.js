@@ -156,29 +156,8 @@ async function handleSyncNext(req, res) {
     logger.info(`✅ Sync-next completado: ${savedCount} nuevos, ${totalInDB} total en BD`);
     res.json(response);
 
-    // PROCESAMIENTO INTELIGENTE ASÍNCRONO: Llamar después de responder
-    if (productIds.length > 0) {
-      logger.info(`🚀 Iniciando procesamiento inteligente asíncrono para ${productIds.length} productos...`);
-      setTimeout(async () => {
-        logger.info(`✅ TIMEOUT EJECUTADO: userId=${userId}, productos=${productIds?.length || 'undefined'}`);
-        
-        try {
-          // Importar y ejecutar la función de procesamiento interno
-          const { processProductUpdates } = require('./products-processor');
-          const result = await processProductUpdates(null, null, userId, productIds);
-          
-          if (result.success) {
-            logger.info(`📊 Procesamiento asíncrono completado: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados, ${result.stats.unchangedProducts} sin cambios`);
-          } else {
-            logger.error(`❌ Procesamiento asíncrono falló: ${result.message}`);
-          }
-          
-        } catch (asyncError) {
-          logger.error(`❌ Error en procesamiento asíncrono: ${asyncError.message}`);
-          logger.error(`❌ Stack trace: ${asyncError.stack}`);
-        }
-      }, 200); // 200ms después de responder
-    }
+    // El procesamiento inteligente ahora se hace desde ml-api-products-service.js
+    logger.info(`ℹ️ Productos obtenidos: ${productIds.length} (procesamiento se hará en ml-api-products-service)`);
 
   } catch (error) {
     logger.error(`❌ Error en sync-next: ${error.message}`);

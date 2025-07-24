@@ -138,6 +138,23 @@ class ProductsService {
       logger.info(`🔢 Duplicados detectados: ${response.duplicatesDetected || 0}`);
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
       
+      // PROCESAMIENTO INTELIGENTE: Llamada HTTP asíncrona al endpoint
+      if (allProductIds.length > 0) {
+        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos via HTTP...`);
+        
+        this.callProcessingEndpoint(allProductIds, userId)
+          .then(result => {
+            if (result.success) {
+              logger.info(`📊 Procesamiento HTTP completado: ${result.message}`);
+            } else {
+              logger.error(`❌ Procesamiento HTTP falló: ${result.message}`);
+            }
+          })
+          .catch(error => {
+            logger.error(`❌ Error en procesamiento HTTP: ${error.message}`);
+          });
+      }
+      
       // Log información sobre continuación
       if (response.hasMoreProducts) {
         logger.info(`🔄 Hay más productos disponibles. Usa el endpoint de continuación para obtener el resto.`);
@@ -213,6 +230,23 @@ class ProductsService {
       logger.info(`✅ Continuación completada: ${newProductsCount} productos nuevos obtenidos (total acumulado: ${totalProducts})`);
       logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'}`);
       logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
+      
+      // PROCESAMIENTO INTELIGENTE: Llamada HTTP asíncrona al endpoint
+      if (allProductIds.length > 0) {
+        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos via HTTP (continuación)...`);
+        
+        this.callProcessingEndpoint(allProductIds, user.id)
+          .then(result => {
+            if (result.success) {
+              logger.info(`📊 Procesamiento HTTP completado: ${result.message}`);
+            } else {
+              logger.error(`❌ Procesamiento HTTP falló: ${result.message}`);
+            }
+          })
+          .catch(error => {
+            logger.error(`❌ Error en procesamiento HTTP: ${error.message}`);
+          });
+      }
       
       logger.info(`🔍 ScrollId obtenido en continuación: ${response.scrollId ? response.scrollId.substring(0, 30) + '...' : 'NULL'}`);
       
@@ -896,6 +930,47 @@ class ProductsService {
         (auth.tokens && auth.tokens.access_token ? 
           auth.tokens.access_token.substring(0, 20) + '...' : 'NO_TOKEN')
     };
+  }
+
+  /**
+   * Llamar al endpoint de procesamiento de productos de forma asíncrona
+   */
+  async callProcessingEndpoint(productIds, userId) {
+    try {
+      // Obtener tokens para autenticación
+      await this.ensureAuthentication(userId);
+      
+      // Simular llamada HTTP interna al endpoint de procesamiento  
+      const body = JSON.stringify({ productIds });
+      
+      // En entorno de Vercel, hacer llamada HTTP interna
+      const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000';
+        
+      const response = await fetch(`${baseUrl}/api/process-products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.tokens?.access_token || 'mock-token'}`
+        },
+        body
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return result;
+
+    } catch (error) {
+      logger.error(`❌ Error en llamada HTTP al procesador: ${error.message}`);
+      return {
+        success: false,
+        message: `Error en llamada HTTP: ${error.message}`
+      };
+    }
   }
 }
 
