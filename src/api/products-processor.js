@@ -5,7 +5,6 @@
 
 const { withAuth } = require('../middleware/serverlessAuth');
 const databaseService = require('../services/databaseService');
-const mlApiService = require('./ml-api-products-service');
 const logger = require('../utils/logger');
 const { processProductsBatch } = require('../services/productProcessor');
 
