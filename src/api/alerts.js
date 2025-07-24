@@ -294,9 +294,84 @@ function getTimeAgo(dateString) {
 }
 
 /**
+ * Obtener configuración de alertas del usuario (movido desde alert-settings.js)
+ */
+async function getAlertSettings(req, res) {
+  try {
+    const userId = req.auth.userId;
+
+    // Configuración por defecto
+    const defaultSettings = {
+      popupsEnabled: true,
+      soundEnabled: false,
+      lowStockThreshold: 5,
+      showCriticalOnly: false,
+      autoMarkAsRead: false
+    };
+
+    res.json({
+      success: true,
+      settings: defaultSettings
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error obteniendo configuración de alertas: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Actualizar configuración de alertas del usuario (movido desde alert-settings.js)
+ */
+async function updateAlertSettings(req, res) {
+  try {
+    const userId = req.auth.userId;
+    const { settings } = req.body;
+
+    if (!settings) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere el objeto settings'
+      });
+    }
+
+    logger.info(`⚙️ Actualizando configuración de alertas para usuario ${userId}:`, settings);
+
+    res.json({
+      success: true,
+      message: 'Configuración de alertas actualizada',
+      settings: settings
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error actualizando configuración de alertas: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
  * Manejador principal de rutas
  */
 async function handleAlerts(req, res) {
+  // Manejar rutas de configuración
+  if (req.url?.endsWith('/settings')) {
+    switch (req.method) {
+      case 'GET':
+        return await getAlertSettings(req, res);
+      case 'PUT':
+        return await updateAlertSettings(req, res);
+      default:
+        return res.status(405).json({ error: 'Método no permitido para settings' });
+    }
+  }
+
+  // Manejar rutas de alertas principales
   switch (req.method) {
     case 'GET':
       return await getAlerts(req, res);
@@ -304,12 +379,6 @@ async function handleAlerts(req, res) {
     case 'POST':
       if (req.url?.endsWith('/mark-read')) {
         return await markAlertsAsRead(req, res);
-      }
-      return res.status(404).json({ error: 'Endpoint no encontrado' });
-    
-    case 'PUT':
-      if (req.url?.endsWith('/settings')) {
-        return await updateAlertSettings(req, res);
       }
       return res.status(404).json({ error: 'Endpoint no encontrado' });
     

@@ -11,184 +11,6 @@ const databaseService = require('../services/databaseService');
 const path = require('path');
 const fs = require('fs');
 
-// ==========================================
-// FUNCIONES INTERNAS PARA SYNC INTELIGENTE
-// ==========================================
-
-/**
- * Función interna: Procesar actualizaciones de productos
- * Compara ML vs BD y solo actualiza lo que cambió
- */
-async function processProductUpdates(productIds, userId) {
-  logger.info(`🔄 Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
-  
-  // 1. Obtener datos actuales de ML para este lote
-  logger.info(`📡 STEP 1: Obteniendo ${productIds.length} productos desde ML API...`);
-  const mlProductsData = await products.getMultipleProducts(productIds, false, userId);
-  logger.info(`📡 STEP 1 RESULT: Obtenidos ${mlProductsData?.length || 0} productos desde ML API`);
-  
-  if (!mlProductsData || mlProductsData.length === 0) {
-    return 0;
-  }
-
-  // 2. Obtener datos actuales de BD (solo campos para comparación)
-  logger.info(`🔍 STEP 2: Consultando BD para ${productIds.length} productos...`);
-  const dbProducts = await databaseService.getProductsForComparison(productIds, userId);
-  logger.info(`🔍 STEP 2 RESULT: Obtenidos ${dbProducts?.length || 0} productos desde BD`);
-  
-  // 3. Comparar y clasificar productos
-  logger.info(`⚖️ STEP 3: Comparando ${mlProductsData.length} productos ML vs ${dbProducts.length} productos BD...`);
-  const result = compareProducts(mlProductsData, dbProducts, userId);
-  logger.info(`⚖️ STEP 3 RESULT: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
-  
-  // 4. Procesar categorías de productos nuevos/actualizados
-  const allRelevantProducts = [...result.newProducts, ...result.updatedProducts];
-  if (allRelevantProducts.length > 0) {
-    const categoriesSet = new Set();
-    allRelevantProducts.forEach(product => {
-      if (product.category_id) {
-        categoriesSet.add(product.category_id);
-      }
-    });
-    
-    if (categoriesSet.size > 0) {
-      await saveCategoriesFromProducts(Array.from(categoriesSet));
-    }
-  }
-  
-  // 5. Procesar cambios en BD
-  let totalSaved = 0;
-  
-  if (result.newProducts.length > 0) {
-    logger.info(`💾 STEP 5A: Guardando ${result.newProducts.length} productos nuevos en BD...`);
-    await databaseService.upsertMultipleProducts(result.newProducts);
-    totalSaved += result.newProducts.length;
-    logger.info(`✅ STEP 5A RESULT: Guardados ${result.newProducts.length} productos nuevos`);
-  }
-  
-  if (result.updatedProducts.length > 0) {
-    logger.info(`📝 STEP 5B: Actualizando ${result.updatedProducts.length} productos en BD...`);
-    await databaseService.updateProductsOptimized(result.updatedProducts);
-    totalSaved += result.updatedProducts.length;
-    logger.info(`✅ STEP 5B RESULT: Actualizados ${result.updatedProducts.length} productos con cambios`);
-  }
-  
-  logger.info(`📊 Resumen lote: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
-  
-  return totalSaved;
-}
-
-/**
- * Función interna: Comparar productos ML vs BD
- */
-function compareProducts(mlProducts, dbProducts, userId) {
-  const dbProductsMap = new Map(dbProducts.map(p => [p.id, p]));
-  const newProducts = [];
-  const updatedProducts = [];
-  let unchangedCount = 0;
-  
-  mlProducts.forEach(mlProduct => {
-    const dbProduct = dbProductsMap.get(mlProduct.id);
-    
-    if (!dbProduct) {
-      // Producto nuevo - mapear completo
-      newProducts.push(mapProductForDB(mlProduct, userId));
-    } else if (hasStockChanges(mlProduct, dbProduct)) {
-      // Solo campos que cambiaron
-      updatedProducts.push({
-        id: mlProduct.id,
-        available_quantity: mlProduct.available_quantity || 0,
-        price: mlProduct.price,
-        status: mlProduct.status,
-        title: mlProduct.title, // Título puede cambiar
-        seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
-        last_api_sync: new Date().toISOString()
-      });
-    } else {
-      unchangedCount++;
-    }
-  });
-  
-  return { newProducts, updatedProducts, unchangedCount };
-}
-
-/**
- * Función interna: Verificar si hay cambios relevantes
- */
-function hasStockChanges(mlProduct, dbProduct) {
-  return mlProduct.available_quantity !== dbProduct.available_quantity ||
-         mlProduct.price !== dbProduct.price ||
-         mlProduct.status !== dbProduct.status ||
-         mlProduct.title !== dbProduct.title ||
-         extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku;
-}
-
-/**
- * Función interna: Mapear producto ML a formato BD
- */
-function mapProductForDB(productData, userId) {
-  const extractedSKU = extractSKUFromProduct(productData);
-  return {
-    id: productData.id,
-    user_id: userId,
-    title: productData.title,
-    seller_sku: extractedSKU,
-    available_quantity: productData.available_quantity || 0,
-    price: productData.price,
-    status: productData.status,
-    permalink: productData.permalink,
-    category_id: productData.category_id,
-    condition: productData.condition,
-    listing_type_id: productData.listing_type_id,
-    health: productData.health,
-    last_api_sync: new Date().toISOString()
-  };
-}
-
-/**
- * Función auxiliar para extraer SKU de múltiples fuentes
- */
-function extractSKUFromProduct(productData) {
-  // 1. Verificar seller_sku directo
-  if (productData.seller_sku) {
-    return productData.seller_sku;
-  }
-
-  // 2. Buscar en attributes si existe
-  if (productData.attributes && Array.isArray(productData.attributes)) {
-    const skuAttribute = productData.attributes.find(attr => 
-      attr.id === 'SELLER_SKU' || 
-      attr.id === 'SKU' || 
-      (attr.name && attr.name.toLowerCase().includes('sku'))
-    );
-    
-    if (skuAttribute && skuAttribute.value_name) {
-      return skuAttribute.value_name;
-    }
-  }
-
-  // 3. Si no se encuentra, retornar null
-  return null;
-}
-
-// Función auxiliar para verificar categorías (simplificada - solo log)
-function saveCategoriesFromProducts(categoryIds) {
-  try {
-    logger.info(`🔍 SYNC CATEGORIES: ${categoryIds.length} categorías detectadas en productos`);
-    logger.info(`🔍 SYNC CATEGORIES: Todas disponibles desde archivo estático (no requiere procesamiento)`);
-    logger.info(`   • Categorías disponibles: 12,109+`);
-    logger.info(`   • Ejemplos: ${categoryIds.slice(0, 3).join(', ')}${categoryIds.length > 3 ? '...' : ''}`);
-    
-    return { 
-      total: categoryIds.length, 
-      source: 'static_file_available' 
-    };
-    
-  } catch (error) {
-    logger.error(`🔍 SYNC CATEGORIES: Error: ${error.message}`);
-  }
-}
-
 // Función simplificada - ya no necesita poblar nada
 function populateCategoriesAfterSync(userId) {
   logger.info(`✅ CATEGORIES: Todas disponibles desde archivo estático (12,109+ categorías)`);
@@ -280,23 +102,9 @@ async function handleSyncNext(req, res) {
     const productIds = mlResult.results;
     logger.info(`📦 Obtenidos ${productIds.length} IDs de ML API`);
 
-    // 5. Procesar productos con sync inteligente (nuevos + actualizaciones)
+    // 5. Por ahora no procesamos productos sincrónicamente (se hace asíncronamente después)
     let savedCount = 0;
-    if (productIds.length > 0) {
-      logger.info(`🔄 Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
-      try {
-        savedCount = await processProductUpdates(productIds, userId);
-        logger.info(`✅ Procesamiento completado: ${savedCount} productos guardados/actualizados`);
-      } catch (error) {
-        logger.error(`❌ Error en processProductUpdates: ${error.message}`);
-        logger.error(`❌ Stack trace: ${error.stack}`);
-        savedCount = 0;
-        // Re-throw el error para que sea visible
-        throw error;
-      }
-    } else {
-      logger.info(`ℹ️ No hay productos nuevos que procesar en este lote`);
-    }
+    logger.info(`ℹ️ Productos obtenidos: ${productIds.length} (procesamiento inteligente será asíncrono)`);
 
     // 7. Actualizar progreso en scan_control
     const newTotal = mlResult.total || (scanState.total_products + productIds.length);
@@ -347,6 +155,33 @@ async function handleSyncNext(req, res) {
 
     logger.info(`✅ Sync-next completado: ${savedCount} nuevos, ${totalInDB} total en BD`);
     res.json(response);
+
+    // PROCESAMIENTO INTELIGENTE ASÍNCRONO: Llamar después de responder
+    if (productIds.length > 0) {
+      logger.info(`🚀 Iniciando procesamiento inteligente asíncrono para ${productIds.length} productos...`);
+      setTimeout(async () => {
+        try {
+          // Simular request para el endpoint process-products
+          const processRequest = {
+            auth: { userId },
+            body: { productIds }
+          };
+          
+          // Simular response (no enviamos respuesta real)
+          const processResponse = {
+            json: (data) => logger.info(`📊 Procesamiento asíncrono completado:`, data),
+            status: (code) => ({ json: (data) => logger.error(`❌ Procesamiento asíncrono falló (${code}):`, data) })
+          };
+          
+          // Importar y ejecutar la función de procesamiento
+          const processProducts = require('./process-products');
+          await processProducts(processRequest, processResponse);
+          
+        } catch (asyncError) {
+          logger.error(`❌ Error en procesamiento asíncrono: ${asyncError.message}`);
+        }
+      }, 200); // 200ms después de responder
+    }
 
   } catch (error) {
     logger.error(`❌ Error en sync-next: ${error.message}`);

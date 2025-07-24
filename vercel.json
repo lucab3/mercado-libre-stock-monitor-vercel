@@ -39,10 +39,6 @@
       "dest": "src/api/alerts.js"
     },
     {
-      "src": "/api/alert-settings",
-      "dest": "src/api/alert-settings.js"
-    },
-    {
       "src": "/api/products",
       "dest": "src/api/products-api.js"
     },
@@ -53,6 +49,10 @@
     {
       "src": "/api/departments",
       "dest": "src/api/departments.js"
+    },
+    {
+      "src": "/api/process-products",
+      "dest": "src/api/process-products.js"
     },
     {
       "src": "/api/(.*)",
