@@ -23,18 +23,23 @@ async function processProductUpdates(productIds, userId) {
   logger.info(`🔄 Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
   
   // 1. Obtener datos actuales de ML para este lote
+  logger.info(`📡 STEP 1: Obteniendo ${productIds.length} productos desde ML API...`);
   const mlProductsData = await products.getMultipleProducts(productIds, false, userId);
+  logger.info(`📡 STEP 1 RESULT: Obtenidos ${mlProductsData?.length || 0} productos desde ML API`);
   
   if (!mlProductsData || mlProductsData.length === 0) {
     return 0;
   }
 
   // 2. Obtener datos actuales de BD (solo campos para comparación)
-  logger.info(`🔍 Consultando BD: productos existentes para comparación`);
+  logger.info(`🔍 STEP 2: Consultando BD para ${productIds.length} productos...`);
   const dbProducts = await databaseService.getProductsForComparison(productIds, userId);
+  logger.info(`🔍 STEP 2 RESULT: Obtenidos ${dbProducts?.length || 0} productos desde BD`);
   
   // 3. Comparar y clasificar productos
+  logger.info(`⚖️ STEP 3: Comparando ${mlProductsData.length} productos ML vs ${dbProducts.length} productos BD...`);
   const result = compareProducts(mlProductsData, dbProducts, userId);
+  logger.info(`⚖️ STEP 3 RESULT: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
   
   // 4. Procesar categorías de productos nuevos/actualizados
   const allRelevantProducts = [...result.newProducts, ...result.updatedProducts];
@@ -55,15 +60,17 @@ async function processProductUpdates(productIds, userId) {
   let totalSaved = 0;
   
   if (result.newProducts.length > 0) {
+    logger.info(`💾 STEP 5A: Guardando ${result.newProducts.length} productos nuevos en BD...`);
     await databaseService.upsertMultipleProducts(result.newProducts);
     totalSaved += result.newProducts.length;
-    logger.info(`💾 Guardados ${result.newProducts.length} productos nuevos`);
+    logger.info(`✅ STEP 5A RESULT: Guardados ${result.newProducts.length} productos nuevos`);
   }
   
   if (result.updatedProducts.length > 0) {
+    logger.info(`📝 STEP 5B: Actualizando ${result.updatedProducts.length} productos en BD...`);
     await databaseService.updateProductsOptimized(result.updatedProducts);
     totalSaved += result.updatedProducts.length;
-    logger.info(`📝 Actualizados ${result.updatedProducts.length} productos con cambios de stock/precio`);
+    logger.info(`✅ STEP 5B RESULT: Actualizados ${result.updatedProducts.length} productos con cambios`);
   }
   
   logger.info(`📊 Resumen lote: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
@@ -282,7 +289,10 @@ async function handleSyncNext(req, res) {
         logger.info(`✅ Procesamiento completado: ${savedCount} productos guardados/actualizados`);
       } catch (error) {
         logger.error(`❌ Error en processProductUpdates: ${error.message}`);
+        logger.error(`❌ Stack trace: ${error.stack}`);
         savedCount = 0;
+        // Re-throw el error para que sea visible
+        throw error;
       }
     } else {
       logger.info(`ℹ️ No hay productos nuevos que procesar en este lote`);
