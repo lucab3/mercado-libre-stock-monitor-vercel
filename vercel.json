@@ -40,11 +40,11 @@
     },
     {
       "src": "/api/products",
-      "dest": "src/api/products-api.js"
+      "dest": "src/api/products-reader.js"
     },
     {
       "src": "/api/products/stats",
-      "dest": "src/api/products-api.js"
+      "dest": "src/api/products-reader.js"
     },
     {
       "src": "/api/departments",
@@ -52,7 +52,7 @@
     },
     {
       "src": "/api/process-products",
-      "dest": "src/api/process-products.js"
+      "dest": "src/api/products-processor.js"
     },
     {
       "src": "/api/(.*)",

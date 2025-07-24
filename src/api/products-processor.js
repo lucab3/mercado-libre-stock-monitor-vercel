@@ -6,7 +6,7 @@
 
 const { withAuth } = require('../middleware/serverlessAuth');
 const databaseService = require('../services/databaseService');
-const products = require('./products');
+const products = require('./ml-api-products-service');
 const logger = require('../utils/logger');
 
 /**
@@ -125,19 +125,23 @@ function saveCategoriesFromProducts(categoryIds) {
 /**
  * Procesar actualizaciones de productos
  * Compara ML vs BD y solo actualiza lo que cambió
+ * Puede usarse como endpoint HTTP o función interna
  */
-async function processProductUpdates(req, res) {
+async function processProductUpdates(req, res, userIdDirect = null, productIdsDirect = null) {
   const startTime = Date.now();
   
   try {
-    const userId = req.auth.userId;
-    const { productIds } = req.body;
+    // Determinar si es llamada interna o HTTP
+    const isInternalCall = userIdDirect && productIdsDirect;
+    const userId = isInternalCall ? userIdDirect : req.auth.userId;
+    const productIds = isInternalCall ? productIdsDirect : req.body.productIds;
 
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Se requiere un array de productIds'
-      });
+      const error = { success: false, error: 'Se requiere un array de productIds' };
+      if (isInternalCall) {
+        return error;
+      }
+      return res.status(400).json(error);
     }
 
     logger.info(`🔄 PROCESS: Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
@@ -148,12 +152,16 @@ async function processProductUpdates(req, res) {
     logger.info(`📡 PROCESS STEP 1 RESULT: Obtenidos ${mlProductsData?.length || 0} productos desde ML API`);
     
     if (!mlProductsData || mlProductsData.length === 0) {
-      return res.json({
+      const result = {
         success: true,
         message: 'No se pudieron obtener productos de ML API',
         processed: 0,
         processingTime: Date.now() - startTime
-      });
+      };
+      if (isInternalCall) {
+        return result;
+      }
+      return res.json(result);
     }
 
     // STEP 2: Obtener datos actuales de BD (solo campos para comparación)
@@ -201,7 +209,7 @@ async function processProductUpdates(req, res) {
     const processingTime = Date.now() - startTime;
     logger.info(`📊 PROCESS RESUMEN: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios (${processingTime}ms)`);
     
-    res.json({
+    const response = {
       success: true,
       message: 'Procesamiento inteligente completado',
       stats: {
@@ -213,19 +221,29 @@ async function processProductUpdates(req, res) {
         saved: totalSaved
       },
       processingTime
-    });
+    };
+    
+    if (isInternalCall) {
+      return response;
+    }
+    res.json(response);
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
     logger.error(`❌ PROCESS ERROR: ${error.message} (${processingTime}ms)`);
     logger.error(`❌ PROCESS STACK: ${error.stack}`);
     
-    res.status(500).json({
+    const errorResponse = {
       success: false,
       error: 'Error en procesamiento inteligente',
       message: error.message,
       processingTime
-    });
+    };
+    
+    if (isInternalCall) {
+      return errorResponse;
+    }
+    res.status(500).json(errorResponse);
   }
 }
 
@@ -242,5 +260,8 @@ async function handleProcessProducts(req, res) {
   }
 }
 
-// Export con middleware de autenticación
+// Export con middleware de autenticación para HTTP
 module.exports = withAuth(handleProcessProducts);
+
+// Export adicional para uso interno (sin middleware)
+module.exports.processProductUpdates = processProductUpdates;

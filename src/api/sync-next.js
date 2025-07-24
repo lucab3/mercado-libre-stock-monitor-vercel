@@ -3,7 +3,7 @@
  * Una llamada pequeña, rápida y simple que guarda productos nuevos
  */
 
-const products = require('./products');
+const products = require('./ml-api-products-service');
 const logger = require('../utils/logger');
 const databaseService = require('../services/databaseService');
 
@@ -161,21 +161,15 @@ async function handleSyncNext(req, res) {
       logger.info(`🚀 Iniciando procesamiento inteligente asíncrono para ${productIds.length} productos...`);
       setTimeout(async () => {
         try {
-          // Simular request para el endpoint process-products
-          const processRequest = {
-            auth: { userId },
-            body: { productIds }
-          };
+          // Importar y ejecutar la función de procesamiento interno
+          const { processProductUpdates } = require('./products-processor');
+          const result = await processProductUpdates(null, null, userId, productIds);
           
-          // Simular response (no enviamos respuesta real)
-          const processResponse = {
-            json: (data) => logger.info(`📊 Procesamiento asíncrono completado:`, data),
-            status: (code) => ({ json: (data) => logger.error(`❌ Procesamiento asíncrono falló (${code}):`, data) })
-          };
-          
-          // Importar y ejecutar la función de procesamiento
-          const processProducts = require('./process-products');
-          await processProducts(processRequest, processResponse);
+          if (result.success) {
+            logger.info(`📊 Procesamiento asíncrono completado: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados, ${result.stats.unchangedProducts} sin cambios`);
+          } else {
+            logger.error(`❌ Procesamiento asíncrono falló: ${result.message}`);
+          }
           
         } catch (asyncError) {
           logger.error(`❌ Error en procesamiento asíncrono: ${asyncError.message}`);

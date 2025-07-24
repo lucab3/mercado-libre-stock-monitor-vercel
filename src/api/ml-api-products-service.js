@@ -539,7 +539,7 @@ class ProductsService {
   /**
    * Actualiza el stock de un producto con rate limiting
    */
-  async updateProductStock(productId, quantity) {
+  async updateProductStock(productId, quantity, userId) {
     if (this.mockMode) {
       logger.info(`🎭 Actualizando stock de ${productId} a ${quantity} unidades (MOCK)`);
       try {
