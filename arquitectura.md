@@ -869,4 +869,4 @@ LOG_LEVEL=info         # debug | info | warn | error
 
 **Documentación técnica v1.0 - Sistema de Monitoreo de Stock MercadoLibre**
 
-*Arquitectura diseñada para producción con escalabilidad y robustez empresarial*
+*Arquitectura diseñada para producción con escalabilidad y robustez empresarial*e
