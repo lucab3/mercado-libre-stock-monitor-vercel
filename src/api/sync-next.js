@@ -26,11 +26,11 @@ async function processProductUpdates(productIds, userId) {
   const mlProductsData = await products.getMultipleProducts(productIds, false, userId);
   
   if (!mlProductsData || mlProductsData.length === 0) {
-    logger.warn(`⚠️ No se obtuvieron datos de ML para ${productIds.length} productos`);
     return 0;
   }
 
   // 2. Obtener datos actuales de BD (solo campos para comparación)
+  logger.info(`🔍 Consultando BD: productos existentes para comparación`);
   const dbProducts = await databaseService.getProductsForComparison(productIds, userId);
   
   // 3. Comparar y clasificar productos
@@ -47,7 +47,6 @@ async function processProductUpdates(productIds, userId) {
     });
     
     if (categoriesSet.size > 0) {
-      logger.info(`🔍 Procesando ${categoriesSet.size} categorías del lote`);
       await saveCategoriesFromProducts(Array.from(categoriesSet));
     }
   }
@@ -277,7 +276,16 @@ async function handleSyncNext(req, res) {
     // 5. Procesar productos con sync inteligente (nuevos + actualizaciones)
     let savedCount = 0;
     if (productIds.length > 0) {
-      savedCount = await processProductUpdates(productIds, userId);
+      logger.info(`🔄 Procesando ${productIds.length} productos para actualizaciones inteligentes...`);
+      try {
+        savedCount = await processProductUpdates(productIds, userId);
+        logger.info(`✅ Procesamiento completado: ${savedCount} productos guardados/actualizados`);
+      } catch (error) {
+        logger.error(`❌ Error en processProductUpdates: ${error.message}`);
+        savedCount = 0;
+      }
+    } else {
+      logger.info(`ℹ️ No hay productos nuevos que procesar en este lote`);
     }
 
     // 7. Actualizar progreso en scan_control
