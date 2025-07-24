@@ -161,9 +161,15 @@ async function handleSyncNext(req, res) {
       logger.info(`🚀 Iniciando procesamiento inteligente asíncrono para ${productIds.length} productos...`);
       setTimeout(async () => {
         try {
+          logger.info(`🔧 ASYNC DEBUG 1: setTimeout ejecutado, importando products-processor...`);
+          
           // Importar y ejecutar la función de procesamiento interno
           const { processProductUpdates } = require('./products-processor');
+          logger.info(`🔧 ASYNC DEBUG 2: processProductUpdates importado correctamente`);
+          
+          logger.info(`🔧 ASYNC DEBUG 3: Llamando processProductUpdates con userId=${userId}, productIds.length=${productIds.length}`);
           const result = await processProductUpdates(null, null, userId, productIds);
+          logger.info(`🔧 ASYNC DEBUG 4: processProductUpdates completado, result.success=${result.success}`);
           
           if (result.success) {
             logger.info(`📊 Procesamiento asíncrono completado: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados, ${result.stats.unchangedProducts} sin cambios`);
@@ -173,6 +179,7 @@ async function handleSyncNext(req, res) {
           
         } catch (asyncError) {
           logger.error(`❌ Error en procesamiento asíncrono: ${asyncError.message}`);
+          logger.error(`❌ Stack trace: ${asyncError.stack}`);
         }
       }, 200); // 200ms después de responder
     }
