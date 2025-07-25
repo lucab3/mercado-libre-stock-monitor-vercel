@@ -102,9 +102,22 @@ async function handleSyncNext(req, res) {
     const productIds = mlResult.results;
     logger.info(`📦 Obtenidos ${productIds.length} IDs de ML API`);
 
-    // 5. Por ahora no procesamos productos sincrónicamente (se hace asíncronamente después)
+    // 5. Procesar productos inmediatamente (restaurado)
     let savedCount = 0;
-    logger.info(`ℹ️ Productos obtenidos: ${productIds.length} (procesamiento inteligente será asíncrono)`);
+    if (productIds.length > 0) {
+      logger.info(`🔄 Procesando ${productIds.length} productos inmediatamente...`);
+      
+      // Obtener instancia del procesador
+      const productsService = require('./ml-api-products-service');
+      const result = await productsService.processProductsDirectly(productIds, userId);
+      
+      if (result.success) {
+        savedCount = result.stats.newProducts + result.stats.updatedProducts;
+        logger.info(`✅ Procesamiento completado: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados`);
+      } else {
+        logger.error(`❌ Error en procesamiento: ${result.message}`);
+      }
+    }
 
     // 7. Actualizar progreso en scan_control
     const newTotal = mlResult.total || (scanState.total_products + productIds.length);
@@ -156,8 +169,8 @@ async function handleSyncNext(req, res) {
     logger.info(`✅ Sync-next completado: ${savedCount} nuevos, ${totalInDB} total en BD`);
     res.json(response);
 
-    // El procesamiento inteligente ahora se hace desde ml-api-products-service.js
-    logger.info(`ℹ️ Productos obtenidos: ${productIds.length} (procesamiento se hará en ml-api-products-service)`);
+    // Procesamiento completado inmediatamente arriba
+    logger.info(`ℹ️ Procesamiento sincrónico completado: ${savedCount} productos guardados/actualizados`);
 
   } catch (error) {
     logger.error(`❌ Error en sync-next: ${error.message}`);
