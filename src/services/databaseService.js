@@ -1051,7 +1051,7 @@ class DatabaseService {
         user_id: userId,
         created_at: new Date().toISOString(),
         last_used: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // 6 horas
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutos
         ip_address: ipAddress,
         user_agent: userAgent,
         revoked: false

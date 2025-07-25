@@ -12,7 +12,7 @@ class SessionManager {
     // Almacén de sesiones por cookieId
     this.sessions = new Map(); // cookieId -> sessionData
     this.userSessions = new Map(); // userId -> Set of cookieIds
-    this.sessionTimeout = 6 * 60 * 60 * 1000; // 6 horas como ML tokens
+    this.sessionTimeout = 30 * 60 * 1000; // 30 minutos por seguridad
     
     // Limpiar sesiones expiradas cada hora
     setInterval(() => this.cleanExpiredSessions(), 60 * 60 * 1000);
@@ -58,7 +58,7 @@ class SessionManager {
     }
     this.userSessions.get(userId).add(cookieId);
     
-    logger.info(`🔑 Sesión creada para usuario ${userId} en navegador ${cookieId.substring(0, 8)}...`);
+    logger.info(`🔑 Sesión creada para usuario ${userId}`);
     
     return cookieId;
   }
@@ -79,7 +79,7 @@ class SessionManager {
 
     // Verificar si la sesión ha expirado
     if (Date.now() > session.expiresAt) {
-      logger.warn(`⏰ Sesión expirada: ${cookieId.substring(0, 8)}...`);
+      logger.warn(`⏰ Sesión expirada para usuario`);
       this.invalidateSession(cookieId);
       return null;
     }
@@ -109,7 +109,7 @@ class SessionManager {
     }
 
     if (session.userId !== expectedUserId) {
-      logger.error(`🚨 SEGURIDAD: Intento de acceso con sesión incorrecta. Cookie ${cookieId.substring(0, 8)}: usuario ${session.userId}, esperado: ${expectedUserId}`);
+      logger.error(`🚨 SEGURIDAD: Intento de acceso con sesión incorrecta. Usuario actual: ${session.userId}, esperado: ${expectedUserId}`);
       return false;
     }
 
@@ -132,7 +132,7 @@ class SessionManager {
       }
       
       this.sessions.delete(cookieId);
-      logger.info(`🗑️ Sesión invalidada: ${cookieId.substring(0, 8)}... (Usuario: ${session.userId})`);
+      logger.info(`🗑️ Sesión invalidada para usuario: ${session.userId}`);
     }
   }
 
@@ -228,10 +228,10 @@ class SessionManager {
       const session = this.sessions.get(cookieId);
       if (session && Date.now() <= session.expiresAt) {
         sessions.push({
-          cookieId: cookieId.substring(0, 8) + '...',
+          sessionActive: true,
           createdAt: session.createdAt,
           lastActivity: session.lastActivity,
-          userAgent: session.userAgent
+          userAgent: session.userAgent || 'Unknown'
         });
       }
     }
@@ -249,8 +249,7 @@ class SessionManager {
     }
 
     return {
-      sessionId: session.cookieId.substring(0, 8) + '...',
-      cookieId: session.cookieId.substring(0, 8) + '...',
+      sessionActive: true,
       userId: session.userId,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
@@ -286,7 +285,7 @@ class SessionManager {
     this.sessions.set(tempCookieId, sessionData);
     
     // NO agregar a userSessions porque es temporal
-    logger.debug(`🔄 Sesión temporal creada para usuario ${userId}: ${tempCookieId.substring(0, 8)}...`);
+    logger.debug(`🔄 Sesión temporal creada para usuario ${userId}`);
     
     return {
       cookieId: tempCookieId,

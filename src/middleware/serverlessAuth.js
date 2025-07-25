@@ -37,7 +37,7 @@ async function validateAuth(req) {
       endpoint: req.url,
       method: req.method,
       hasCookie: !!req.headers.cookie,
-      sessionCookie: sessionCookie ? sessionCookie.substring(0, 8) + '...' : null
+      hasValidSession: !!sessionCookie
     });
     
     if (!sessionCookie) {
@@ -57,7 +57,6 @@ async function validateAuth(req) {
     const session = await databaseService.getUserSession(sessionCookie);
     
     logger.info(`🔍 SESSION CHECK:`, {
-      sessionCookie: sessionCookie.substring(0, 8) + '...',
       sessionFound: !!session,
       userId: session?.userId
     });
@@ -104,11 +103,9 @@ async function validateAuth(req) {
  */
 async function withAuth(handler) {
   return async (req, res) => {
-    // Configurar CORS para todos los endpoints
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    // Usar middleware CORS centralizado
+    const { configureCorsHeaders } = require('./cors');
+    configureCorsHeaders(req, res);
 
     // Manejar OPTIONS request
     if (req.method === 'OPTIONS') {

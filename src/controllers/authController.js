@@ -48,12 +48,13 @@ class AuthController {
         await databaseService.saveTokens(mockUserId, mockTokens);
         await databaseService.createUserSession(cookieId, mockUserId, req.ip, req.get('User-Agent'));
         
-        // Establecer cookie
+        // Establecer cookie con configuración segura
         res.cookie('ml-session', cookieId, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          maxAge: 6 * 60 * 60 * 1000, // 6 horas
-          sameSite: 'lax'
+          secure: true, // Forzar HTTPS siempre
+          maxAge: 30 * 60 * 1000, // 30 minutos (más seguro)
+          sameSite: 'strict', // Prevenir CSRF
+          path: '/' // Limitar scope
         });
         
         return res.redirect('/');
@@ -136,15 +137,16 @@ class AuthController {
         req.get('User-Agent')
       );
       
-      // Establecer cookie
+      // Establecer cookie con configuración segura
       res.cookie('ml-session', cookieId, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 6 * 60 * 60 * 1000, // 6 horas
-        sameSite: 'lax'
+        secure: true, // Forzar HTTPS siempre
+        maxAge: 30 * 60 * 1000, // 30 minutos (más seguro)
+        sameSite: 'strict', // Prevenir CSRF
+        path: '/' // Limitar scope
       });
       
-      logger.info(`🔐 Sesión creada: ${cookieId.substring(0, 8)}... para usuario ${userId}`);
+      logger.info(`🔐 Sesión creada para usuario ${userId}`);
       res.redirect('/');
       
     } catch (error) {
@@ -164,14 +166,14 @@ class AuthController {
         // Revocar sesión en BD (única fuente de verdad)
         await databaseService.revokeUserSession(sessionCookie);
         
-        logger.info(`🔓 Sesión cerrada: ${sessionCookie.substring(0, 8)}...`);
+        logger.info(`🔓 Sesión cerrada para usuario`);
       }
       
-      // Limpiar cookie
+      // Limpiar cookie con misma configuración
       res.clearCookie('ml-session', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true,
+        sameSite: 'strict',
         path: '/'
       });
       
@@ -200,7 +202,7 @@ class AuthController {
           authenticated: true,
           user: {
             id: req.user.userId,
-            sessionId: req.user.sessionId.substring(0, 8) + '...'
+            sessionActive: true
           },
           session: {
             createdAt: session?.createdAt,

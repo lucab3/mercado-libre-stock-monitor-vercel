@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables and sensitive config
+.env
+.env.local
+.env.production
+.env.development
+env-*.txt
+*.env*
+
+# Security keys
+.secret_key
+.secret_iv
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
+*.tgz
+
+# Temporary files
+*.tmp
+*.temp
+
+# Package-lock files (if using yarn)
+# package-lock.json
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+
+# Database
+*.sqlite
+*.db
+
+# Backup files
+*.backup
+*.bak
