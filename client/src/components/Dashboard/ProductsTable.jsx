@@ -90,7 +90,7 @@ function ProductsTable({ products, loading }) {
   }
 
   return (
-    <div className="table-responsive" style={{ maxHeight: '100%', overflowY: 'auto' }}>
+    <div className="table-responsive">
       <table className="table table-hover">
         <thead>
           <tr>

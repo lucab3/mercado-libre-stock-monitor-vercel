@@ -46,20 +46,15 @@ main {
   padding-top: 48px;
 }
 
-/* Sticky table headers - FORZAR sticky en todos los contextos */
-.table-responsive {
-  position: relative;
-}
-
+/* Sticky table headers - Solución optimizada */
 .table-responsive .table thead th {
-  position: -webkit-sticky;
   position: sticky;
   top: 0;
   background-color: #fff !important;
-  z-index: 1020 !important;
+  z-index: 10;
   border-top: none;
   border-bottom: 2px solid #dee2e6;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* Ensure table headers have proper background in dark mode */
