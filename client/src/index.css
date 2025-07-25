@@ -46,19 +46,24 @@ main {
   padding-top: 48px;
 }
 
-/* Sticky table headers */
+/* Sticky table headers - FORZAR sticky en todos los contextos */
+.table-responsive {
+  position: relative;
+}
+
 .table-responsive .table thead th {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   background-color: #fff !important;
-  z-index: 10;
+  z-index: 1020 !important;
   border-top: none;
   border-bottom: 2px solid #dee2e6;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
 }
 
 /* Ensure table headers have proper background in dark mode */
-[data-bs-theme="dark"] .table-responsive .table thead.sticky-top th {
+[data-bs-theme="dark"] .table-responsive .table thead th {
   background-color: var(--bs-dark) !important;
   border-bottom-color: #495057;
 }
