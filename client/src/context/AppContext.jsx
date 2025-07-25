@@ -36,6 +36,7 @@ const initialState = {
     categories: [], // Array de categorías seleccionadas (vacío = todas)
     stockSort: 'default',
     stockFilter: 'all', // all, low, out
+    statusFilter: 'all', // all, active, paused, closed, under_review
     searchText: ''
   },
   

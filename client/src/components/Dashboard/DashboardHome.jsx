@@ -420,7 +420,9 @@ function DashboardHome() {
                 </div>
               </div>
               
-              <ProductsTable products={paginatedLowStockProducts} loading={loading.products} />
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <ProductsTable products={paginatedLowStockProducts} loading={loading.products} />
+              </div>
               
               {/* Paginación */}
               {totalPages > 1 && (

@@ -23,15 +23,18 @@ function ProductsSection() {
       )
     }
     
-    // Filtro por estado
-    if (productFilters.stockFilter === 'active') {
-      filtered = filtered.filter(p => p.status === 'active')
-    } else if (productFilters.stockFilter === 'paused') {
-      filtered = filtered.filter(p => p.status === 'paused')
-    } else if (productFilters.stockFilter === 'low') {
-      filtered = filtered.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
-    } else if (productFilters.stockFilter === 'out') {
-      filtered = filtered.filter(p => p.available_quantity === 0)
+    // Filtro por estado de publicación
+    if (productFilters.statusFilter && productFilters.statusFilter !== 'all') {
+      filtered = filtered.filter(p => p.status === productFilters.statusFilter)
+    }
+    
+    // Filtro por nivel de stock
+    if (productFilters.stockFilter && productFilters.stockFilter !== 'all') {
+      if (productFilters.stockFilter === 'low') {
+        filtered = filtered.filter(p => p.available_quantity <= 5 && p.available_quantity > 0)
+      } else if (productFilters.stockFilter === 'out') {
+        filtered = filtered.filter(p => p.available_quantity === 0)
+      }
     }
     
     // Filtro por texto de búsqueda
@@ -131,22 +134,35 @@ function ProductsSection() {
               />
             </div>
             
-            <div className="col-md-3">
-              <label className="form-label">Filtrar por estado:</label>
+            <div className="col-md-2">
+              <label className="form-label">Estado publicación:</label>
               <select 
                 className="form-select"
-                value={productFilters.stockFilter}
+                value={productFilters.statusFilter || 'all'}
+                onChange={(e) => handleFilterChange('statusFilter', e.target.value)}
+              >
+                <option value="all">Todos</option>
+                <option value="active">Activo</option>
+                <option value="paused">Pausado</option>
+                <option value="closed">Cerrado</option>
+                <option value="under_review">En revisión</option>
+              </select>
+            </div>
+            
+            <div className="col-md-2">
+              <label className="form-label">Nivel de stock:</label>
+              <select 
+                className="form-select"
+                value={productFilters.stockFilter || 'all'}
                 onChange={(e) => handleFilterChange('stockFilter', e.target.value)}
               >
                 <option value="all">Todos</option>
-                <option value="active">Activos</option>
-                <option value="paused">Pausados</option>
-                <option value="low">Stock bajo (≤5)</option>
+                <option value="low">Stock bajo</option>
                 <option value="out">Sin stock</option>
               </select>
             </div>
             
-            <div className="col-md-3">
+            <div className="col-md-2">
               <label className="form-label">Ordenar por:</label>
               <select 
                 className="form-select"
@@ -159,7 +175,7 @@ function ProductsSection() {
               </select>
             </div>
             
-            <div className="col-md-3">
+            <div className="col-md-4">
               <label className="form-label">Buscar producto:</label>
               <div className="input-group">
                 <input 
@@ -169,7 +185,7 @@ function ProductsSection() {
                   value={productFilters.searchText}
                   onChange={(e) => handleFilterChange('searchText', e.target.value)}
                 />
-                {(productFilters.categories.length > 0 || productFilters.searchText || productFilters.stockFilter !== 'all' || productFilters.stockSort !== 'default') && (
+                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default') && (
                   <button
                     className="btn btn-outline-secondary"
                     type="button"
@@ -177,6 +193,7 @@ function ProductsSection() {
                       categories: [],
                       stockSort: 'default',
                       stockFilter: 'all',
+                      statusFilter: 'all',
                       searchText: ''
                     })}
                     title="Limpiar todos los filtros"
@@ -192,7 +209,9 @@ function ProductsSection() {
 
       <div className="card">
         <div className="card-body">
-          <ProductsTable products={filteredProducts} loading={loading.products} />
+          <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+            <ProductsTable products={filteredProducts} loading={loading.products} />
+          </div>
         </div>
       </div>
     </div>
