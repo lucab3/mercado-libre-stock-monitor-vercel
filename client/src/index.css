@@ -47,13 +47,13 @@ main {
 }
 
 /* Sticky table headers */
-.table-responsive .table thead.sticky-top th {
-  border-top: none;
-  border-bottom: 2px solid #dee2e6;
+.table-responsive .table thead th {
   position: sticky;
   top: 0;
   background-color: #fff !important;
   z-index: 10;
+  border-top: none;
+  border-bottom: 2px solid #dee2e6;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
