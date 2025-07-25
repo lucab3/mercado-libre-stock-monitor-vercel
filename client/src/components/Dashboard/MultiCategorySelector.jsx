@@ -119,7 +119,9 @@ function MultiCategorySelector({
               </div>
             ) : (
               <div className="row g-1">
-                {availableCategories.map(categoryId => {
+                {availableCategories
+                  .sort((a, b) => getCategoryName(a).localeCompare(getCategoryName(b)))
+                  .map(categoryId => {
                   const isSelected = selectedCategories.includes(categoryId)
                   return (
                     <div key={categoryId} className="col-12">
