@@ -136,6 +136,17 @@ async function processProductsBatch(productIds, userId, dependencies) {
     const result = compareProducts(mlProductsData, dbProducts, userId);
     logger.info(`⚖️ PROCESS STEP 3 RESULT: ${result.newProducts.length} nuevos, ${result.updatedProducts.length} actualizados, ${result.unchangedCount} sin cambios`);
     
+    // STEP 3.1: Log detallado de productos con cambios (para verificar actualizaciones de stock)
+    if (result.updatedProducts.length > 0) {
+      logger.info(`📊 STOCK UPDATES: Detectados ${result.updatedProducts.length} productos con cambios:`);
+      result.updatedProducts.slice(0, 3).forEach(product => {
+        logger.info(`  • ${product.id}: Stock=${product.available_quantity}, Price=${product.price}`);
+      });
+      if (result.updatedProducts.length > 3) {
+        logger.info(`  • ... y ${result.updatedProducts.length - 3} productos más`);
+      }
+    }
+    
     // STEP 4: Procesar cambios en BD
     let totalSaved = 0;
     
@@ -184,6 +195,54 @@ async function processProductsBatch(productIds, userId, dependencies) {
   }
 }
 
+/**
+ * Función para limpiar productos que ya no existen en ML API
+ * Se ejecuta cuando el scan está completo
+ */
+async function cleanupDeletedProducts(allCurrentMLIds, userId, dependencies) {
+  const { databaseService, logger } = dependencies;
+  const startTime = Date.now();
+  
+  try {
+    logger.info(`🧹 CLEANUP: Iniciando limpieza de productos eliminados...`);
+    
+    // Obtener todos los IDs que tenemos en BD
+    const dbProductIds = await databaseService.getAllProductIds(userId);
+    logger.info(`🧹 CLEANUP: BD tiene ${dbProductIds.length} productos, ML API tiene ${allCurrentMLIds.length}`);
+    
+    // Encontrar productos que están en BD pero no en ML API
+    const mlIdsSet = new Set(allCurrentMLIds);
+    const productsToDelete = dbProductIds.filter(dbId => !mlIdsSet.has(dbId));
+    
+    if (productsToDelete.length > 0) {
+      logger.info(`🗑️ CLEANUP: Eliminando ${productsToDelete.length} productos que ya no existen en ML API`);
+      await databaseService.deleteProducts(productsToDelete, userId);
+      logger.info(`✅ CLEANUP: ${productsToDelete.length} productos eliminados exitosamente`);
+    } else {
+      logger.info(`✅ CLEANUP: No hay productos para eliminar - BD sincronizada con ML API`);
+    }
+    
+    const processingTime = Date.now() - startTime;
+    return {
+      success: true,
+      deletedCount: productsToDelete.length,
+      processingTime
+    };
+    
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    logger.error(`❌ CLEANUP ERROR: ${error.message} (${processingTime}ms)`);
+    
+    return {
+      success: false,
+      error: 'Error en limpieza de productos eliminados',
+      message: error.message,
+      processingTime
+    };
+  }
+}
+
 module.exports = {
-  processProductsBatch
+  processProductsBatch,
+  cleanupDeletedProducts
 };
