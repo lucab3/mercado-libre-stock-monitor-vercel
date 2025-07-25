@@ -8,100 +8,12 @@ const auth = require('./auth');
 const logger = require('../utils/logger');
 const config = require('../../config/config');
 
-/**
- * Queue de procesamiento de productos para evitar timeouts en serverless
- */
-class ProductQueue {
-  constructor() {
-    this.queue = [];
-    this.processing = false;
-  }
-  
-  async addBatch(productIds, userId) {
-    if (!productIds || productIds.length === 0) {
-      return;
-    }
-    
-    this.queue.push({ 
-      productIds, 
-      userId, 
-      timestamp: Date.now(),
-      id: Math.random().toString(36).substr(2, 9)
-    });
-    
-    logger.info(`📥 QUEUE: Lote agregado - ${productIds.length} productos (cola: ${this.queue.length} lotes)`);
-    
-    // Iniciar procesamiento si no está activo
-    if (!this.processing) {
-      this.startProcessing();
-    }
-  }
-  
-  async startProcessing() {
-    if (this.processing) {
-      logger.debug(`🔄 QUEUE: Procesamiento ya activo - ignorando`);
-      return;
-    }
-    
-    this.processing = true;
-    logger.info(`🚀 QUEUE: Iniciando procesamiento de cola (${this.queue.length} lotes)`);
-    
-    while (this.queue.length > 0) {
-      const batch = this.queue.shift();
-      const startTime = Date.now();
-      
-      logger.info(`🔄 QUEUE: Procesando lote ${batch.id} - ${batch.productIds.length} productos`);
-      
-      try {
-        // Obtener referencia al servicio
-        const productsService = require('./ml-api-products-service');
-        const result = await productsService.processProductsDirectly(batch.productIds, batch.userId);
-        
-        const processingTime = Date.now() - startTime;
-        
-        if (result.success) {
-          logger.info(`✅ QUEUE: Lote ${batch.id} completado en ${processingTime}ms`);
-          logger.info(`📊 QUEUE: ${result.stats?.newProducts || 0} nuevos, ${result.stats?.updatedProducts || 0} actualizados`);
-        } else {
-          logger.error(`❌ QUEUE: Lote ${batch.id} falló: ${result.message}`);
-        }
-        
-      } catch (error) {
-        logger.error(`❌ QUEUE: Error en lote ${batch.id}: ${error.message}`);
-        logger.error(`❌ QUEUE: Stack: ${error.stack}`);
-      }
-      
-      // Pausa entre lotes para rate limiting
-      if (this.queue.length > 0) {
-        logger.debug(`⏳ QUEUE: Pausa de 1s antes del siguiente lote...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    this.processing = false;
-    logger.info(`🏁 QUEUE: Procesamiento de cola completado`);
-  }
-  
-  getStatus() {
-    return {
-      queueLength: this.queue.length,
-      processing: this.processing,
-      nextBatch: this.queue.length > 0 ? {
-        productCount: this.queue[0].productIds.length,
-        timestamp: this.queue[0].timestamp
-      } : null
-    };
-  }
-}
-
-// Instancia singleton de la queue
-const productQueue = new ProductQueue();
+// ProductQueue eliminado - procesamiento directo solamente
 
 class ProductsService {
   constructor() {
     this.mockMode = process.env.MOCK_ML_API === 'true';
     this.mockAPI = null;
-    this.queue = productQueue;
     
     if (this.mockMode) {
       this.mockAPI = require('./mock-ml-api');
