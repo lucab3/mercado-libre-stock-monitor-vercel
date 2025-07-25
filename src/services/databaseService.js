@@ -86,50 +86,7 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Actualizar productos optimizado (solo campos que cambiaron)
-   */
-  async updateProductsOptimized(updatedProducts) {
-    if (!updatedProducts || updatedProducts.length === 0) {
-      return { success: true, count: 0 };
-    }
-
-    try {
-      const batchSize = 100;
-      const results = [];
-      
-      for (let i = 0; i < updatedProducts.length; i += batchSize) {
-        const batch = updatedProducts.slice(i, i + batchSize);
-        
-        // Agregar timestamp de actualización
-        const batchWithTimestamps = batch.map(product => ({
-          ...product,
-          updated_at: new Date().toISOString()
-        }));
-        
-        const result = await supabaseClient.executeQuery(
-          async (client) => {
-            return await client
-              .from(this.tableName)
-              .upsert(batchWithTimestamps, { 
-                onConflict: 'id',
-                returning: 'minimal'
-              });
-          },
-          `update_optimized_batch_${Math.floor(i / batchSize + 1)}`
-        );
-        
-        results.push(result);
-      }
-      
-      logger.info(`📝 Actualizados ${updatedProducts.length} productos con cambios optimizados`);
-      return { success: true, count: updatedProducts.length, results };
-      
-    } catch (error) {
-      logger.error(`❌ Error actualizando productos optimizados: ${error.message}`);
-      throw error;
-    }
-  }
+  // updateProductsOptimized movido al final del archivo con implementación completa que incluye last_api_sync
 
   /**
    * Obtener productos con stock bajo
