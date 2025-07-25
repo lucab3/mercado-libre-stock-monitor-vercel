@@ -138,21 +138,24 @@ class ProductsService {
       logger.info(`🔢 Duplicados detectados: ${response.duplicatesDetected || 0}`);
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
       
-      // PROCESAMIENTO INTELIGENTE: Llamada HTTP asíncrona al endpoint
+      // PROCESAMIENTO INTELIGENTE: Llamada directa al procesador
       if (allProductIds.length > 0) {
-        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos via HTTP...`);
+        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos directamente...`);
         
-        this.callProcessingEndpoint(allProductIds, userId)
-          .then(result => {
-            if (result.success) {
-              logger.info(`📊 Procesamiento HTTP completado: ${result.message}`);
-            } else {
-              logger.error(`❌ Procesamiento HTTP falló: ${result.message}`);
-            }
-          })
-          .catch(error => {
-            logger.error(`❌ Error en procesamiento HTTP: ${error.message}`);
-          });
+        // Llamada asíncrona sin esperar (fire-and-forget)
+        setTimeout(() => {
+          this.processProductsDirectly(allProductIds, userId)
+            .then(result => {
+              if (result.success) {
+                logger.info(`📊 Procesamiento directo completado: ${result.message}`);
+              } else {
+                logger.error(`❌ Procesamiento directo falló: ${result.message}`);
+              }
+            })
+            .catch(error => {
+              logger.error(`❌ Error en procesamiento directo: ${error.message}`);
+            });
+        }, 100); // Pequeño delay para no bloquear la respuesta
       }
       
       // Log información sobre continuación
@@ -231,21 +234,24 @@ class ProductsService {
       logger.info(`📊 Lote completado: ${response.batchCompleted ? 'SÍ' : 'NO'}`);
       logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
       
-      // PROCESAMIENTO INTELIGENTE: Llamada HTTP asíncrona al endpoint
+      // PROCESAMIENTO INTELIGENTE: Llamada directa al procesador
       if (allProductIds.length > 0) {
-        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos via HTTP (continuación)...`);
+        logger.info(`🔄 Iniciando procesamiento inteligente para ${allProductIds.length} productos directamente (continuación)...`);
         
-        this.callProcessingEndpoint(allProductIds, user.id)
-          .then(result => {
-            if (result.success) {
-              logger.info(`📊 Procesamiento HTTP completado: ${result.message}`);
-            } else {
-              logger.error(`❌ Procesamiento HTTP falló: ${result.message}`);
-            }
-          })
-          .catch(error => {
-            logger.error(`❌ Error en procesamiento HTTP: ${error.message}`);
-          });
+        // Llamada asíncrona sin esperar (fire-and-forget)
+        setTimeout(() => {
+          this.processProductsDirectly(allProductIds, userId)
+            .then(result => {
+              if (result.success) {
+                logger.info(`📊 Procesamiento directo completado: ${result.message}`);
+              } else {
+                logger.error(`❌ Procesamiento directo falló: ${result.message}`);
+              }
+            })
+            .catch(error => {
+              logger.error(`❌ Error en procesamiento directo: ${error.message}`);
+            });
+        }, 100); // Pequeño delay para no bloquear la respuesta
       }
       
       logger.info(`🔍 ScrollId obtenido en continuación: ${response.scrollId ? response.scrollId.substring(0, 30) + '...' : 'NULL'}`);
@@ -933,7 +939,46 @@ class ProductsService {
   }
 
   /**
-   * Llamar al endpoint de procesamiento de productos de forma asíncrona
+   * Procesar productos directamente sin HTTP calls
+   */
+  async processProductsDirectly(productIds, userId) {
+    try {
+      // Importar el procesador de productos
+      const { processProductsBatch } = require('../services/productProcessor');
+      const databaseService = require('../services/databaseService');
+      
+      logger.info(`🔄 PROCESAMIENTO DIRECTO: Iniciando para ${productIds.length} productos...`);
+      
+      // Inyectar dependencias (igual que en el wrapper HTTP eliminado)
+      const dependencies = {
+        databaseService,
+        mlApiService: this, // Referencia a esta instancia
+        logger
+      };
+
+      // Llamar directamente al procesador
+      const result = await processProductsBatch(productIds, userId, dependencies);
+      
+      if (result.success) {
+        logger.info(`✅ PROCESAMIENTO DIRECTO: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados, ${result.stats.unchangedProducts} sin cambios`);
+      }
+      
+      return result;
+
+    } catch (error) {
+      logger.error(`❌ Error en procesamiento directo: ${error.message}`);
+      logger.error(`❌ Stack: ${error.stack}`);
+      
+      return {
+        success: false,
+        error: 'Error en procesamiento directo',
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * DEPRECATED: Llamar al endpoint de procesamiento de productos de forma asíncrona
    */
   async callProcessingEndpoint(productIds, userId) {
     try {

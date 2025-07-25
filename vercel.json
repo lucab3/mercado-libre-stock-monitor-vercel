@@ -51,10 +51,6 @@
       "dest": "src/api/departments.js"
     },
     {
-      "src": "/api/process-products",
-      "dest": "src/api/products-processor.js"
-    },
-    {
       "src": "/api/(.*)",
       "dest": "src/index.js"
     },
