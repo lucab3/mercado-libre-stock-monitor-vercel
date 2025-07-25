@@ -21,6 +21,8 @@ function ProductsTable({ products, loading }) {
         return 'bg-warning'
       case 'closed':
         return 'bg-danger'
+      case 'under_review':
+        return 'bg-info'
       default:
         return 'bg-secondary'
     }
@@ -34,6 +36,8 @@ function ProductsTable({ products, loading }) {
         return 'Pausado'
       case 'closed':
         return 'Finalizada'
+      case 'under_review':
+        return 'En revisión'
       default:
         return status || 'Desconocido'
     }
