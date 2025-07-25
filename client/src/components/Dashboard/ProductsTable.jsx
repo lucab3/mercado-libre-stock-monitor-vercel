@@ -177,6 +177,7 @@ function ProductsTable({ products, loading }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
