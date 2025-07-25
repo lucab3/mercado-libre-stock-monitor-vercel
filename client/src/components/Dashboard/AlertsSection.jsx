@@ -3,7 +3,7 @@ import { useAppContext } from '../../context/AppContext'
 import { apiService } from '../../services/api'
 
 function AlertsSection() {
-  const { alerts, alertFilters, alertCounts, loading, actions } = useAppContext()
+  const { alerts, alertFilters, alertCounts, loading, actions, products } = useAppContext()
 
   useEffect(() => {
     loadAlerts()
@@ -49,6 +49,12 @@ function AlertsSection() {
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString()
+  }
+
+  // Buscar nombre del producto por ID
+  const getProductName = (productId) => {
+    const product = products.find(p => p.id === productId)
+    return product ? product.title : null
   }
 
   // Los contadores ahora vienen del backend para mostrar totales correctos
@@ -140,6 +146,7 @@ function AlertsSection() {
                 };
                 
                 const productUrl = alert.product_id ? generateUrlFromId(alert.product_id) : null;
+                const productName = alert.product_id ? getProductName(alert.product_id) : null;
                 
                 return (
                   <div key={index} className="list-group-item p-3">
@@ -154,10 +161,20 @@ function AlertsSection() {
                               rel="noopener noreferrer"
                               className="text-decoration-none"
                             >
-                              <h6 className="mb-0 text-primary">{alert.title}</h6>
+                              <h6 className="mb-0 text-primary">
+                                {productName || alert.title}
+                              </h6>
+                              {productName && productName !== alert.title && (
+                                <small className="text-muted d-block">{alert.title}</small>
+                              )}
                             </a>
                           ) : (
-                            <h6 className="mb-0">{alert.title}</h6>
+                            <div>
+                              <h6 className="mb-0">{productName || alert.title}</h6>
+                              {productName && productName !== alert.title && (
+                                <small className="text-muted">{alert.title}</small>
+                              )}
+                            </div>
                           )}
                           <small className="text-muted">{formatTime(alert.created_at)}</small>
                         </div>

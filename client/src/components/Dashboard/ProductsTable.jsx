@@ -33,10 +33,36 @@ function ProductsTable({ products, loading }) {
       case 'paused':
         return 'Pausado'
       case 'closed':
-        return 'Cerrado'
+        return 'Finalizada'
       default:
         return status || 'Desconocido'
     }
+  }
+
+  // Detectar si producto está en estado de demora (30 días + pausado)
+  const isDelayedProduct = (product) => {
+    const isPaused = product.status === 'paused'
+    const hasLongShipping = product.shipping_time >= 30 || 
+                           (product.shipping && product.shipping.logistic_type === 'fulfillment') ||
+                           (product.shipping && product.shipping.mode === 'custom' && product.shipping.free_shipping === false)
+    
+    return isPaused && hasLongShipping
+  }
+
+  // Obtener badge de estado considerando demora
+  const getStatusBadgeWithDelay = (product) => {
+    if (isDelayedProduct(product)) {
+      return 'bg-warning text-dark'
+    }
+    return getStatusBadge(product.status)
+  }
+
+  // Obtener texto de estado considerando demora  
+  const getStatusTextWithDelay = (product) => {
+    if (isDelayedProduct(product)) {
+      return 'En demora'
+    }
+    return getStatusText(product.status)
   }
 
   if (loading) {
@@ -114,8 +140,8 @@ function ProductsTable({ products, loading }) {
                 </span>
               </td>
               <td>
-                <span className={`badge ${getStatusBadge(product.status)}`}>
-                  {getStatusText(product.status)}
+                <span className={`badge ${getStatusBadgeWithDelay(product)}`}>
+                  {getStatusTextWithDelay(product)}
                 </span>
               </td>
               <td>
