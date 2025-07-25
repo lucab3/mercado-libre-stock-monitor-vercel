@@ -46,22 +46,21 @@ main {
   padding-top: 48px;
 }
 
-/* Sticky table headers - Solución optimizada */
-.table-responsive .table thead th {
-  position: sticky;
-  top: 0;
-  background-color: #fff !important;
-  z-index: 10;
-  border-top: none;
-  border-bottom: 2px solid #dee2e6;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
+/* Headers fijos duplicados - Sincronizar anchos */
+.table th:nth-child(1) { width: 40%; }  /* Producto */
+.table th:nth-child(2) { width: 12%; }  /* SKU */
+.table th:nth-child(3) { width: 8%; }   /* Stock */
+.table th:nth-child(4) { width: 12%; }  /* Estado Stock */
+.table th:nth-child(5) { width: 15%; }  /* Estado Publicación */
+.table th:nth-child(6) { width: 13%; }  /* Última actualización */
 
-/* Ensure table headers have proper background in dark mode */
-[data-bs-theme="dark"] .table-responsive .table thead th {
-  background-color: var(--bs-dark) !important;
-  border-bottom-color: #495057;
-}
+/* Asegurar que las celdas mantengan el mismo ancho */
+.table td:nth-child(1) { width: 40%; }
+.table td:nth-child(2) { width: 12%; }
+.table td:nth-child(3) { width: 8%; }
+.table td:nth-child(4) { width: 12%; }
+.table td:nth-child(5) { width: 15%; }
+.table td:nth-child(6) { width: 13%; }
 
 .status-indicator {
   width: 12px;

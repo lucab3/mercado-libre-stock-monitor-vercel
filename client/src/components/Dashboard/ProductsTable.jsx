@@ -90,18 +90,38 @@ function ProductsTable({ products, loading }) {
   }
 
   return (
-    <div className="table-responsive">
-      <table className="table table-hover">
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th>SKU</th>
-            <th>Stock</th>
-            <th>Estado Stock</th>
-            <th>Estado Publicación</th>
-            <th>Última actualización</th>
-          </tr>
-        </thead>
+    <div>
+      {/* Headers fijos siempre visibles */}
+      <div className="sticky-top bg-white border-bottom" style={{ zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th className="border-top-0">Producto</th>
+                <th className="border-top-0">SKU</th>
+                <th className="border-top-0">Stock</th>
+                <th className="border-top-0">Estado Stock</th>
+                <th className="border-top-0">Estado Publicación</th>
+                <th className="border-top-0">Última actualización</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>
+      
+      {/* Tabla con scroll normal */}
+      <div className="table-responsive">
+        <table className="table table-hover">
+          <thead className="visually-hidden">
+            <tr>
+              <th>Producto</th>
+              <th>SKU</th>
+              <th>Stock</th>
+              <th>Estado Stock</th>
+              <th>Estado Publicación</th>
+              <th>Última actualización</th>
+            </tr>
+          </thead>
         <tbody>
           {products.map((product) => (
             <tr key={product.id}>
