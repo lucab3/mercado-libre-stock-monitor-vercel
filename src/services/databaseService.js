@@ -1465,6 +1465,70 @@ class DatabaseService {
       throw error;
     }
   }
+
+  /**
+   * Obtener todos los IDs de productos para un usuario
+   * @param {string} userId - ID del usuario
+   * @returns {Array} Array de IDs de productos
+   */
+  async getAllProductIds(userId) {
+    try {
+      logger.debug(`🔍 Obteniendo todos los IDs de productos para usuario ${userId}`);
+      
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('id')
+            .eq('user_id', userId);
+        },
+        'get_all_product_ids'
+      );
+      
+      const productIds = (result.data || []).map(row => row.id);
+      logger.debug(`✅ Obtenidos ${productIds.length} IDs de productos de BD`);
+      return productIds;
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo IDs de productos para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Eliminar productos por IDs
+   * @param {Array} productIds - Array de IDs de productos a eliminar
+   * @param {string} userId - ID del usuario para seguridad
+   * @returns {Object} Resultado de la eliminación
+   */
+  async deleteProducts(productIds, userId) {
+    try {
+      if (!productIds || productIds.length === 0) {
+        return { deletedCount: 0 };
+      }
+
+      logger.info(`🗑️ Eliminando ${productIds.length} productos de BD para usuario ${userId}`);
+      
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .delete()
+            .eq('user_id', userId)
+            .in('id', productIds);
+        },
+        'delete_products'
+      );
+      
+      const deletedCount = result.count || productIds.length;
+      logger.info(`✅ Eliminados ${deletedCount} productos de BD`);
+      return { deletedCount };
+      
+    } catch (error) {
+      logger.error(`❌ Error eliminando productos para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Exportar instancia singleton
