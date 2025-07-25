@@ -60,9 +60,9 @@ function ProductsTable({ products, loading }) {
   }
 
   return (
-    <div className="table-responsive">
+    <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
       <table className="table table-hover">
-        <thead>
+        <thead className="sticky-top bg-white" style={{ zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <tr>
             <th>Producto</th>
             <th>SKU</th>

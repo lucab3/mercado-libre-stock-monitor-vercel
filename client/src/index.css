@@ -46,6 +46,23 @@ main {
   padding-top: 48px;
 }
 
+/* Sticky table headers */
+.table-responsive .table thead.sticky-top th {
+  border-top: none;
+  border-bottom: 2px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  background-color: #fff !important;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Ensure table headers have proper background in dark mode */
+[data-bs-theme="dark"] .table-responsive .table thead.sticky-top th {
+  background-color: var(--bs-dark) !important;
+  border-bottom-color: #495057;
+}
+
 .status-indicator {
   width: 12px;
   height: 12px;
