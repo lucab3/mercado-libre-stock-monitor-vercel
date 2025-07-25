@@ -229,10 +229,20 @@ class ProductsService {
       logger.info(`📊 Esto incluye productos activos, pausados y cerrados`);
       
       // PROCESAMIENTO INTELIGENTE: Agregar a queue para procesamiento asíncrono
+      logger.info(`🔍 DEBUG QUEUE: allProductIds.length = ${allProductIds.length}, userId = ${userId}`);
+      logger.info(`🔍 DEBUG QUEUE: this.queue existe = ${!!this.queue}, tipo = ${typeof this.queue}`);
+      
       if (allProductIds.length > 0) {
         logger.info(`🔄 Agregando ${allProductIds.length} productos a cola de procesamiento inteligente...`);
-        await this.queue.addBatch(allProductIds, userId);
-        logger.info(`📥 Productos agregados a queue - procesamiento continuará en background`);
+        try {
+          await this.queue.addBatch(allProductIds, userId);
+          logger.info(`📥 Productos agregados a queue - procesamiento continuará en background`);
+        } catch (error) {
+          logger.error(`❌ ERROR QUEUE: ${error.message}`);
+          logger.error(`❌ ERROR QUEUE STACK: ${error.stack}`);
+        }
+      } else {
+        logger.warn(`⚠️ DEBUG QUEUE: No se agregan productos a queue porque allProductIds.length = ${allProductIds.length}`);
       }
       
       // Log información sobre continuación
@@ -312,10 +322,20 @@ class ProductsService {
       logger.info(`🔄 Más productos disponibles: ${response.hasMoreProducts ? 'SÍ' : 'NO'}`);
       
       // PROCESAMIENTO INTELIGENTE: Agregar a queue para procesamiento asíncrono  
+      logger.info(`🔍 DEBUG QUEUE (CONTINUE): allProductIds.length = ${allProductIds.length}, userId = ${userId}`);
+      logger.info(`🔍 DEBUG QUEUE (CONTINUE): this.queue existe = ${!!this.queue}, tipo = ${typeof this.queue}`);
+      
       if (allProductIds.length > 0) {
         logger.info(`🔄 Agregando ${allProductIds.length} productos a cola de procesamiento inteligente (continuación)...`);
-        await this.queue.addBatch(allProductIds, userId);
-        logger.info(`📥 Productos agregados a queue - procesamiento continuará en background`);
+        try {
+          await this.queue.addBatch(allProductIds, userId);
+          logger.info(`📥 Productos agregados a queue - procesamiento continuará en background`);
+        } catch (error) {
+          logger.error(`❌ ERROR QUEUE (CONTINUE): ${error.message}`);
+          logger.error(`❌ ERROR QUEUE STACK (CONTINUE): ${error.stack}`);
+        }
+      } else {
+        logger.warn(`⚠️ DEBUG QUEUE (CONTINUE): No se agregan productos a queue porque allProductIds.length = ${allProductIds.length}`);
       }
       
       logger.info(`🔍 ScrollId obtenido en continuación: ${response.scrollId ? response.scrollId.substring(0, 30) + '...' : 'NULL'}`);
