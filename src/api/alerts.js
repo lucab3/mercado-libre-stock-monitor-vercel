@@ -6,47 +6,7 @@
 
 const databaseService = require('../services/databaseService');
 const { withAuth } = require('../middleware/serverlessAuth');
-const { validate } = require('../middleware/validation');
 const logger = require('../utils/logger');
-
-/**
- * Validación para el endpoint de alerts
- */
-const alertsValidation = validate({
-  query: {
-    alertType: {
-      type: 'string',
-      enum: ['LOW_STOCK', 'STOCK_DECREASE', 'STOCK_INCREASE', 'all'],
-      default: 'all'
-    },
-    priority: {
-      type: 'string',
-      enum: ['critical', 'warning', 'info', 'all'],
-      default: 'all'
-    },
-    limit: {
-      type: 'number',
-      min: 1,
-      max: 500,
-      default: 50
-    },
-    offset: {
-      type: 'number',
-      min: 0,
-      max: 100000,
-      default: 0
-    },
-    onlyUnread: {
-      type: 'boolean',
-      default: false
-    },
-    timeRange: {
-      type: 'string',
-      enum: ['today', 'week', 'month', 'all'],
-      default: 'all'
-    }
-  }
-});
 
 /**
  * Obtener alertas con filtros y paginación
@@ -443,16 +403,5 @@ async function handleAlertSettings(req, res) {
   }
 }
 
-// Crear wrapper que aplica validación solo a GET requests
-async function validatedHandleAlerts(req, res) {
-  // Si es GET y no es settings, aplicar validación
-  if (req.method === 'GET' && !req.url?.endsWith('/settings')) {
-    return alertsValidation(req, res, () => handleAlerts(req, res));
-  }
-  
-  // Para otros casos, usar handler normal
-  return handleAlerts(req, res);
-}
-
 // Export por defecto para Vercel con middleware de autenticación centralizado
-module.exports = withAuth(validatedHandleAlerts);
+module.exports = withAuth(handleAlerts);
