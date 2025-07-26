@@ -18,7 +18,7 @@ if (fs.existsSync(envPath)) {
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const logger = require('./utils/logger');
-const corsMiddleware = require('./middleware/cors');
+const { corsMiddleware } = require('./middleware/cors');
 
 // Importar rutas
 const authRoutes = require('./routes/auth');

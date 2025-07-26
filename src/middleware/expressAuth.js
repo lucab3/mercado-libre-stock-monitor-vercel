@@ -18,7 +18,7 @@ async function expressAuth(req, res, next) {
       path: req.path,
       method: req.method,
       hasCookie: !!sessionCookie,
-      sessionCookie: sessionCookie ? sessionCookie.substring(0, 8) + '...' : null
+      hasValidSession: !!sessionCookie
     });
     
     if (!sessionCookie) {
@@ -33,11 +33,11 @@ async function expressAuth(req, res, next) {
     const session = await databaseService.getUserSession(sessionCookie);
     
     if (!session) {
-      // Limpiar cookie inválida
+      // Limpiar cookie inválida con configuración segura
       res.clearCookie('ml-session', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true,
+        sameSite: 'strict',
         path: '/'
       });
       
