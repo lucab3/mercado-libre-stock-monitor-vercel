@@ -105,12 +105,30 @@ function extractSKUFromProduct(productData) {
  * Función auxiliar para extraer información de shipping y detectar demoras
  */
 function extractShippingInfo(productData) {
-  // ⭐ CORREGIDO: El campo es manufacturing_time según desarrollador de ML API
-  const manufacturingTime = productData.manufacturing_time || null;
+  // ⭐ CORREGIDO: manufacturing_time está en sale_terms según documentación ML
+  let manufacturingDays = null;
+  
+  if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+    const manufacturingTerm = productData.sale_terms.find(term => 
+      term.id === 'MANUFACTURING_TIME'
+    );
+    
+    if (manufacturingTerm && manufacturingTerm.value_name) {
+      // Extraer número de días de "20 días", "30 días", etc.
+      const match = manufacturingTerm.value_name.match(/(\d+)/);
+      if (match) {
+        manufacturingDays = parseInt(match[1]);
+      }
+    }
+  }
+  
+  // Convertir días a horas para mantener compatibilidad con lógica existente
+  const manufacturingHours = manufacturingDays ? manufacturingDays * 24 : null;
   
   return {
-    handling_time: manufacturingTime, // Mantenemos el nombre interno para compatibilidad
-    has_delay: manufacturingTime && manufacturingTime > 48 // Más de 2 días = demora
+    handling_time: manufacturingHours, // En horas para compatibilidad
+    manufacturing_days: manufacturingDays, // Días originales
+    has_delay: manufacturingDays && manufacturingDays > 2 // Más de 2 días = demora
   };
 }
 
