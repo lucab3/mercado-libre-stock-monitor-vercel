@@ -16,21 +16,56 @@ async function getAlerts(req, res) {
     // La autenticación ya fue validada por withAuth middleware
     const userId = req.auth.userId;
     
-    // 2. Obtener parámetros de filtros
+    // 2. Obtener y validar parámetros de filtros de forma segura
     const {
-      alertType,
-      priority, // Nuevo: filtro por prioridad (critical, warning, info)
-      limit = 50,
-      offset = 0,
-      onlyUnread = false,
-      timeRange = 'all' // 'today', 'week', 'month', 'all'
+      alertType: rawAlertType,
+      priority: rawPriority, 
+      limit: rawLimit = 50,
+      offset: rawOffset = 0,
+      onlyUnread: rawOnlyUnread = false,
+      timeRange: rawTimeRange = 'all'
     } = req.query;
+    
+    // Validación de seguridad que preserva comportamiento original
+    const validAlertTypes = ['LOW_STOCK', 'STOCK_DECREASE', 'STOCK_INCREASE'];
+    const validPriorities = ['critical', 'warning', 'info'];
+    const validTimeRanges = ['today', 'week', 'month', 'all'];
+    
+    // alertType: permitir undefined, validar solo si está presente
+    const alertType = rawAlertType && !validAlertTypes.includes(rawAlertType) 
+      ? (logger.warn(`🚨 alertType inválido: ${rawAlertType} desde IP: ${req.ip}`), undefined)
+      : rawAlertType;
+    
+    // priority: preservar undefined para lógica hasValidPriorityFilter
+    const priority = rawPriority && !validPriorities.includes(rawPriority)
+      ? (logger.warn(`🚨 priority inválido: ${rawPriority} desde IP: ${req.ip}`), undefined)
+      : rawPriority;
+    
+    // limit: validar rango y convertir a número
+    const limitNum = parseInt(rawLimit);
+    const limit = isNaN(limitNum) || limitNum < 1 || limitNum > 500 
+      ? (logger.warn(`🚨 limit inválido: ${rawLimit} desde IP: ${req.ip}`), 50)
+      : limitNum;
+    
+    // offset: validar no negativo
+    const offsetNum = parseInt(rawOffset);
+    const offset = isNaN(offsetNum) || offsetNum < 0 || offsetNum > 100000
+      ? (logger.warn(`🚨 offset inválido: ${rawOffset} desde IP: ${req.ip}`), 0)
+      : offsetNum;
+    
+    // onlyUnread: validar boolean
+    const onlyUnread = rawOnlyUnread === 'true' || rawOnlyUnread === true;
+    
+    // timeRange: validar enum
+    const timeRange = !validTimeRanges.includes(rawTimeRange)
+      ? (logger.warn(`🚨 timeRange inválido: ${rawTimeRange} desde IP: ${req.ip}`), 'all')
+      : rawTimeRange;
 
     logger.info(`📋 Obteniendo alertas para usuario ${userId} con filtros:`, {
       alertType,
       priority,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit,
+      offset,
       onlyUnread,
       timeRange
     });
@@ -38,8 +73,8 @@ async function getAlerts(req, res) {
     // 3. Preparar filtros para base de datos (sin paginación inicial si hay filtro de prioridad)
     const hasValidPriorityFilter = priority && priority.trim() !== '' && priority !== 'all';
     const filters = {
-      limit: hasValidPriorityFilter ? 500 : parseInt(limit), // Si hay filtro de prioridad, traer más para filtrar después
-      offset: hasValidPriorityFilter ? 0 : parseInt(offset),  // Si hay filtro de prioridad, empezar desde 0
+      limit: hasValidPriorityFilter ? 500 : limit, // Si hay filtro de prioridad, traer más para filtrar después
+      offset: hasValidPriorityFilter ? 0 : offset,  // Si hay filtro de prioridad, empezar desde 0
       alertType
     };
 
@@ -64,8 +99,8 @@ async function getAlerts(req, res) {
     }
     
     // 7. Aplicar paginación después de filtrar por prioridad
-    const startIndex = parseInt(offset);
-    const endIndex = startIndex + parseInt(limit);
+    const startIndex = offset;
+    const endIndex = startIndex + limit;
     const paginatedAlerts = filteredAlerts.slice(startIndex, endIndex);
     
     // 8. Obtener conteo por tipo de alerta
@@ -83,8 +118,8 @@ async function getAlerts(req, res) {
         info: allClassifiedAlerts.filter(a => a.priority === 'informative').length
       },
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
+        limit,
+        offset,
         hasMore: endIndex < filteredAlerts.length
       }
     };
