@@ -518,7 +518,8 @@ class ProductsService {
             'health',          // Estado de salud de la publicación
             'catalog_listing', // Si es catálogo
             'category_id',     // ID de categoría para filtros
-            'attributes'       // Atributos adicionales que pueden incluir SKU
+            'attributes',      // Atributos adicionales que pueden incluir SKU
+            'shipping'         // ⭐ NUEVO: Datos de envío y handling_time
           ];
 
       logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);

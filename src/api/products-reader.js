@@ -8,6 +8,28 @@ const { withAuth } = require('../middleware/serverlessAuth');
 const logger = require('../utils/logger');
 
 /**
+ * Helper para mostrar estado del producto con información de demora
+ */
+function getStatusWithDelay(status, handlingTime) {
+  // Mapear estados de ML a español
+  const statusMap = {
+    'active': 'Activo',
+    'paused': 'Pausado', 
+    'closed': 'Finalizado',
+    'inactive': 'Inactivo'
+  };
+  
+  let displayStatus = statusMap[status] || status;
+  
+  // Si tiene más de 48 horas (2 días) de handling time, agregar "con demora"
+  if (handlingTime && handlingTime > 48) {
+    displayStatus += ' con demora';
+  }
+  
+  return displayStatus;
+}
+
+/**
  * Obtener todos los productos del usuario autenticado
  */
 async function getProducts(req, res) {
@@ -24,12 +46,17 @@ async function getProducts(req, res) {
       // Generar URL correcta usando el mismo método que el HTML original
       const productUrl = product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`;
       
+      // ⭐ NUEVO: Calcular estado con información de demora
+      const statusWithDelay = getStatusWithDelay(product.status, product.estimated_handling_time);
+      
       return {
         id: product.id,
         title: product.title,
         seller_sku: product.seller_sku,
         available_quantity: product.available_quantity,
-        status: product.status,
+        status: product.status, // Estado original
+        status_display: statusWithDelay, // ⭐ Estado con demora para mostrar
+        estimated_handling_time: product.estimated_handling_time,
         permalink: product.permalink,
         productUrl: productUrl, // URL preferida para links
         category_id: product.category_id, // Agregar category_id para filtros

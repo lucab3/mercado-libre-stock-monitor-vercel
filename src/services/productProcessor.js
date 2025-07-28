@@ -54,6 +54,8 @@ function hasStockChanges(mlProduct, dbProduct) {
  */
 function mapProductForDB(productData, userId) {
   const extractedSKU = extractSKUFromProduct(productData);
+  const shippingInfo = extractShippingInfo(productData);
+  
   return {
     id: productData.id,
     user_id: userId,
@@ -67,6 +69,8 @@ function mapProductForDB(productData, userId) {
     condition: productData.condition,
     listing_type_id: productData.listing_type_id,
     health: productData.health,
+    // ⭐ NUEVO: Tiempo de preparación para detectar demoras
+    estimated_handling_time: shippingInfo.handling_time,
     last_api_sync: new Date().toISOString()
   };
 }
@@ -95,6 +99,21 @@ function extractSKUFromProduct(productData) {
 
   // 3. Si no se encuentra, retornar null
   return null;
+}
+
+/**
+ * Función auxiliar para extraer información de shipping y detectar demoras
+ */
+function extractShippingInfo(productData) {
+  const shipping = productData.shipping || {};
+  
+  // El handling_time viene en horas desde la API de ML
+  const handlingTime = shipping.handling_time || null;
+  
+  return {
+    handling_time: handlingTime,
+    has_delay: handlingTime && handlingTime > 48 // Más de 2 días = demora
+  };
 }
 
 /**
