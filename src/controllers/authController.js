@@ -82,15 +82,26 @@ class AuthController {
       logger.info('🔄 CALLBACK RECIBIDO - /auth/callback llamado');
       logger.info(`🔍 Query params: ${JSON.stringify(req.query)}`);
       
-      const { code, error } = req.query;
+      // Validar y sanitizar parámetros OAuth
+      const { code: rawCode, error: rawError } = req.query;
       
-      if (error) {
-        logger.error(`❌ Error en callback OAuth: ${error}`);
+      // Validar error OAuth
+      if (rawError) {
+        const sanitizedError = typeof rawError === 'string' ? rawError.slice(0, 100).replace(/[<>\"']/g, '') : 'unknown';
+        logger.error(`❌ Error en callback OAuth: ${sanitizedError} desde IP: ${req.ip}`);
         return res.redirect('/acceso-denegado');
       }
       
-      if (!code) {
-        logger.error('❌ No se recibió código de autorización');
+      // Validar código de autorización
+      if (!rawCode || typeof rawCode !== 'string') {
+        logger.error(`❌ No se recibió código de autorización válido desde IP: ${req.ip}`);
+        return res.redirect('/acceso-denegado');
+      }
+      
+      // Validar formato del código (OAuth codes suelen ser alfanuméricos)
+      const code = rawCode.slice(0, 500); // Limitar longitud
+      if (!/^[a-zA-Z0-9_-]+$/.test(code)) {
+        logger.warn(`🚨 Código OAuth con formato sospechoso desde IP: ${req.ip}`);
         return res.redirect('/acceso-denegado');
       }
       

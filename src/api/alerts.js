@@ -143,12 +143,48 @@ async function markAlertsAsRead(req, res) {
   try {
     // La autenticación ya fue validada por withAuth middleware
     const userId = req.auth.userId;
-    const { alertIds } = req.body;
+    const { alertIds: rawAlertIds } = req.body;
 
-    if (!alertIds || !Array.isArray(alertIds)) {
+    // Validar alertIds array
+    if (!rawAlertIds || !Array.isArray(rawAlertIds)) {
+      logger.warn(`🚨 alertIds no es array desde IP: ${req.ip}`);
       return res.status(400).json({
         success: false,
         error: 'Se requiere un array de alertIds'
+      });
+    }
+    
+    // Validar límite para prevenir DoS
+    if (rawAlertIds.length > 1000) {
+      logger.warn(`🚨 Demasiados alertIds (${rawAlertIds.length}) desde IP: ${req.ip}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Máximo 1000 alertIds permitidos'
+      });
+    }
+    
+    // Validar y sanitizar cada alertId
+    const alertIds = [];
+    for (let i = 0; i < rawAlertIds.length; i++) {
+      const id = rawAlertIds[i];
+      
+      // Validar que sea string/number y convertir a string
+      if (typeof id === 'string' || typeof id === 'number') {
+        const stringId = String(id).slice(0, 50); // Limitar longitud
+        
+        // Validar formato (números o UUIDs típicos)
+        if (/^[a-zA-Z0-9_-]+$/.test(stringId)) {
+          alertIds.push(stringId);
+        } else {
+          logger.warn(`🚨 alertId con formato inválido: ${stringId} desde IP: ${req.ip}`);
+        }
+      }
+    }
+    
+    if (alertIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se encontraron alertIds válidos'
       });
     }
 
@@ -211,12 +247,58 @@ async function updateAlertSettings(req, res) {
   try {
     // La autenticación ya fue validada por withAuth middleware
     const userId = req.auth.userId;
-    const { settings } = req.body;
+    const { settings: rawSettings } = req.body;
 
-    if (!settings) {
+    // Validar que settings sea un objeto
+    if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
+      logger.warn(`🚨 settings no es objeto desde IP: ${req.ip}`);
+      return res.status(400).json({
+        success: false,  
+        error: 'Se requiere el objeto settings'
+      });
+    }
+    
+    // Validar y sanitizar configuraciones
+    const settings = {};
+    
+    // popupsEnabled: boolean
+    if ('popupsEnabled' in rawSettings) {
+      settings.popupsEnabled = Boolean(rawSettings.popupsEnabled);
+    }
+    
+    // soundEnabled: boolean  
+    if ('soundEnabled' in rawSettings) {
+      settings.soundEnabled = Boolean(rawSettings.soundEnabled);
+    }
+    
+    // lowStockThreshold: number (1-100)
+    if ('lowStockThreshold' in rawSettings) {
+      const threshold = Number(rawSettings.lowStockThreshold);
+      if (isNaN(threshold) || threshold < 1 || threshold > 100) {
+        logger.warn(`🚨 lowStockThreshold inválido: ${rawSettings.lowStockThreshold} desde IP: ${req.ip}`);
+        return res.status(400).json({
+          success: false,
+          error: 'lowStockThreshold debe ser un número entre 1 y 100'
+        });
+      }
+      settings.lowStockThreshold = Math.floor(threshold);
+    }
+    
+    // showCriticalOnly: boolean
+    if ('showCriticalOnly' in rawSettings) {
+      settings.showCriticalOnly = Boolean(rawSettings.showCriticalOnly);
+    }
+    
+    // autoMarkAsRead: boolean
+    if ('autoMarkAsRead' in rawSettings) {
+      settings.autoMarkAsRead = Boolean(rawSettings.autoMarkAsRead);
+    }
+    
+    // Verificar que al menos una configuración sea válida
+    if (Object.keys(settings).length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Se requiere el objeto settings'
+        error: 'No se encontraron configuraciones válidas'
       });
     }
 
