@@ -519,7 +519,8 @@ class ProductsService {
             'catalog_listing', // Si es catálogo
             'category_id',     // ID de categoría para filtros
             'attributes',      // Atributos adicionales que pueden incluir SKU
-            'shipping'         // ⭐ NUEVO: Datos de envío y handling_time
+            'shipping',        // Datos de envío
+            'manufacturing_time' // ⭐ CORREGIDO: Campo real para tiempo de fabricación
           ];
 
       logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);

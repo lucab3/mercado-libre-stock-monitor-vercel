@@ -105,14 +105,12 @@ function extractSKUFromProduct(productData) {
  * Función auxiliar para extraer información de shipping y detectar demoras
  */
 function extractShippingInfo(productData) {
-  const shipping = productData.shipping || {};
-  
-  // El handling_time viene en horas desde la API de ML
-  const handlingTime = shipping.handling_time || null;
+  // ⭐ CORREGIDO: El campo es manufacturing_time según desarrollador de ML API
+  const manufacturingTime = productData.manufacturing_time || null;
   
   return {
-    handling_time: handlingTime,
-    has_delay: handlingTime && handlingTime > 48 // Más de 2 días = demora
+    handling_time: manufacturingTime, // Mantenemos el nombre interno para compatibilidad
+    has_delay: manufacturingTime && manufacturingTime > 48 // Más de 2 días = demora
   };
 }
 
