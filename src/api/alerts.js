@@ -16,25 +16,15 @@ async function getAlerts(req, res) {
     // La autenticación ya fue validada por withAuth middleware
     const userId = req.auth.userId;
     
-    // 2. Obtener y validar parámetros de filtros
-    const validAlertTypes = ['LOW_STOCK', 'STOCK_DECREASE', 'STOCK_INCREASE', 'all'];
-    const validPriorities = ['critical', 'warning', 'info', 'all'];
-    const validTimeRanges = ['today', 'week', 'month', 'all'];
-    
-    const alertType = validAlertTypes.includes(req.query.alertType) ? req.query.alertType : 'all';
-    const priority = validPriorities.includes(req.query.priority) ? req.query.priority : 'all';
-    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit) || 50));
-    const offset = Math.max(0, Math.min(100000, parseInt(req.query.offset) || 0));
-    const onlyUnread = req.query.onlyUnread === 'true';
-    const timeRange = validTimeRanges.includes(req.query.timeRange) ? req.query.timeRange : 'all';
-    
-    // Log de valores sospechosos para monitoreo de seguridad
-    if (req.query.limit && (parseInt(req.query.limit) > 500 || parseInt(req.query.limit) < 1)) {
-      logger.warn(`🚨 Valor de limit sospechoso: ${req.query.limit} desde IP: ${req.ip}`);
-    }
-    if (req.query.offset && parseInt(req.query.offset) < 0) {
-      logger.warn(`🚨 Valor de offset sospechoso: ${req.query.offset} desde IP: ${req.ip}`);
-    }
+    // 2. Obtener parámetros de filtros
+    const {
+      alertType,
+      priority, // Nuevo: filtro por prioridad (critical, warning, info)
+      limit = 50,
+      offset = 0,
+      onlyUnread = false,
+      timeRange = 'all' // 'today', 'week', 'month', 'all'
+    } = req.query;
 
     logger.info(`📋 Obteniendo alertas para usuario ${userId} con filtros:`, {
       alertType,
