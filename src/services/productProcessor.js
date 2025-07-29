@@ -20,7 +20,9 @@ function compareProducts(mlProducts, dbProducts, userId) {
       // Producto nuevo - mapear completo
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
-      // Solo campos que cambiaron
+      // Solo campos que cambiaron + shipping info
+      const shippingInfo = extractShippingInfo(mlProduct);
+      
       updatedProducts.push({
         id: mlProduct.id,
         available_quantity: mlProduct.available_quantity || 0,
@@ -28,6 +30,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
         status: mlProduct.status,
         title: mlProduct.title, // Título puede cambiar
         seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
+        estimated_handling_time: shippingInfo.handling_time, // ⭐ NUEVO: Incluir shipping info
         last_api_sync: new Date().toISOString()
       });
     } else {
@@ -42,11 +45,14 @@ function compareProducts(mlProducts, dbProducts, userId) {
  * Función interna: Verificar si hay cambios relevantes
  */
 function hasStockChanges(mlProduct, dbProduct) {
+  const shippingInfo = extractShippingInfo(mlProduct);
+  
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
          mlProduct.status !== dbProduct.status ||
          mlProduct.title !== dbProduct.title ||
-         extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku;
+         extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku ||
+         shippingInfo.handling_time !== dbProduct.estimated_handling_time; // ⭐ NUEVO: Detectar cambios en shipping
 }
 
 /**
