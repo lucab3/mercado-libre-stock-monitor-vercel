@@ -536,6 +536,13 @@ class ProductsService {
       // NUEVO: Validar cada producto obtenido
       products.forEach(product => {
         this.validateAndLogProductData(product);
+        
+        // 🔍 DEBUG ESPECÍFICO: Verificar sale_terms
+        if (product.sale_terms) {
+          logger.info(`🔍 MULTIGET DEBUG - Producto ${product.id} tiene sale_terms:`, JSON.stringify(product.sale_terms, null, 2));
+        } else {
+          logger.info(`❌ MULTIGET DEBUG - Producto ${product.id} NO tiene sale_terms`);
+        }
       });
       
       return products;
