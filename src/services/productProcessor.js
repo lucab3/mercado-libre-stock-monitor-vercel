@@ -5,6 +5,47 @@
  */
 
 /**
+ * Función auxiliar: Extraer manufacturing time de sale_terms
+ */
+function extractManufacturingTime(productData) {
+  const logger = require('../utils/logger');
+  
+  if (!productData.sale_terms || !Array.isArray(productData.sale_terms)) {
+    return null;
+  }
+  
+  const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+  if (!manufacturingTerm) {
+    return null;
+  }
+  
+  logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
+    value_name: manufacturingTerm.value_name,
+    value_struct: manufacturingTerm.value_struct
+  });
+  
+  // Priorizar value_struct.number si existe
+  if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
+    const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
+    const manufacturingHours = manufacturingDays * 24;
+    logger.info(`✅ Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
+    return manufacturingHours;
+  } 
+  // Fallback a value_name con regex
+  else if (manufacturingTerm.value_name) {
+    const match = manufacturingTerm.value_name.match(/(\d+)/);
+    if (match) {
+      const manufacturingDays = parseInt(match[1]);
+      const manufacturingHours = manufacturingDays * 24;
+      logger.info(`✅ Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
+      return manufacturingHours;
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Función interna: Comparar productos ML vs BD
  */
 function compareProducts(mlProducts, dbProducts, userId) {
@@ -21,39 +62,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
-      let manufacturingHours = null;
-      if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
-        // 🔍 Log detallado para updates también
-        const logger = require('../utils/logger');
-        logger.info(`🔍 UPDATE DEBUG ${mlProduct.id}: sale_terms length=${mlProduct.sale_terms.length}`);
-        mlProduct.sale_terms.forEach((term, index) => {
-          logger.info(`  • Update Term ${index}: id="${term.id}", value_name="${term.value_name}"`);
-        });
-        
-        const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
-        if (manufacturingTerm) {
-          logger.info(`🎯 UPDATE: MANUFACTURING_TIME encontrado para ${mlProduct.id}:`, {
-            value_name: manufacturingTerm.value_name,
-            value_struct: manufacturingTerm.value_struct
-          });
-          
-          // Priorizar value_struct.number si existe
-          if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
-            const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
-            manufacturingHours = manufacturingDays * 24;
-            logger.info(`✅ UPDATE: Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
-          } 
-          // Fallback a value_name con regex
-          else if (manufacturingTerm.value_name) {
-            const match = manufacturingTerm.value_name.match(/(\d+)/);
-            if (match) {
-              const manufacturingDays = parseInt(match[1]);
-              manufacturingHours = manufacturingDays * 24;
-              logger.info(`✅ UPDATE: Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
-            }
-          }
-        }
-      }
+      const manufacturingHours = extractManufacturingTime(mlProduct);
       
       updatedProducts.push({
         id: mlProduct.id,
@@ -77,24 +86,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
  * Función interna: Verificar si hay cambios relevantes
  */
 function hasStockChanges(mlProduct, dbProduct) {
-  // Extraer manufacturing time de sale_terms
-  let manufacturingHours = null;
-  if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
-    const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
-    if (manufacturingTerm) {
-      // Priorizar value_struct.number si existe
-      if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
-        manufacturingHours = parseInt(manufacturingTerm.value_struct.number) * 24;
-      } 
-      // Fallback a value_name con regex
-      else if (manufacturingTerm.value_name) {
-        const match = manufacturingTerm.value_name.match(/(\d+)/);
-        if (match) {
-          manufacturingHours = parseInt(match[1]) * 24;
-        }
-      }
-    }
-  }
+  const manufacturingHours = extractManufacturingTime(mlProduct);
   
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
@@ -111,46 +103,18 @@ function mapProductForDB(productData, userId) {
   const logger = require('../utils/logger');
   const extractedSKU = extractSKUFromProduct(productData);
   
-  // 🔍 Buscar MANUFACTURING_TIME en sale_terms
-  let manufacturingDays = null;
-  let manufacturingHours = null;
-  
+  // 🔍 Log detallado de sale_terms para debug
   if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
-    // 🔍 Log detallado de sale_terms para debug
     logger.info(`🔍 DEBUG ${productData.id}: sale_terms length=${productData.sale_terms.length}`);
     productData.sale_terms.forEach((term, index) => {
       logger.info(`  • Term ${index}: id="${term.id}", value_name="${term.value_name}"`);
     });
-    
-    const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
-    
-    if (manufacturingTerm) {
-      logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
-        value_name: manufacturingTerm.value_name,
-        value_struct: manufacturingTerm.value_struct
-      });
-      
-      // Priorizar value_struct.number si existe
-      if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
-        manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
-        manufacturingHours = manufacturingDays * 24;
-        logger.info(`✅ Producto ${productData.id}: Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
-      } 
-      // Fallback a value_name con regex
-      else if (manufacturingTerm.value_name) {
-        const match = manufacturingTerm.value_name.match(/(\d+)/);
-        if (match) {
-          manufacturingDays = parseInt(match[1]);
-          manufacturingHours = manufacturingDays * 24;
-          logger.info(`✅ Producto ${productData.id}: Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
-        }
-      }
-    } else {
-      logger.info(`❌ Producto ${productData.id} NO tiene MANUFACTURING_TIME en sale_terms`);
-    }
   } else {
     logger.info(`❌ Producto ${productData.id} NO tiene sale_terms o no es array`);
   }
+  
+  // Extraer manufacturing time usando función centralizada
+  const manufacturingHours = extractManufacturingTime(productData);
   
   return {
     id: productData.id,
