@@ -535,6 +535,16 @@ class MLAPIClient {
           const validProducts = response
             .filter(item => item.code === 200)
             .map(item => item.body);
+          
+          // 🔍 DEBUG: Log específico para sale_terms
+          validProducts.forEach(product => {
+            if (product.sale_terms) {
+              logger.info(`🎯 MULTIGET: Producto ${product.id} tiene sale_terms:`, JSON.stringify(product.sale_terms));
+            } else {
+              logger.info(`❌ MULTIGET: Producto ${product.id} NO tiene sale_terms`);
+            }
+          });
+          
           results.push(...validProducts);
         }
       } catch (error) {
