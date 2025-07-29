@@ -520,7 +520,8 @@ class ProductsService {
             'category_id',     // ID de categoría para filtros
             'attributes',      // Atributos adicionales que pueden incluir SKU
             'shipping',        // Datos de envío
-            'sale_terms'       // ⭐ CORREGIDO: Aquí está MANUFACTURING_TIME
+            'sale_terms',      // Terms de venta (incluye MANUFACTURING_TIME)
+            'manufacturing_time' // ⭐ DIRECTO: Manufacturing time como atributo directo
           ];
 
       logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);
@@ -537,11 +538,19 @@ class ProductsService {
       products.forEach(product => {
         this.validateAndLogProductData(product);
         
-        // 🔍 DEBUG ESPECÍFICO: Verificar sale_terms
-        if (product.sale_terms) {
-          logger.info(`🔍 MULTIGET DEBUG - Producto ${product.id} tiene sale_terms:`, JSON.stringify(product.sale_terms, null, 2));
+        // 🔍 DEBUG ESPECÍFICO: Verificar campos de manufacturing time
+        logger.info(`🔍 MULTIGET DEBUG - Producto ${product.id}:`);
+        
+        if (product.manufacturing_time) {
+          logger.info(`  ✅ manufacturing_time directo: ${product.manufacturing_time}`);
         } else {
-          logger.info(`❌ MULTIGET DEBUG - Producto ${product.id} NO tiene sale_terms`);
+          logger.info(`  ❌ NO tiene manufacturing_time directo`);
+        }
+        
+        if (product.sale_terms) {
+          logger.info(`  ✅ sale_terms:`, JSON.stringify(product.sale_terms, null, 2));
+        } else {
+          logger.info(`  ❌ NO tiene sale_terms`);
         }
       });
       

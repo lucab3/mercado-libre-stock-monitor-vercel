@@ -21,7 +21,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
-      const shippingInfo = extractShippingInfo(mlProduct);
+      const manufacturingHours = mlProduct.manufacturing_time ? mlProduct.manufacturing_time * 24 : null;
       
       updatedProducts.push({
         id: mlProduct.id,
@@ -30,7 +30,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
         status: mlProduct.status,
         title: mlProduct.title, // Título puede cambiar
         seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
-        estimated_handling_time: shippingInfo.handling_time, // ⭐ NUEVO: Incluir shipping info
+        estimated_handling_time: manufacturingHours, // ⭐ DIRECTO: Manufacturing time
         last_api_sync: new Date().toISOString()
       });
     } else {
@@ -45,22 +45,30 @@ function compareProducts(mlProducts, dbProducts, userId) {
  * Función interna: Verificar si hay cambios relevantes
  */
 function hasStockChanges(mlProduct, dbProduct) {
-  const shippingInfo = extractShippingInfo(mlProduct);
+  const manufacturingHours = mlProduct.manufacturing_time ? mlProduct.manufacturing_time * 24 : null;
   
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
          mlProduct.status !== dbProduct.status ||
          mlProduct.title !== dbProduct.title ||
          extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku ||
-         shippingInfo.handling_time !== dbProduct.estimated_handling_time; // ⭐ NUEVO: Detectar cambios en shipping
+         manufacturingHours !== dbProduct.estimated_handling_time; // ⭐ DIRECTO: Detectar cambios en manufacturing time
 }
 
 /**
  * Función interna: Mapear producto ML a formato BD
  */
 function mapProductForDB(productData, userId) {
+  const logger = require('../utils/logger');
   const extractedSKU = extractSKUFromProduct(productData);
-  const shippingInfo = extractShippingInfo(productData);
+  const manufacturingHours = productData.manufacturing_time ? productData.manufacturing_time * 24 : null;
+  
+  // 🔍 DEBUG: Logging para manufacturing time
+  if (productData.manufacturing_time) {
+    logger.info(`✅ Producto ${productData.id} tiene manufacturing_time: ${productData.manufacturing_time} (${manufacturingHours}h)`);
+  } else {
+    logger.debug(`❌ Producto ${productData.id} NO tiene manufacturing_time`);
+  }
   
   return {
     id: productData.id,
@@ -75,8 +83,8 @@ function mapProductForDB(productData, userId) {
     condition: productData.condition,
     listing_type_id: productData.listing_type_id,
     health: productData.health,
-    // ⭐ NUEVO: Tiempo de preparación para detectar demoras
-    estimated_handling_time: shippingInfo.handling_time,
+    // ⭐ DIRECTO: Manufacturing time desde productData
+    estimated_handling_time: manufacturingHours,
     last_api_sync: new Date().toISOString()
   };
 }
@@ -107,67 +115,6 @@ function extractSKUFromProduct(productData) {
   return null;
 }
 
-/**
- * Función auxiliar para extraer información de shipping y detectar demoras
- */
-function extractShippingInfo(productData) {
-  // ⭐ CORREGIDO: manufacturing_time está en sale_terms según documentación ML
-  let manufacturingDays = null;
-  
-  // 🔍 DEBUG: Log para ver qué datos llegan
-  const logger = require('../utils/logger');
-  
-  // 🔍 DEBUG EXTENSO: Logear todo el objeto del producto para ver estructura
-  logger.info(`🔍 EXTRACTING SHIPPING INFO para producto ${productData.id}`);
-  logger.info(`🔍 CAMPOS DISPONIBLES: ${Object.keys(productData).join(', ')}`);
-  
-  if (productData.sale_terms) {
-    logger.info(`🔍 sale_terms EXISTE para ${productData.id}, tipo: ${typeof productData.sale_terms}`);
-    logger.info(`🔍 sale_terms contenido:`, JSON.stringify(productData.sale_terms, null, 2));
-    
-    if (Array.isArray(productData.sale_terms)) {
-      logger.info(`🔍 sale_terms es array con ${productData.sale_terms.length} elementos`);
-      
-      productData.sale_terms.forEach((term, index) => {
-        logger.info(`🔍 sale_terms[${index}]: id="${term.id}", value_name="${term.value_name}"`);
-      });
-      
-      const manufacturingTerm = productData.sale_terms.find(term => 
-        term.id === 'MANUFACTURING_TIME'
-      );
-      
-      if (manufacturingTerm && manufacturingTerm.value_name) {
-        logger.info(`⏱️ MANUFACTURING_TIME encontrado: ${manufacturingTerm.value_name} para producto ${productData.id}`);
-        
-        // Extraer número de días de "20 días", "30 días", etc.
-        const match = manufacturingTerm.value_name.match(/(\d+)/);
-        if (match) {
-          manufacturingDays = parseInt(match[1]);
-          logger.info(`✅ Extraídos ${manufacturingDays} días de fabricación para ${productData.id}`);
-        }
-      } else {
-        logger.info(`❌ No se encontró MANUFACTURING_TIME en sale_terms para ${productData.id}`);
-      }
-    } else {
-      logger.info(`❌ sale_terms NO es array para ${productData.id}, es: ${typeof productData.sale_terms}`);
-    }
-  } else {
-    logger.info(`❌ NO HAY sale_terms para producto ${productData.id}`);
-  }
-  
-  // Convertir días a horas para mantener compatibilidad con lógica existente
-  const manufacturingHours = manufacturingDays ? manufacturingDays * 24 : null;
-  
-  if (manufacturingHours) {
-    logger.info(`🎯 Producto ${productData.id} tendrá ${manufacturingHours}h de handling_time (${manufacturingDays} días)`);
-  }
-  
-  return {
-    handling_time: manufacturingHours, // En horas para compatibilidad
-    manufacturing_days: manufacturingDays, // Días originales
-    has_delay: manufacturingDays && manufacturingDays > 2 // Más de 2 días = demora
-  };
-}
 
 /**
  * Función principal: Procesar lote de productos
