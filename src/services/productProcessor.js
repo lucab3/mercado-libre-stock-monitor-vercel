@@ -31,11 +31,26 @@ function compareProducts(mlProducts, dbProducts, userId) {
         });
         
         const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
-        if (manufacturingTerm && manufacturingTerm.value_name) {
-          const match = manufacturingTerm.value_name.match(/(\d+)/);
-          if (match) {
-            manufacturingHours = parseInt(match[1]) * 24;
-            logger.info(`🎯 UPDATE: Manufacturing time detectado ${mlProduct.id}: ${manufacturingHours}h`);
+        if (manufacturingTerm) {
+          logger.info(`🎯 UPDATE: MANUFACTURING_TIME encontrado para ${mlProduct.id}:`, {
+            value_name: manufacturingTerm.value_name,
+            value_struct: manufacturingTerm.value_struct
+          });
+          
+          // Priorizar value_struct.number si existe
+          if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
+            const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
+            manufacturingHours = manufacturingDays * 24;
+            logger.info(`✅ UPDATE: Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
+          } 
+          // Fallback a value_name con regex
+          else if (manufacturingTerm.value_name) {
+            const match = manufacturingTerm.value_name.match(/(\d+)/);
+            if (match) {
+              const manufacturingDays = parseInt(match[1]);
+              manufacturingHours = manufacturingDays * 24;
+              logger.info(`✅ UPDATE: Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
+            }
           }
         }
       }
@@ -66,10 +81,17 @@ function hasStockChanges(mlProduct, dbProduct) {
   let manufacturingHours = null;
   if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
     const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
-    if (manufacturingTerm && manufacturingTerm.value_name) {
-      const match = manufacturingTerm.value_name.match(/(\d+)/);
-      if (match) {
-        manufacturingHours = parseInt(match[1]) * 24;
+    if (manufacturingTerm) {
+      // Priorizar value_struct.number si existe
+      if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
+        manufacturingHours = parseInt(manufacturingTerm.value_struct.number) * 24;
+      } 
+      // Fallback a value_name con regex
+      else if (manufacturingTerm.value_name) {
+        const match = manufacturingTerm.value_name.match(/(\d+)/);
+        if (match) {
+          manufacturingHours = parseInt(match[1]) * 24;
+        }
       }
     }
   }
@@ -102,15 +124,26 @@ function mapProductForDB(productData, userId) {
     
     const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
     
-    if (manufacturingTerm && manufacturingTerm.value_name) {
-      logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}: ${manufacturingTerm.value_name}`);
+    if (manufacturingTerm) {
+      logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
+        value_name: manufacturingTerm.value_name,
+        value_struct: manufacturingTerm.value_struct
+      });
       
-      // Extraer número de días de "20 días", "30 días", etc.
-      const match = manufacturingTerm.value_name.match(/(\d+)/);
-      if (match) {
-        manufacturingDays = parseInt(match[1]);
-        manufacturingHours = manufacturingDays * 24; // Convertir a horas
-        logger.info(`✅ Producto ${productData.id}: ${manufacturingDays} días = ${manufacturingHours}h de fabricación`);
+      // Priorizar value_struct.number si existe
+      if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
+        manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
+        manufacturingHours = manufacturingDays * 24;
+        logger.info(`✅ Producto ${productData.id}: Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
+      } 
+      // Fallback a value_name con regex
+      else if (manufacturingTerm.value_name) {
+        const match = manufacturingTerm.value_name.match(/(\d+)/);
+        if (match) {
+          manufacturingDays = parseInt(match[1]);
+          manufacturingHours = manufacturingDays * 24;
+          logger.info(`✅ Producto ${productData.id}: Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
+        }
       }
     } else {
       logger.info(`❌ Producto ${productData.id} NO tiene MANUFACTURING_TIME en sale_terms`);
