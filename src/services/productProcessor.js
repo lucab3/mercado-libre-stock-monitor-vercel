@@ -117,27 +117,42 @@ function extractShippingInfo(productData) {
   // 🔍 DEBUG: Log para ver qué datos llegan
   const logger = require('../utils/logger');
   
-  if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
-    logger.debug(`🔍 sale_terms encontrados para ${productData.id}:`, productData.sale_terms);
+  // 🔍 DEBUG EXTENSO: Logear todo el objeto del producto para ver estructura
+  logger.info(`🔍 EXTRACTING SHIPPING INFO para producto ${productData.id}`);
+  logger.info(`🔍 CAMPOS DISPONIBLES: ${Object.keys(productData).join(', ')}`);
+  
+  if (productData.sale_terms) {
+    logger.info(`🔍 sale_terms EXISTE para ${productData.id}, tipo: ${typeof productData.sale_terms}`);
+    logger.info(`🔍 sale_terms contenido:`, JSON.stringify(productData.sale_terms, null, 2));
     
-    const manufacturingTerm = productData.sale_terms.find(term => 
-      term.id === 'MANUFACTURING_TIME'
-    );
-    
-    if (manufacturingTerm && manufacturingTerm.value_name) {
-      logger.info(`⏱️ MANUFACTURING_TIME encontrado: ${manufacturingTerm.value_name} para producto ${productData.id}`);
+    if (Array.isArray(productData.sale_terms)) {
+      logger.info(`🔍 sale_terms es array con ${productData.sale_terms.length} elementos`);
       
-      // Extraer número de días de "20 días", "30 días", etc.
-      const match = manufacturingTerm.value_name.match(/(\d+)/);
-      if (match) {
-        manufacturingDays = parseInt(match[1]);
-        logger.info(`✅ Extraídos ${manufacturingDays} días de fabricación para ${productData.id}`);
+      productData.sale_terms.forEach((term, index) => {
+        logger.info(`🔍 sale_terms[${index}]: id="${term.id}", value_name="${term.value_name}"`);
+      });
+      
+      const manufacturingTerm = productData.sale_terms.find(term => 
+        term.id === 'MANUFACTURING_TIME'
+      );
+      
+      if (manufacturingTerm && manufacturingTerm.value_name) {
+        logger.info(`⏱️ MANUFACTURING_TIME encontrado: ${manufacturingTerm.value_name} para producto ${productData.id}`);
+        
+        // Extraer número de días de "20 días", "30 días", etc.
+        const match = manufacturingTerm.value_name.match(/(\d+)/);
+        if (match) {
+          manufacturingDays = parseInt(match[1]);
+          logger.info(`✅ Extraídos ${manufacturingDays} días de fabricación para ${productData.id}`);
+        }
+      } else {
+        logger.info(`❌ No se encontró MANUFACTURING_TIME en sale_terms para ${productData.id}`);
       }
     } else {
-      logger.debug(`❌ No se encontró MANUFACTURING_TIME en sale_terms para ${productData.id}`);
+      logger.info(`❌ sale_terms NO es array para ${productData.id}, es: ${typeof productData.sale_terms}`);
     }
   } else {
-    logger.debug(`❌ No hay sale_terms para producto ${productData.id}`);
+    logger.info(`❌ NO HAY sale_terms para producto ${productData.id}`);
   }
   
   // Convertir días a horas para mantener compatibilidad con lógica existente
