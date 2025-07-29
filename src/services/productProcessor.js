@@ -21,7 +21,16 @@ function compareProducts(mlProducts, dbProducts, userId) {
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
-      const manufacturingHours = mlProduct.manufacturing_time ? mlProduct.manufacturing_time * 24 : null;
+      let manufacturingHours = null;
+      if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
+        const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+        if (manufacturingTerm && manufacturingTerm.value_name) {
+          const match = manufacturingTerm.value_name.match(/(\d+)/);
+          if (match) {
+            manufacturingHours = parseInt(match[1]) * 24;
+          }
+        }
+      }
       
       updatedProducts.push({
         id: mlProduct.id,
@@ -30,7 +39,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
         status: mlProduct.status,
         title: mlProduct.title, // Título puede cambiar
         seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
-        estimated_handling_time: manufacturingHours, // ⭐ DIRECTO: Manufacturing time
+        estimated_handling_time: manufacturingHours, // ⭐ Manufacturing time desde sale_terms
         last_api_sync: new Date().toISOString()
       });
     } else {
@@ -45,14 +54,24 @@ function compareProducts(mlProducts, dbProducts, userId) {
  * Función interna: Verificar si hay cambios relevantes
  */
 function hasStockChanges(mlProduct, dbProduct) {
-  const manufacturingHours = mlProduct.manufacturing_time ? mlProduct.manufacturing_time * 24 : null;
+  // Extraer manufacturing time de sale_terms
+  let manufacturingHours = null;
+  if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
+    const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+    if (manufacturingTerm && manufacturingTerm.value_name) {
+      const match = manufacturingTerm.value_name.match(/(\d+)/);
+      if (match) {
+        manufacturingHours = parseInt(match[1]) * 24;
+      }
+    }
+  }
   
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
          mlProduct.status !== dbProduct.status ||
          mlProduct.title !== dbProduct.title ||
          extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku ||
-         manufacturingHours !== dbProduct.estimated_handling_time; // ⭐ DIRECTO: Detectar cambios en manufacturing time
+         manufacturingHours !== dbProduct.estimated_handling_time; // ⭐ Detectar cambios en manufacturing time
 }
 
 /**
@@ -61,13 +80,29 @@ function hasStockChanges(mlProduct, dbProduct) {
 function mapProductForDB(productData, userId) {
   const logger = require('../utils/logger');
   const extractedSKU = extractSKUFromProduct(productData);
-  const manufacturingHours = productData.manufacturing_time ? productData.manufacturing_time * 24 : null;
   
-  // 🔍 DEBUG: Logging para manufacturing time
-  if (productData.manufacturing_time) {
-    logger.info(`✅ Producto ${productData.id} tiene manufacturing_time: ${productData.manufacturing_time} (${manufacturingHours}h)`);
+  // 🔍 Buscar MANUFACTURING_TIME en sale_terms
+  let manufacturingDays = null;
+  let manufacturingHours = null;
+  
+  if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+    const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+    
+    if (manufacturingTerm && manufacturingTerm.value_name) {
+      logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}: ${manufacturingTerm.value_name}`);
+      
+      // Extraer número de días de "20 días", "30 días", etc.
+      const match = manufacturingTerm.value_name.match(/(\d+)/);
+      if (match) {
+        manufacturingDays = parseInt(match[1]);
+        manufacturingHours = manufacturingDays * 24; // Convertir a horas
+        logger.info(`✅ Producto ${productData.id}: ${manufacturingDays} días = ${manufacturingHours}h de fabricación`);
+      }
+    } else {
+      logger.debug(`❌ Producto ${productData.id} NO tiene MANUFACTURING_TIME`);
+    }
   } else {
-    logger.debug(`❌ Producto ${productData.id} NO tiene manufacturing_time`);
+    logger.debug(`❌ Producto ${productData.id} NO tiene sale_terms`);
   }
   
   return {

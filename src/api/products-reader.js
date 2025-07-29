@@ -21,9 +21,10 @@ function getStatusWithDelay(status, handlingTime) {
   
   let displayStatus = statusMap[status] || status;
   
-  // Si tiene más de 48 horas (2 días) de handling time, agregar "con demora"
-  if (handlingTime && handlingTime > 48) {
-    displayStatus += ' con demora';
+  // Si tiene más de 24 horas (1 día) de handling time, agregar información de demora
+  if (handlingTime && handlingTime > 24) {
+    const days = Math.round(handlingTime / 24);
+    displayStatus += ` con demora de ${days} día${days === 1 ? '' : 's'}`;
   }
   
   return displayStatus;

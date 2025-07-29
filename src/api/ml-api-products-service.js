@@ -520,8 +520,7 @@ class ProductsService {
             'category_id',     // ID de categoría para filtros
             'attributes',      // Atributos adicionales que pueden incluir SKU
             'shipping',        // Datos de envío
-            'sale_terms',      // Terms de venta (incluye MANUFACTURING_TIME)
-            'manufacturing_time' // ⭐ DIRECTO: Manufacturing time como atributo directo
+            'sale_terms'       // ⭐ Terms de venta (incluye MANUFACTURING_TIME)
           ];
 
       logger.info(`🔍 Obteniendo ${productIds.length} productos con multiget optimizado (incluye SKU)`);
@@ -538,19 +537,21 @@ class ProductsService {
       products.forEach(product => {
         this.validateAndLogProductData(product);
         
-        // 🔍 DEBUG ESPECÍFICO: Verificar campos de manufacturing time
+        // 🔍 DEBUG ESPECÍFICO: Verificar sale_terms para MANUFACTURING_TIME
         logger.info(`🔍 MULTIGET DEBUG - Producto ${product.id}:`);
         
-        if (product.manufacturing_time) {
-          logger.info(`  ✅ manufacturing_time directo: ${product.manufacturing_time}`);
+        if (product.sale_terms && Array.isArray(product.sale_terms)) {
+          logger.info(`  ✅ sale_terms (${product.sale_terms.length} items):`, product.sale_terms);
+          
+          // Buscar específicamente MANUFACTURING_TIME
+          const manufacturingTerm = product.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+          if (manufacturingTerm) {
+            logger.info(`  🎯 MANUFACTURING_TIME encontrado: ${manufacturingTerm.value_name}`);
+          } else {
+            logger.info(`  ❌ NO tiene MANUFACTURING_TIME en sale_terms`);
+          }
         } else {
-          logger.info(`  ❌ NO tiene manufacturing_time directo`);
-        }
-        
-        if (product.sale_terms) {
-          logger.info(`  ✅ sale_terms:`, JSON.stringify(product.sale_terms, null, 2));
-        } else {
-          logger.info(`  ❌ NO tiene sale_terms`);
+          logger.info(`  ❌ NO tiene sale_terms o no es array`);
         }
       });
       
