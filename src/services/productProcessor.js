@@ -108,22 +108,38 @@ function extractShippingInfo(productData) {
   // ⭐ CORREGIDO: manufacturing_time está en sale_terms según documentación ML
   let manufacturingDays = null;
   
+  // 🔍 DEBUG: Log para ver qué datos llegan
+  const logger = require('../utils/logger');
+  
   if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+    logger.debug(`🔍 sale_terms encontrados para ${productData.id}:`, productData.sale_terms);
+    
     const manufacturingTerm = productData.sale_terms.find(term => 
       term.id === 'MANUFACTURING_TIME'
     );
     
     if (manufacturingTerm && manufacturingTerm.value_name) {
+      logger.info(`⏱️ MANUFACTURING_TIME encontrado: ${manufacturingTerm.value_name} para producto ${productData.id}`);
+      
       // Extraer número de días de "20 días", "30 días", etc.
       const match = manufacturingTerm.value_name.match(/(\d+)/);
       if (match) {
         manufacturingDays = parseInt(match[1]);
+        logger.info(`✅ Extraídos ${manufacturingDays} días de fabricación para ${productData.id}`);
       }
+    } else {
+      logger.debug(`❌ No se encontró MANUFACTURING_TIME en sale_terms para ${productData.id}`);
     }
+  } else {
+    logger.debug(`❌ No hay sale_terms para producto ${productData.id}`);
   }
   
   // Convertir días a horas para mantener compatibilidad con lógica existente
   const manufacturingHours = manufacturingDays ? manufacturingDays * 24 : null;
+  
+  if (manufacturingHours) {
+    logger.info(`🎯 Producto ${productData.id} tendrá ${manufacturingHours}h de handling_time (${manufacturingDays} días)`);
+  }
   
   return {
     handling_time: manufacturingHours, // En horas para compatibilidad
