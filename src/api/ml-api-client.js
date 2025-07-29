@@ -538,10 +538,10 @@ class MLAPIClient {
           
           // 🔍 DEBUG: Log específico para sale_terms
           validProducts.forEach(product => {
-            if (product.sale_terms) {
-              logger.info(`🎯 MULTIGET: Producto ${product.id} tiene sale_terms:`, JSON.stringify(product.sale_terms));
+            if (product.sale_terms && Array.isArray(product.sale_terms)) {
+              logger.info(`🎯 MULTIGET: Producto ${product.id} tiene ${product.sale_terms.length} sale_terms:`, product.sale_terms);
             } else {
-              logger.info(`❌ MULTIGET: Producto ${product.id} NO tiene sale_terms`);
+              logger.info(`❌ MULTIGET: Producto ${product.id} NO tiene sale_terms o no es array`);
             }
           });
           
