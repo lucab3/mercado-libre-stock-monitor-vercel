@@ -23,11 +23,19 @@ function compareProducts(mlProducts, dbProducts, userId) {
       // Solo campos que cambiaron + shipping info
       let manufacturingHours = null;
       if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
+        // 🔍 Log detallado para updates también
+        const logger = require('../utils/logger');
+        logger.info(`🔍 UPDATE DEBUG ${mlProduct.id}: sale_terms length=${mlProduct.sale_terms.length}`);
+        mlProduct.sale_terms.forEach((term, index) => {
+          logger.info(`  • Update Term ${index}: id="${term.id}", value_name="${term.value_name}"`);
+        });
+        
         const manufacturingTerm = mlProduct.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
         if (manufacturingTerm && manufacturingTerm.value_name) {
           const match = manufacturingTerm.value_name.match(/(\d+)/);
           if (match) {
             manufacturingHours = parseInt(match[1]) * 24;
+            logger.info(`🎯 UPDATE: Manufacturing time detectado ${mlProduct.id}: ${manufacturingHours}h`);
           }
         }
       }
@@ -86,6 +94,12 @@ function mapProductForDB(productData, userId) {
   let manufacturingHours = null;
   
   if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+    // 🔍 Log detallado de sale_terms para debug
+    logger.info(`🔍 DEBUG ${productData.id}: sale_terms length=${productData.sale_terms.length}`);
+    productData.sale_terms.forEach((term, index) => {
+      logger.info(`  • Term ${index}: id="${term.id}", value_name="${term.value_name}"`);
+    });
+    
     const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
     
     if (manufacturingTerm && manufacturingTerm.value_name) {
@@ -99,10 +113,10 @@ function mapProductForDB(productData, userId) {
         logger.info(`✅ Producto ${productData.id}: ${manufacturingDays} días = ${manufacturingHours}h de fabricación`);
       }
     } else {
-      logger.debug(`❌ Producto ${productData.id} NO tiene MANUFACTURING_TIME`);
+      logger.info(`❌ Producto ${productData.id} NO tiene MANUFACTURING_TIME en sale_terms`);
     }
   } else {
-    logger.debug(`❌ Producto ${productData.id} NO tiene sale_terms`);
+    logger.info(`❌ Producto ${productData.id} NO tiene sale_terms o no es array`);
   }
   
   return {
