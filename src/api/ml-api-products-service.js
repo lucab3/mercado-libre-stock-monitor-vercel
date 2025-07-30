@@ -510,7 +510,9 @@ class ProductsService {
     }
 
     try {
+      logger.info(`🔑 DEBUG: Iniciando ensureAuthentication para userId: ${userId}`);
       await this.ensureAuthentication(userId);
+      logger.info(`✅ DEBUG: ensureAuthentication exitoso para userId: ${userId}`);
 
       // MEJORADO: Incluir más atributos para debugging completo
       const attributes = includeFullDetails 
@@ -572,7 +574,9 @@ class ProductsService {
       return products;
       
     } catch (error) {
-      logger.error(`❌ Error obteniendo múltiples productos: ${error.message}`);
+      logger.error(`❌ ERROR CRÍTICO en getMultipleProducts: ${error.message}`);
+      logger.error(`❌ ERROR STACK: ${error.stack}`);
+      logger.error(`❌ ERROR para userId: ${userId}, productIds count: ${productIds?.length}`);
       throw error;
     }
   }
