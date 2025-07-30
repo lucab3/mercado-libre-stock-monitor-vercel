@@ -188,21 +188,45 @@ class StockMonitor {
       logger.info(`✅ Obtención de detalles completada: ${allProductsData.length}/${allProductIds.length} productos`);
       
       // Preparar datos para base de datos
-      const productsToSync = allProductsData.map(productData => ({
-        id: productData.id,
-        user_id: userId,
-        title: productData.title,
-        seller_sku: productData.seller_sku,
-        available_quantity: productData.available_quantity || 0,
-        price: productData.price,
-        status: productData.status,
-        permalink: productData.permalink,
-        category_id: productData.category_id,
-        condition: productData.condition,
-        listing_type_id: productData.listing_type_id,
-        health: productData.health,
-        last_api_sync: new Date().toISOString()
-      }));
+      const productsToSync = allProductsData.map(productData => {
+        // Extraer manufacturing time desde sale_terms (misma lógica que productProcessor)
+        let estimated_handling_time = null;
+        if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+          const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
+          if (manufacturingTerm) {
+            // Priorizar value_struct.number si existe
+            if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
+              const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
+              estimated_handling_time = manufacturingDays * 24; // Convertir a horas
+            } 
+            // Fallback a value_name con regex
+            else if (manufacturingTerm.value_name) {
+              const match = manufacturingTerm.value_name.match(/(\d+)/);
+              if (match) {
+                const manufacturingDays = parseInt(match[1]);
+                estimated_handling_time = manufacturingDays * 24; // Convertir a horas
+              }
+            }
+          }
+        }
+
+        return {
+          id: productData.id,
+          user_id: userId,
+          title: productData.title,
+          seller_sku: productData.seller_sku,
+          available_quantity: productData.available_quantity || 0,
+          price: productData.price,
+          status: productData.status,
+          permalink: productData.permalink,
+          category_id: productData.category_id,
+          condition: productData.condition,
+          listing_type_id: productData.listing_type_id,
+          health: productData.health,
+          estimated_handling_time: estimated_handling_time, // ⭐ INCLUIR manufacturing time
+          last_api_sync: new Date().toISOString()
+        };
+      });
       
       // Guardar en base de datos por lotes
       if (productsToSync.length > 0) {
