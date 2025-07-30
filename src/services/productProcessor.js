@@ -95,6 +95,10 @@ function compareProducts(mlProducts, dbProducts, userId) {
 function hasStockChanges(mlProduct, dbProduct) {
   const manufacturingHours = extractManufacturingTime(mlProduct);
   
+  // 🔍 DEBUG CRÍTICO: Verificar valores exactos
+  const logger = require('../utils/logger');
+  logger.info(`🔍 CHANGE CHECK ${mlProduct.id}: manufacturingHours=${manufacturingHours}, dbProduct.estimated_handling_time=${dbProduct.estimated_handling_time}`);
+  
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
          mlProduct.status !== dbProduct.status ||
@@ -188,6 +192,15 @@ async function processProductsBatch(productIds, userId, dependencies) {
     logger.info(`📡 PROCESS STEP 1: Obteniendo ${productIds.length} productos desde ML API...`);
     const mlProductsData = await mlApiService.getMultipleProducts(productIds, false, userId);
     logger.info(`📡 PROCESS STEP 1 RESULT: Obtenidos ${mlProductsData?.length || 0} productos desde ML API`);
+    
+    // DEBUG: Verificar si mlProductsData es válido
+    if (!mlProductsData) {
+      logger.error(`🚨 CRITICAL: mlProductsData es null/undefined`);
+    } else if (mlProductsData.length === 0) {
+      logger.error(`🚨 CRITICAL: mlProductsData está vacío (length = 0)`);
+    } else {
+      logger.info(`✅ VALID: mlProductsData tiene ${mlProductsData.length} productos válidos`);
+    }
     
     if (!mlProductsData || mlProductsData.length === 0) {
       return {
