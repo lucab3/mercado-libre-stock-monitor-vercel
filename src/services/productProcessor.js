@@ -62,7 +62,14 @@ function compareProducts(mlProducts, dbProducts, userId) {
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
+      const logger = require('../utils/logger');
+      logger.info(`🔧 DEBUG UPDATE: Procesando producto existente ${mlProduct.id} con cambios`);
+      logger.info(`🔧 DEBUG UPDATE: sale_terms presente: ${!!(mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms))}`);
+      if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
+        logger.info(`🔧 DEBUG UPDATE: sale_terms length: ${mlProduct.sale_terms.length}`);
+      }
       const manufacturingHours = extractManufacturingTime(mlProduct);
+      logger.info(`🔧 DEBUG UPDATE: manufacturingHours calculado: ${manufacturingHours}`);
       
       updatedProducts.push({
         id: mlProduct.id,
