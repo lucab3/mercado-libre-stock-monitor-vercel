@@ -50,10 +50,7 @@ function ProductsTable({ products, loading }) {
 
   // Obtener badge de estado considerando demora de fabricación
   const getStatusBadgeWithDelay = (product) => {
-    if (hasManufacturingDelay(product)) {
-      // Productos con demora de fabricación en color naranja
-      return 'bg-warning text-dark'
-    }
+    // El color debe basarse en el estado, no en la demora
     return getStatusBadge(product.status)
   }
 
