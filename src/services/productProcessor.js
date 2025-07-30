@@ -8,56 +8,19 @@
  * Función auxiliar: Extraer manufacturing time de sale_terms
  */
 function extractManufacturingTime(productData) {
-  const logger = require('../utils/logger');
-  
-  // DEBUG específico para productos test
-  const testProducts = ['MLA738453155', 'MLA740761847', 'MLA747771535', 'MLA739460277'];
-  const isTestProduct = testProducts.includes(productData.id);
-  
-  if (isTestProduct) {
-    logger.info(`🔍 TEST PRODUCT ${productData.id}: Verificando sale_terms...`);
-    logger.info(`🔍 TEST PRODUCT ${productData.id}: sale_terms present: ${!!(productData.sale_terms && Array.isArray(productData.sale_terms))}`);
-    if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
-      logger.info(`🔍 TEST PRODUCT ${productData.id}: sale_terms count: ${productData.sale_terms.length}`);
-      productData.sale_terms.forEach((term, i) => {
-        logger.info(`🔍 TEST PRODUCT ${productData.id}: term[${i}] id="${term.id}" value_name="${term.value_name}"`);
-      });
-    }
-  }
-  
   if (!productData.sale_terms || !Array.isArray(productData.sale_terms)) {
-    if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: NO sale_terms - returning null`);
     return null;
   }
   
   const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
   if (!manufacturingTerm) {
-    if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: NO MANUFACTURING_TIME term found - returning null`);
     return null;
-  }
-  
-  if (isTestProduct) {
-    logger.info(`🎯 TEST PRODUCT ${productData.id}: MANUFACTURING_TIME encontrado:`, {
-      value_name: manufacturingTerm.value_name,
-      value_struct: manufacturingTerm.value_struct
-    });
-  } else {
-    logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
-      value_name: manufacturingTerm.value_name,
-      value_struct: manufacturingTerm.value_struct
-    });
   }
   
   // Priorizar value_struct.number si existe
   if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
     const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
     const manufacturingHours = manufacturingDays * 24;
-    const logMsg = `✅ Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`;
-    if (isTestProduct) {
-      logger.info(`🔍 TEST PRODUCT ${productData.id}: ${logMsg}`);
-    } else {
-      logger.info(logMsg);
-    }
     return manufacturingHours;
   } 
   // Fallback a value_name con regex
@@ -66,17 +29,10 @@ function extractManufacturingTime(productData) {
     if (match) {
       const manufacturingDays = parseInt(match[1]);
       const manufacturingHours = manufacturingDays * 24;
-      const logMsg = `✅ Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`;
-      if (isTestProduct) {
-        logger.info(`🔍 TEST PRODUCT ${productData.id}: ${logMsg}`);
-      } else {
-        logger.info(logMsg);
-      }
       return manufacturingHours;
     }
   }
   
-  if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: No se pudo extraer manufacturing_time - returning null`);
   return null;
 }
 
@@ -97,14 +53,7 @@ function compareProducts(mlProducts, dbProducts, userId) {
       newProducts.push(mapProductForDB(mlProduct, userId));
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
-      const logger = require('../utils/logger');
-      logger.info(`🔧 DEBUG UPDATE: Procesando producto existente ${mlProduct.id} con cambios`);
-      logger.info(`🔧 DEBUG UPDATE: sale_terms presente: ${!!(mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms))}`);
-      if (mlProduct.sale_terms && Array.isArray(mlProduct.sale_terms)) {
-        logger.info(`🔧 DEBUG UPDATE: sale_terms length: ${mlProduct.sale_terms.length}`);
-      }
       const manufacturingHours = extractManufacturingTime(mlProduct);
-      logger.info(`🔧 DEBUG UPDATE: manufacturingHours calculado: ${manufacturingHours}`);
       
       updatedProducts.push({
         id: mlProduct.id,
@@ -142,18 +91,7 @@ function hasStockChanges(mlProduct, dbProduct) {
  * Función interna: Mapear producto ML a formato BD
  */
 function mapProductForDB(productData, userId) {
-  const logger = require('../utils/logger');
   const extractedSKU = extractSKUFromProduct(productData);
-  
-  // 🔍 Log detallado de sale_terms para debug
-  if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
-    logger.info(`🔍 DEBUG ${productData.id}: sale_terms length=${productData.sale_terms.length}`);
-    productData.sale_terms.forEach((term, index) => {
-      logger.info(`  • Term ${index}: id="${term.id}", value_name="${term.value_name}"`);
-    });
-  } else {
-    logger.info(`❌ Producto ${productData.id} NO tiene sale_terms o no es array`);
-  }
   
   // Extraer manufacturing time usando función centralizada
   const manufacturingHours = extractManufacturingTime(productData);
