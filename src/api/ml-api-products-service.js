@@ -41,14 +41,28 @@ class ProductsService {
       return true; // En modo mock siempre está "autenticado"
     }
 
-    // NUEVO: Si se especifica userId, usar tokens específicos de ese usuario (para webhooks)
+    // CORREGIDO: Si se especifica userId, usar tokens de sesión activa (no webhook auth)
     if (userId) {
       try {
-        logger.debug(`🔑 Obteniendo access token para webhook - Usuario: ${userId}`);
-        const accessToken = await auth.getAccessTokenForWebhook(userId);
+        logger.debug(`🔑 Obteniendo access token desde sesión - Usuario: ${userId}`);
         
-        logger.debug(`✅ Access token obtenido para usuario ${userId}`);
-        this.setAccessToken(accessToken);
+        // Usar tokenManager directamente para obtener tokens almacenados
+        const tokenManager = require('../utils/tokenManager');
+        const tokens = await tokenManager.getTokens(userId);
+        
+        if (!tokens || !tokens.access_token) {
+          throw new Error(`No hay tokens válidos para el usuario ${userId}`);
+        }
+        
+        // Verificar expiración y refrescar si es necesario
+        if (tokens.expires_at && tokens.expires_at - Date.now() < 300000) {
+          logger.info(`Token expirado para usuario ${userId}, intentando refrescar...`);
+          // TODO: Implementar refresh específico sin cambiar estado global
+          throw new Error(`Token expirado para usuario ${userId}`);
+        }
+        
+        logger.debug(`✅ Access token obtenido desde sesión para usuario ${userId}`);
+        this.setAccessToken(tokens.access_token);
         return true;
       } catch (error) {
         logger.error(`❌ Error obteniendo token para usuario ${userId}: ${error.message}`);
