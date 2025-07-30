@@ -1439,6 +1439,7 @@ class DatabaseService {
                   status: update.status,
                   title: update.title,
                   seller_sku: update.seller_sku,
+                  estimated_handling_time: update.estimated_handling_time, // ⭐ FALTABA: Manufacturing time
                   last_api_sync: update.last_api_sync,
                   updated_at: new Date().toISOString()
                 })
