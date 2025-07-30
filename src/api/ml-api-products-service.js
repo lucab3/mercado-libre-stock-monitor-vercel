@@ -950,8 +950,17 @@ class ProductsService {
         logger
       };
 
+      // DEBUG: Verificar antes de llamar al procesador
+      logger.info(`🚨 DEBUG SYNC: Sobre a llamar processProductsBatch con ${productIds.length} IDs`);
+      
       // Llamar directamente al procesador
       const result = await processProductsBatch(productIds, userId, dependencies);
+      
+      // DEBUG: Verificar resultado del procesador
+      logger.info(`🚨 DEBUG SYNC: processProductsBatch retornó success=${result.success}`);
+      if (result.stats) {
+        logger.info(`🚨 DEBUG SYNC: stats=${JSON.stringify(result.stats)}`);
+      }
       
       if (result.success) {
         logger.info(`✅ PROCESAMIENTO DIRECTO: ${result.stats.newProducts} nuevos, ${result.stats.updatedProducts} actualizados, ${result.stats.unchangedProducts} sin cambios`);
