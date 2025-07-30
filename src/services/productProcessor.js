@@ -10,25 +10,54 @@
 function extractManufacturingTime(productData) {
   const logger = require('../utils/logger');
   
+  // DEBUG específico para productos test
+  const testProducts = ['MLA738453155', 'MLA740761847', 'MLA747771535', 'MLA739460277'];
+  const isTestProduct = testProducts.includes(productData.id);
+  
+  if (isTestProduct) {
+    logger.info(`🔍 TEST PRODUCT ${productData.id}: Verificando sale_terms...`);
+    logger.info(`🔍 TEST PRODUCT ${productData.id}: sale_terms present: ${!!(productData.sale_terms && Array.isArray(productData.sale_terms))}`);
+    if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+      logger.info(`🔍 TEST PRODUCT ${productData.id}: sale_terms count: ${productData.sale_terms.length}`);
+      productData.sale_terms.forEach((term, i) => {
+        logger.info(`🔍 TEST PRODUCT ${productData.id}: term[${i}] id="${term.id}" value_name="${term.value_name}"`);
+      });
+    }
+  }
+  
   if (!productData.sale_terms || !Array.isArray(productData.sale_terms)) {
+    if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: NO sale_terms - returning null`);
     return null;
   }
   
   const manufacturingTerm = productData.sale_terms.find(term => term.id === 'MANUFACTURING_TIME');
   if (!manufacturingTerm) {
+    if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: NO MANUFACTURING_TIME term found - returning null`);
     return null;
   }
   
-  logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
-    value_name: manufacturingTerm.value_name,
-    value_struct: manufacturingTerm.value_struct
-  });
+  if (isTestProduct) {
+    logger.info(`🎯 TEST PRODUCT ${productData.id}: MANUFACTURING_TIME encontrado:`, {
+      value_name: manufacturingTerm.value_name,
+      value_struct: manufacturingTerm.value_struct
+    });
+  } else {
+    logger.info(`🎯 MANUFACTURING_TIME encontrado para ${productData.id}:`, {
+      value_name: manufacturingTerm.value_name,
+      value_struct: manufacturingTerm.value_struct
+    });
+  }
   
   // Priorizar value_struct.number si existe
   if (manufacturingTerm.value_struct && manufacturingTerm.value_struct.number) {
     const manufacturingDays = parseInt(manufacturingTerm.value_struct.number);
     const manufacturingHours = manufacturingDays * 24;
-    logger.info(`✅ Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`);
+    const logMsg = `✅ Usando value_struct.number = ${manufacturingDays} días = ${manufacturingHours}h`;
+    if (isTestProduct) {
+      logger.info(`🔍 TEST PRODUCT ${productData.id}: ${logMsg}`);
+    } else {
+      logger.info(logMsg);
+    }
     return manufacturingHours;
   } 
   // Fallback a value_name con regex
@@ -37,11 +66,17 @@ function extractManufacturingTime(productData) {
     if (match) {
       const manufacturingDays = parseInt(match[1]);
       const manufacturingHours = manufacturingDays * 24;
-      logger.info(`✅ Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`);
+      const logMsg = `✅ Usando value_name regex = ${manufacturingDays} días = ${manufacturingHours}h`;
+      if (isTestProduct) {
+        logger.info(`🔍 TEST PRODUCT ${productData.id}: ${logMsg}`);
+      } else {
+        logger.info(logMsg);
+      }
       return manufacturingHours;
     }
   }
   
+  if (isTestProduct) logger.info(`🔍 TEST PRODUCT ${productData.id}: No se pudo extraer manufacturing_time - returning null`);
   return null;
 }
 
