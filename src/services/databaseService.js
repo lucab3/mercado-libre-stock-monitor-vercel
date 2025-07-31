@@ -1165,8 +1165,7 @@ class DatabaseService {
           return await client
             .from('user_sessions')
             .update({ 
-              revoked: true,
-              revoked_at: new Date().toISOString()
+              revoked: true
             })
             .eq('session_id', sessionId);
         },
@@ -1192,8 +1191,7 @@ class DatabaseService {
           return await client
             .from('user_sessions')
             .update({ 
-              revoked: true,
-              revoked_at: new Date().toISOString()
+              revoked: true
             })
             .eq('user_id', userId)
             .eq('revoked', false);
@@ -1353,8 +1351,7 @@ class DatabaseService {
           return await client
             .from('user_sessions')
             .update({ 
-              revoked: true,
-              revoked_at: new Date().toISOString()
+              revoked: true
             })
             .eq('user_id', userId)
             .eq('revoked', false);
