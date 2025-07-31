@@ -149,7 +149,7 @@ function ProductsTable({ products, loading }) {
                 </span>
               </td>
               <td>
-                <span className={`badge ${getStatusBadgeWithDelay(product)}`}>
+                <span className={`badge ${getStatusBadgeWithDelay(product)}`} style={{ whiteSpace: 'pre-line' }}>
                   {product.status_display || getStatusText(product.status)}
                 </span>
               </td>
