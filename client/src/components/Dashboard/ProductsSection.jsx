@@ -47,6 +47,19 @@ function ProductsSection() {
       )
     }
     
+    // Filtro por precio
+    if (productFilters.priceFilter.value && !isNaN(productFilters.priceFilter.value)) {
+      const priceValue = parseFloat(productFilters.priceFilter.value)
+      filtered = filtered.filter(p => {
+        if (!p.price) return false
+        if (productFilters.priceFilter.operator === 'greater') {
+          return p.price > priceValue
+        } else {
+          return p.price < priceValue
+        }
+      })
+    }
+    
     // Ordenamiento
     switch (productFilters.stockSort) {
       case 'stock-asc':
@@ -175,7 +188,38 @@ function ProductsSection() {
               </select>
             </div>
             
-            <div className="col-md-4">
+            <div className="col-md-3">
+              <label className="form-label">Filtrar por precio:</label>
+              <div className="input-group">
+                <select 
+                  className="form-select" 
+                  style={{ maxWidth: '120px' }}
+                  value={productFilters.priceFilter.operator}
+                  onChange={(e) => handleFilterChange('priceFilter', { 
+                    ...productFilters.priceFilter, 
+                    operator: e.target.value 
+                  })}
+                >
+                  <option value="greater">Mayor a</option>
+                  <option value="less">Menor a</option>
+                </select>
+                <span className="input-group-text">$</span>
+                <input 
+                  type="number" 
+                  className="form-control"
+                  placeholder="0"
+                  value={productFilters.priceFilter.value}
+                  onChange={(e) => handleFilterChange('priceFilter', { 
+                    ...productFilters.priceFilter, 
+                    value: e.target.value 
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="row g-3 mt-2">
+            <div className="col-md-12">
               <label className="form-label">Buscar producto:</label>
               <div className="input-group">
                 <input 
@@ -185,7 +229,7 @@ function ProductsSection() {
                   value={productFilters.searchText}
                   onChange={(e) => handleFilterChange('searchText', e.target.value)}
                 />
-                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default') && (
+                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value) && (
                   <button
                     className="btn btn-outline-secondary"
                     type="button"
@@ -194,7 +238,11 @@ function ProductsSection() {
                       stockSort: 'default',
                       stockFilter: 'all',
                       statusFilter: 'all',
-                      searchText: ''
+                      searchText: '',
+                      priceFilter: {
+                        operator: 'greater',
+                        value: ''
+                      }
                     })}
                     title="Limpiar todos los filtros"
                   >

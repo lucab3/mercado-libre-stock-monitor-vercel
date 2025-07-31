@@ -37,7 +37,11 @@ const initialState = {
     stockSort: 'default',
     stockFilter: 'all', // all, low, out
     statusFilter: 'all', // all, active, paused, closed, under_review
-    searchText: ''
+    searchText: '',
+    priceFilter: {
+      operator: 'greater', // 'greater' o 'less'
+      value: '' // valor numérico
+    }
   },
   
   // Configuración
