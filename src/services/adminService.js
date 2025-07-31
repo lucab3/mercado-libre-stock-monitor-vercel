@@ -136,48 +136,31 @@ class AdminService {
   }
 
   /**
-   * Obtener todas las sesiones de usuarios activas
+   * Obtener todas las sesiones de usuarios activas desde la base de datos
    */
   async getAllUserSessions() {
     try {
-      const stats = sessionManager.getStats();
-      const sessions = [];
-
-      // Obtener sesiones detalladas por usuario
-      for (const [userId, sessionCount] of Object.entries(stats.sessionsByUser)) {
-        const userSessions = sessionManager.getUserSessions(userId);
-        
-        for (const session of userSessions) {
-          sessions.push({
-            userId,
-            sessionCount: sessionCount,
-            ...session,
-            sessionId: '***hidden***' // No exponer IDs de sesión por seguridad
-          });
-        }
-      }
-
-      return {
-        totalSessions: stats.totalSessions,
-        activeSessions: stats.activeSessions,
-        uniqueUsers: stats.uniqueUsers,
-        avgSessionsPerUser: stats.avgSessionsPerUser,
-        sessions: sessions.sort((a, b) => b.lastActivity - a.lastActivity)
-      };
+      logger.debug('🔍 Admin: obteniendo sesiones desde base de datos...');
+      return await databaseService.getSessionStats();
     } catch (error) {
       logger.error(`❌ Error obteniendo sesiones de usuarios: ${error.message}`);
-      throw error;
+      // Devolver datos por defecto en caso de error
+      return {
+        totalSessions: 0,
+        activeSessions: 0,
+        uniqueUsers: 0,
+        avgSessionsPerUser: 0,
+        sessions: []
+      };
     }
   }
 
   /**
-   * Revocar todas las sesiones de un usuario
+   * Revocar todas las sesiones de un usuario desde la base de datos
    */
   async revokeUserSessions(userId) {
     try {
-      const count = sessionManager.invalidateAllUserSessions(userId);
-      logger.info(`🚨 Admin revocó ${count} sesiones para usuario ${userId}`);
-      return count;
+      return await databaseService.revokeAllUserSessions(userId);
     } catch (error) {
       logger.error(`❌ Error revocando sesiones para usuario ${userId}: ${error.message}`);
       throw error;

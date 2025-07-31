@@ -1254,6 +1254,108 @@ class DatabaseService {
   }
 
   /**
+   * Obtener todas las sesiones activas (para administración)
+   */
+  async getAllActiveSessions() {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('revoked', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('last_used', { ascending: false });
+        },
+        'get_all_active_sessions'
+      );
+
+      return result.data || [];
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo todas las sesiones activas: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estadísticas de sesiones (para administración)
+   */
+  async getSessionStats() {
+    try {
+      const activeSessions = await this.getAllActiveSessions();
+      
+      // Contar usuarios únicos
+      const uniqueUsers = new Set(activeSessions.map(s => s.user_id));
+      
+      // Contar sesiones por usuario
+      const sessionsByUser = {};
+      activeSessions.forEach(session => {
+        const userId = session.user_id;
+        sessionsByUser[userId] = (sessionsByUser[userId] || 0) + 1;
+      });
+
+      return {
+        totalSessions: activeSessions.length,
+        activeSessions: activeSessions.length,
+        uniqueUsers: uniqueUsers.size,
+        avgSessionsPerUser: uniqueUsers.size > 0 ? activeSessions.length / uniqueUsers.size : 0,
+        sessionsByUser,
+        sessions: activeSessions.map(session => ({
+          userId: session.user_id,
+          sessionCount: sessionsByUser[session.user_id],
+          sessionId: '***hidden***',
+          createdAt: new Date(session.created_at).getTime(),
+          lastActivity: new Date(session.last_used).getTime(),
+          userAgent: session.user_agent || 'Unknown',
+          sessionActive: true
+        }))
+      };
+      
+    } catch (error) {
+      logger.error(`❌ Error obteniendo estadísticas de sesiones: ${error.message}`);
+      return {
+        totalSessions: 0,
+        activeSessions: 0,
+        uniqueUsers: 0,
+        avgSessionsPerUser: 0,
+        sessionsByUser: {},
+        sessions: []
+      };
+    }
+  }
+
+  /**
+   * Revocar todas las sesiones de un usuario (para administración)
+   */
+  async revokeAllUserSessions(userId) {
+    try {
+      const result = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .update({ 
+              revoked: true,
+              revoked_at: new Date().toISOString()
+            })
+            .eq('user_id', userId)
+            .eq('revoked', false);
+        },
+        'revoke_all_user_sessions'
+      );
+
+      const revokedCount = result.data?.length || 0;
+      logger.info(`🚨 Admin revocó ${revokedCount} sesiones para usuario ${userId}`);
+      
+      return revokedCount;
+      
+    } catch (error) {
+      logger.error(`❌ Error revocando sesiones para usuario ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Obtener todos los productos de un usuario
    */
   async getAllProducts(userId) {
