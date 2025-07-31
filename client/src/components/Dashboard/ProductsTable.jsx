@@ -88,6 +88,7 @@ function ProductsTable({ products, loading }) {
                 <th className="border-top-0">Estado Stock</th>
                 <th className="border-top-0">Estado Publicación</th>
                 <th className="border-top-0">Última actualización</th>
+                <th className="border-top-0">Precio</th>
               </tr>
             </thead>
           </table>
@@ -105,6 +106,7 @@ function ProductsTable({ products, loading }) {
               <th>Estado Stock</th>
               <th>Estado Publicación</th>
               <th>Última actualización</th>
+              <th>Precio</th>
             </tr>
           </thead>
         <tbody>
@@ -157,6 +159,11 @@ function ProductsTable({ products, loading }) {
                 <small className="text-muted">
                   {product.updated_at ? new Date(product.updated_at).toLocaleString() : 'N/A'}
                 </small>
+              </td>
+              <td>
+                <span className="fw-bold text-success">
+                  ${product.price ? product.price.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : 'N/A'}
+                </span>
               </td>
             </tr>
           ))}

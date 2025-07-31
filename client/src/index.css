@@ -47,20 +47,22 @@ main {
 }
 
 /* Headers fijos duplicados - Sincronizar anchos */
-.table th:nth-child(1) { width: 40%; }  /* Producto */
-.table th:nth-child(2) { width: 12%; }  /* SKU */
-.table th:nth-child(3) { width: 8%; }   /* Stock */
-.table th:nth-child(4) { width: 12%; }  /* Estado Stock */
-.table th:nth-child(5) { width: 15%; }  /* Estado Publicación */
-.table th:nth-child(6) { width: 13%; }  /* Última actualización */
+.table th:nth-child(1) { width: 35%; }  /* Producto */
+.table th:nth-child(2) { width: 10%; }  /* SKU */
+.table th:nth-child(3) { width: 7%; }   /* Stock */
+.table th:nth-child(4) { width: 10%; }  /* Estado Stock */
+.table th:nth-child(5) { width: 13%; }  /* Estado Publicación */
+.table th:nth-child(6) { width: 12%; }  /* Última actualización */
+.table th:nth-child(7) { width: 13%; }  /* Precio */
 
 /* Asegurar que las celdas mantengan el mismo ancho */
-.table td:nth-child(1) { width: 40%; }
-.table td:nth-child(2) { width: 12%; }
-.table td:nth-child(3) { width: 8%; }
-.table td:nth-child(4) { width: 12%; }
-.table td:nth-child(5) { width: 15%; }
-.table td:nth-child(6) { width: 13%; }
+.table td:nth-child(1) { width: 35%; }
+.table td:nth-child(2) { width: 10%; }
+.table td:nth-child(3) { width: 7%; }
+.table td:nth-child(4) { width: 10%; }
+.table td:nth-child(5) { width: 13%; }
+.table td:nth-child(6) { width: 12%; }
+.table td:nth-child(7) { width: 13%; }
 
 .status-indicator {
   width: 12px;
