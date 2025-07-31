@@ -54,6 +54,10 @@ async function handleAdminRoutes(req, res) {
               case '/api/test-session-validation':
                 return await adminController.testSessionValidation(req, res);
               
+              case '/api/debug-ip':
+                const debugIP = require('./debug-ip');
+                return debugIP(req, res);
+              
               default:
                 return res.status(404).json({
                   success: false,
