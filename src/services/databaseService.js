@@ -1100,7 +1100,9 @@ class DatabaseService {
             .eq('session_id', sessionId)
             .eq('revoked', false)
             .gt('expires_at', new Date().toISOString())
-            .single();
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
         },
         'get_user_session'
       );
