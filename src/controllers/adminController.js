@@ -185,12 +185,18 @@ class AdminController {
    */
   async showDashboard(req, res) {
     try {
+      logger.info('🔍 Admin Dashboard: iniciando carga...');
+      
       const [systemStats, userSessions] = await Promise.all([
         adminService.getSystemStats(),
         adminService.getAllUserSessions()
       ]);
 
+      logger.info('🔍 Admin Dashboard: systemStats =', JSON.stringify(systemStats, null, 2));
+      logger.info('🔍 Admin Dashboard: userSessions =', JSON.stringify(userSessions, null, 2));
+
       const adminSessions = adminService.getAdminSessionsInfo();
+      logger.info('🔍 Admin Dashboard: adminSessions =', JSON.stringify(adminSessions, null, 2));
 
       res.send(`
         <html>
@@ -313,25 +319,25 @@ class AdminController {
             <div class="stats-grid">
               <div class="stat-card">
                 <h3>👥 Usuarios Activos</h3>
-                <div class="stat-number">${systemStats.sessions.uniqueUsers}</div>
+                <div class="stat-number">${userSessions?.uniqueUsers || 0}</div>
                 <p>Usuarios con sesiones activas</p>
               </div>
               
               <div class="stat-card">
                 <h3>🔗 Sesiones Totales</h3>
-                <div class="stat-number">${systemStats.sessions.activeUserSessions}</div>
-                <p>Promedio: ${systemStats.sessions.avgSessionsPerUser.toFixed(1)} por usuario</p>
+                <div class="stat-number">${userSessions?.activeSessions || 0}</div>
+                <p>Promedio: ${(userSessions?.avgSessionsPerUser || 0).toFixed(1)} por usuario</p>
               </div>
               
               <div class="stat-card">
                 <h3>📊 Base de Datos</h3>
-                <div class="stat-number">${systemStats.database.totalProducts || 'N/A'}</div>
+                <div class="stat-number">${systemStats?.database?.totalProducts || 'N/A'}</div>
                 <p>Productos almacenados</p>
               </div>
               
               <div class="stat-card">
                 <h3>⚡ Sistema</h3>
-                <div class="stat-number">${Math.round(systemStats.system.uptime / 3600)}h</div>
+                <div class="stat-number">${Math.round((systemStats?.system?.uptime || 0) / 3600)}h</div>
                 <p>Tiempo de actividad</p>
               </div>
             </div>
@@ -349,7 +355,7 @@ class AdminController {
                   </tr>
                 </thead>
                 <tbody>
-                  ${userSessions.sessions.map(session => `
+                  ${(userSessions?.sessions || []).map(session => `
                     <tr>
                       <td><code>${session.userId}</code></td>
                       <td>${session.sessionCount}</td>
@@ -365,7 +371,7 @@ class AdminController {
                 </tbody>
               </table>
               
-              ${userSessions.sessions.length === 0 ? '<p><em>No hay sesiones de usuarios activas</em></p>' : ''}
+              ${(userSessions?.sessions || []).length === 0 ? '<p><em>No hay sesiones de usuarios activas</em></p>' : ''}
             </div>
 
             <div class="sessions-table" style="margin-top: 20px;">
@@ -470,6 +476,38 @@ class AdminController {
       res.status(500).json({
         success: false,
         error: 'Error obteniendo estadísticas'
+      });
+    }
+  }
+
+  /**
+   * Debug: verificar sesiones directamente desde BD
+   */
+  async debugSessions(req, res) {
+    try {
+      const databaseService = require('../services/databaseService');
+      
+      logger.info('🔍 Debug: consultando sesiones directamente...');
+      const activeSessions = await databaseService.getAllActiveSessions();
+      logger.info('🔍 Debug: sesiones activas encontradas:', activeSessions.length);
+      
+      const sessionStats = await databaseService.getSessionStats();
+      logger.info('🔍 Debug: estadísticas calculadas:', JSON.stringify(sessionStats, null, 2));
+      
+      res.json({
+        success: true,
+        debug: {
+          rawSessions: activeSessions,
+          sessionCount: activeSessions.length,
+          sessionStats: sessionStats
+        }
+      });
+    } catch (error) {
+      logger.error(`❌ Error en debug de sesiones: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack
       });
     }
   }

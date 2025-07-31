@@ -45,6 +45,9 @@ async function handleAdminRoutes(req, res) {
               case '/api/stats':
                 return await adminController.getStats(req, res);
               
+              case '/api/debug-sessions':
+                return await adminController.debugSessions(req, res);
+              
               default:
                 return res.status(404).json({
                   success: false,
