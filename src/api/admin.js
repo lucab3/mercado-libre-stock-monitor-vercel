@@ -51,6 +51,9 @@ async function handleAdminRoutes(req, res) {
               case '/api/debug-revocation':
                 return await adminController.debugRevocation(req, res);
               
+              case '/api/test-session-validation':
+                return await adminController.testSessionValidation(req, res);
+              
               default:
                 return res.status(404).json({
                   success: false,

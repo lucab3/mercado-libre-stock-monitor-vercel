@@ -804,6 +804,92 @@ class AdminController {
       });
     }
   }
+
+  /**
+   * Test: validar si una sesión específica está realmente revocada
+   */
+  async testSessionValidation(req, res) {
+    try {
+      const { sessionId } = req.query;
+      const databaseService = require('../services/databaseService');
+      const supabaseClient = require('../utils/supabaseClient');
+      const sessionManager = require('../utils/sessionManager');
+      
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false, 
+          error: 'sessionId parameter required'
+        });
+      }
+      
+      logger.info(`🧪 Testing session validation for: ${sessionId.substring(0, 8)}...`);
+      
+      // Test 1: Raw BD query
+      const rawBdSession = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('session_id', sessionId)
+            .maybeSingle();
+        },
+        'test_raw_bd_session'
+      );
+      
+      // Test 2: getUserSession method (con filtros)
+      const filteredBdSession = await databaseService.getUserSession(sessionId);
+      
+      // Test 3: SessionManager memory
+      const memorySession = sessionManager.getSession(sessionId);
+      
+      // Test 4: Verificar si sessionId existe en memoria Map
+      const existsInMemory = sessionManager.activeSessions.has(sessionId);
+      
+      res.json({
+        success: true,
+        sessionId: sessionId.substring(0, 8) + '...',
+        tests: {
+          rawBdSession: {
+            found: !!rawBdSession.data,
+            data: rawBdSession.data ? {
+              revoked: rawBdSession.data.revoked,
+              expires_at: rawBdSession.data.expires_at,
+              user_id: rawBdSession.data.user_id,
+              created_at: rawBdSession.data.created_at
+            } : null
+          },
+          
+          filteredBdSession: {
+            found: !!filteredBdSession,
+            shouldBeNull: !filteredBdSession ? 'CORRECTO - sesión revocada/expirada' : 'PROBLEMA - sesión debería estar inválida'
+          },
+          
+          memorySession: {
+            found: !!memorySession,
+            shouldBeNull: !memorySession ? 'CORRECTO - sesión no en memoria' : 'PROBLEMA - sesión aún en memoria'
+          },
+          
+          existsInMemoryMap: {
+            exists: existsInMemory,
+            shouldBeFalse: !existsInMemory ? 'CORRECTO - no existe en Map' : 'PROBLEMA - aún existe en Map'
+          }
+        },
+        
+        analysis: {
+          isProperlyRevoked: !filteredBdSession && !memorySession && !existsInMemory,
+          hasInconsistencies: rawBdSession.data?.revoked === true && (!!memorySession || existsInMemory)
+        }
+      });
+      
+    } catch (error) {
+      logger.error(`❌ Error en test de validación: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack
+      });
+    }
+  }
 }
 
 module.exports = new AdminController();
