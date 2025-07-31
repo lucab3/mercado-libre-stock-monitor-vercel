@@ -174,11 +174,25 @@ async function handleSyncNext(req, res) {
 
   } catch (error) {
     logger.error(`❌ Error en sync-next: ${error.message}`);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      message: 'Error en sincronización'
-    });
+    
+    // Si es un error de token, no devolver 500 para evitar logout masivo
+    if (error.message.includes('Token expirado') || error.message.includes('No hay tokens válidos')) {
+      logger.warn(`⚠️ Error de token en sync-next para usuario - reintentando en próxima llamada`);
+      res.status(200).json({
+        success: false,
+        error: 'Token needs refresh',
+        message: 'Token temporal expirando - reintenta sync',
+        retryable: true,
+        hasMore: true // Permitir reintentar
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: 'Error en sincronización',
+        retryable: false
+      });
+    }
   }
 }
 

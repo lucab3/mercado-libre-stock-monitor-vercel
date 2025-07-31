@@ -7,6 +7,7 @@ const mlApiClient = require('./ml-api-client');
 const auth = require('./auth');
 const logger = require('../utils/logger');
 const config = require('../../config/config');
+const sessionManager = require('../utils/sessionManager');
 
 // ProductQueue eliminado - procesamiento directo solamente
 
@@ -56,9 +57,33 @@ class ProductsService {
         
         // Verificar expiración y refrescar si es necesario
         if (tokens.expires_at && tokens.expires_at - Date.now() < 300000) {
-          logger.info(`Token expirado para usuario ${userId}, intentando refrescar...`);
-          // TODO: Implementar refresh específico sin cambiar estado global
-          throw new Error(`Token expirado para usuario ${userId}`);
+          logger.info(`Token próximo a expirar para usuario ${userId}, refrescando automáticamente...`);
+          
+          try {
+            // Crear sesión temporal para refresh
+            const auth = require('./auth');
+            const tempSession = sessionManager.createTemporarySession(userId, tokens);
+            const oldCookieId = auth.currentCookieId;
+            
+            // Usar sesión temporal para refresh
+            auth.currentCookieId = tempSession.cookieId;
+            const newTokens = await auth.refreshAccessToken();
+            
+            // Restaurar sesión original
+            auth.currentCookieId = oldCookieId;
+            sessionManager.invalidateSession(tempSession.cookieId);
+            
+            // Guardar nuevos tokens para el usuario
+            await tokenManager.saveTokens(userId, newTokens);
+            
+            logger.info(`✅ Token refrescado exitosamente para usuario ${userId}`);
+            this.setAccessToken(newTokens.access_token);
+            return true;
+            
+          } catch (refreshError) {
+            logger.error(`❌ Error refrescando token para usuario ${userId}: ${refreshError.message}`);
+            throw new Error(`Token expirado y no se pudo refrescar para usuario ${userId}`);
+          }
         }
         
         logger.debug(`✅ Access token obtenido desde sesión para usuario ${userId}`);
