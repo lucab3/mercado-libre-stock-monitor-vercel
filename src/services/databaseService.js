@@ -1363,6 +1363,11 @@ class DatabaseService {
       const revokedCount = result.data?.length || 0;
       logger.info(`🚨 Admin revocó ${revokedCount} sesiones para usuario ${userId}`);
       
+      // CRITICAL: Sincronizar con memoria - invalidar sesiones en sessionManager
+      const sessionManager = require('../utils/sessionManager');
+      const memorySessions = sessionManager.invalidateUserSessions(userId);
+      logger.info(`🧠 Invalidadas ${memorySessions} sesiones en memoria para usuario ${userId}`);
+      
       // SAFETY CHECK: Verificar que ninguna admin session fue afectada
       const adminService = require('./adminService');
       const adminSessionsAfter = adminService.getAdminSessionsInfo();

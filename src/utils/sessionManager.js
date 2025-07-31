@@ -15,9 +15,17 @@ class SessionManager {
     this.sessionTimeout = 30 * 60 * 1000; // 30 minutos por seguridad
     
     // Limpiar sesiones expiradas cada hora
-    setInterval(() => this.cleanExpiredSessions(), 60 * 60 * 1000);
+    this.cleanupInterval = setInterval(() => this.cleanExpiredSessions(), 60 * 60 * 1000);
+    this.lastCleanup = Date.now();
     
     logger.info('🔐 Session Manager con Cookies inicializado');
+  }
+
+  /**
+   * Propiedad para compatibilidad con debug endpoints
+   */
+  get activeSessions() {
+    return this.sessions;
   }
 
   /**
@@ -182,6 +190,8 @@ class SessionManager {
         cleaned++;
       }
     }
+    
+    this.lastCleanup = now;
     
     if (cleaned > 0) {
       logger.info(`🧹 ${cleaned} sesiones expiradas limpiadas`);
