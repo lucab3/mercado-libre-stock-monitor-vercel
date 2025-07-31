@@ -124,6 +124,10 @@ function createApp() {
   // Rutas de monitoreo (requieren auth)
   app.use('/api/monitor', monitorRoutes);
   
+  // Rutas de administración (requieren auth admin)
+  const adminRoutes = require('./api/admin');
+  app.use('/admin', adminRoutes);
+  
   // ========== RUTAS CRÍTICAS TEMPORALES ==========
   // TODO: Migrar a controladores dedicados
   

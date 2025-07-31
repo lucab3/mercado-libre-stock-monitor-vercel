@@ -66,5 +66,11 @@ module.exports = {
       botToken: getEnvValue('TELEGRAM_BOT_TOKEN', '', true),
       chatId: getEnvValue('TELEGRAM_CHAT_ID')
     }
+  },
+  admin: {
+    enabled: getEnvValue('ADMIN_ENABLED', 'false') === 'true',
+    username: getEnvValue('ADMIN_USERNAME', 'admin'),
+    password: getEnvValue('ADMIN_PASSWORD', '', true),
+    sessionTimeout: parseInt(getEnvValue('ADMIN_SESSION_TIMEOUT', 3600000)) // 1 hora por defecto
   }
 };
