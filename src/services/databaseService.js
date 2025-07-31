@@ -1333,7 +1333,7 @@ class DatabaseService {
         async (client) => {
           return await client
             .from('user_sessions')
-            .select('session_token, user_id, created_at')
+            .select('session_id, user_id, created_at')
             .eq('user_id', userId)
             .eq('revoked', false);
         },
@@ -1343,7 +1343,7 @@ class DatabaseService {
       const sessionsToRevoke = sessionsBefore.data || [];
       logger.info(`🔍 Sesiones a revocar: ${sessionsToRevoke.length}`);
       sessionsToRevoke.forEach(session => {
-        logger.info(`🔍 - Token: ${session.session_token.substring(0, 8)}... UserId: ${session.user_id}`);
+        logger.info(`🔍 - Session ID: ${session.session_id.substring(0, 8)}... UserId: ${session.user_id}`);
       });
       
       // EJECUTAR REVOCACIÓN: Solo en user_sessions table, solo para el userId específico

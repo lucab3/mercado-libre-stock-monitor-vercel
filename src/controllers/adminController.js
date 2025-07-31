@@ -627,7 +627,7 @@ class AdminController {
             memoryVsDatabaseMismatch: sessionManagerData.activeSessions !== (nonRevokedSessions.data || []).length,
             adminSessionsConflicts: adminSessionsInfo.length > 1,
             revokedSessionsStillActive: revokedSessions.data?.some(s => 
-              sessionManager.activeSessions?.has(s.session_token)
+              sessionManager.activeSessions?.has(s.session_id)
             ) || false,
             expiredSessionsNotCleaned: (nonRevokedSessions.data || []).filter(s => 
               new Date(s.expires_at) < new Date()
@@ -720,7 +720,7 @@ class AdminController {
             return await client
               .from('user_sessions')
               .select('*')
-              .eq('session_token', currentAdminSession);
+              .eq('session_id', currentAdminSession);
           },
           'debug_admin_in_user_sessions'
         );
@@ -729,7 +729,7 @@ class AdminController {
       }
       
       // Verificar si hay tokens compartidos entre sistemas
-      const allUserTokens = (allActiveSessions.data || []).map(s => s.session_token);
+      const allUserTokens = (allActiveSessions.data || []).map(s => s.session_id);
       const allAdminTokens = Array.from(adminService.adminSessions.keys());
       
       potentialConflicts.sharedSessionTokens = allUserTokens.filter(token => 
@@ -744,10 +744,10 @@ class AdminController {
         revocationSimulation = {
           targetUserId: userId,
           sessionsToRevoke: targetSessions.length,
-          sessionTokensToRevoke: targetSessions.map(s => s.session_token.substring(0, 8) + '...'),
-          wouldAffectAdminSession: targetSessions.some(s => s.session_token === currentAdminSession),
+          sessionTokensToRevoke: targetSessions.map(s => s.session_id.substring(0, 8) + '...'),
+          wouldAffectAdminSession: targetSessions.some(s => s.session_id === currentAdminSession),
           potentialMemoryCleanup: targetSessions.filter(s => 
-            sessionManager.activeSessions?.has(s.session_token)
+            sessionManager.activeSessions?.has(s.session_id)
           ).length
         };
       }
