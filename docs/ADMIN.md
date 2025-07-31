@@ -19,24 +19,8 @@ Agrega estas variables a tu archivo `.env` o `.env.local`:
 ```bash
 ADMIN_ENABLED=true
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your_hashed_password_here
+ADMIN_PASSWORD=tu_contraseña_segura
 ADMIN_SESSION_TIMEOUT=3600000  # 1 hora en millisegundos
-```
-
-### 2. Generar hash de contraseña
-
-Usa el script incluido para generar un hash seguro:
-
-```bash
-npm run generate-admin-password tu_contraseña_segura
-```
-
-El script generará un hash bcrypt que debes copiar a la variable `ADMIN_PASSWORD`.
-
-### 3. Instalar dependencias
-
-```bash
-npm install bcrypt
 ```
 
 ## 🌐 Acceso al Panel

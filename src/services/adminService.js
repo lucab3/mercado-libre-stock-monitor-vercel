@@ -4,7 +4,6 @@
  */
 
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
 const logger = require('../utils/logger');
 const config = require('../../config/config');
 const sessionManager = require('../utils/sessionManager');
@@ -28,13 +27,6 @@ class AdminService {
     return config.admin.enabled;
   }
 
-  /**
-   * Generar hash de password para comparación segura
-   */
-  async hashPassword(password) {
-    const saltRounds = 12;
-    return await bcrypt.hash(password, saltRounds);
-  }
 
   /**
    * Verificar credenciales de administrador
@@ -54,15 +46,9 @@ class AdminService {
       return false;
     }
 
-    // Verificar password
+    // Verificar password (comparación directa para Vercel)
     try {
-      // Si la password está en hash, usar bcrypt
-      if (config.admin.password.startsWith('$2b$')) {
-        return await bcrypt.compare(password, config.admin.password);
-      } else {
-        // Comparación directa (menos seguro, solo para desarrollo)
-        return password === config.admin.password;
-      }
+      return password === config.admin.password;
     } catch (error) {
       logger.error(`❌ Error verificando credenciales admin: ${error.message}`);
       return false;

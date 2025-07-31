@@ -14,8 +14,7 @@
     "lint": "eslint .",
     "encrypt": "node scripts/encrypt-env.js",
     "generate-secrets": "node scripts/generate-secrets.js",
-    "setup:local": "node scripts/setup-local.js",
-    "generate-admin-password": "node scripts/generate-admin-password.js"
+    "setup:local": "node scripts/setup-local.js"
   },
   "engines": {
     "node": ">=16.0.0"
@@ -31,8 +30,7 @@
     "winston": "^3.11.0",
     "cookie-parser": "^1.4.6",
     "express-session": "^1.17.3",
-    "@supabase/supabase-js": "^2.39.0",
-    "bcrypt": "^5.1.1"
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
