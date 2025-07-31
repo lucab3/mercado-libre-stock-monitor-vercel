@@ -472,8 +472,19 @@ class DatabaseService {
         'count_pending_webhooks'
       );
       
+      // Contar productos totales
+      const totalProducts = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from(this.tableName)
+            .select('*', { count: 'exact', head: true });
+        },
+        'count_total_products'
+      );
+
       return {
         ...stats,
+        totalProducts: totalProducts.count || 0,
         lowStockProducts: lowStockCount.count || 0,
         pendingWebhooks: pendingWebhooks.count || 0
       };
@@ -1264,7 +1275,6 @@ class DatabaseService {
             .from('user_sessions')
             .select('*')
             .eq('revoked', false)
-            .gt('expires_at', new Date().toISOString())
             .order('last_used', { ascending: false });
         },
         'get_all_active_sessions'
@@ -1301,15 +1311,23 @@ class DatabaseService {
         uniqueUsers: uniqueUsers.size,
         avgSessionsPerUser: uniqueUsers.size > 0 ? activeSessions.length / uniqueUsers.size : 0,
         sessionsByUser,
-        sessions: activeSessions.map(session => ({
-          userId: session.user_id,
-          sessionCount: sessionsByUser[session.user_id],
-          sessionId: '***hidden***',
-          createdAt: new Date(session.created_at).getTime(),
-          lastActivity: new Date(session.last_used).getTime(),
-          userAgent: session.user_agent || 'Unknown',
-          sessionActive: true
-        }))
+        sessions: activeSessions.map(session => {
+          const now = new Date();
+          const expiresAt = new Date(session.expires_at);
+          const isActive = expiresAt > now;
+          
+          return {
+            userId: session.user_id,
+            sessionCount: sessionsByUser[session.user_id],
+            sessionId: '***hidden***',
+            createdAt: new Date(session.created_at).getTime(),
+            lastActivity: new Date(session.last_used).getTime(),
+            expiresAt: expiresAt.getTime(),
+            userAgent: session.user_agent || 'Unknown',
+            sessionActive: isActive,
+            status: isActive ? 'Activa' : 'Expirada'
+          };
+        })
       };
       
     } catch (error) {

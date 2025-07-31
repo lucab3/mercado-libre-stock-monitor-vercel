@@ -348,7 +348,7 @@ class AdminController {
                 <thead>
                   <tr>
                     <th>Usuario ID</th>
-                    <th>Sesiones</th>
+                    <th>Estado</th>
                     <th>Última Actividad</th>
                     <th>Creada</th>
                     <th>Acciones</th>
@@ -358,7 +358,11 @@ class AdminController {
                   ${(userSessions?.sessions || []).map(session => `
                     <tr>
                       <td><code>${session.userId}</code></td>
-                      <td>${session.sessionCount}</td>
+                      <td>
+                        <span class="badge ${session.sessionActive ? 'bg-success' : 'bg-secondary'}">
+                          ${session.status || (session.sessionActive ? 'Activa' : 'Expirada')}
+                        </span>
+                      </td>
                       <td>${new Date(session.lastActivity).toLocaleString()}</td>
                       <td>${new Date(session.createdAt).toLocaleString()}</td>
                       <td>
@@ -486,20 +490,51 @@ class AdminController {
   async debugSessions(req, res) {
     try {
       const databaseService = require('../services/databaseService');
+      const supabaseClient = require('../utils/supabaseClient');
       
       logger.info('🔍 Debug: consultando sesiones directamente...');
-      const activeSessions = await databaseService.getAllActiveSessions();
-      logger.info('🔍 Debug: sesiones activas encontradas:', activeSessions.length);
       
-      const sessionStats = await databaseService.getSessionStats();
-      logger.info('🔍 Debug: estadísticas calculadas:', JSON.stringify(sessionStats, null, 2));
+      // 1. Consulta SIN filtros para ver todas las sesiones
+      const allSessions = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(10);
+        },
+        'debug_all_sessions'
+      );
+      
+      // 2. Consulta solo con revoked = false
+      const nonRevokedSessions = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('revoked', false)
+            .order('created_at', { ascending: false })
+            .limit(10);
+        },
+        'debug_non_revoked_sessions'
+      );
+      
+      // 3. Consulta original (con filtros de fecha)
+      const activeSessions = await databaseService.getAllActiveSessions();
+      
+      const now = new Date().toISOString();
       
       res.json({
         success: true,
         debug: {
-          rawSessions: activeSessions,
-          sessionCount: activeSessions.length,
-          sessionStats: sessionStats
+          currentTime: now,
+          allSessions: allSessions.data || [],
+          allSessionsCount: (allSessions.data || []).length,
+          nonRevokedSessions: nonRevokedSessions.data || [],
+          nonRevokedCount: (nonRevokedSessions.data || []).length,
+          activeSessions: activeSessions,
+          activeSessionsCount: activeSessions.length,
+          sampleSession: (allSessions.data || [])[0] || null
         }
       });
     } catch (error) {
