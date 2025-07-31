@@ -1181,32 +1181,6 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Revocar todas las sesiones de un usuario
-   */
-  async revokeAllUserSessions(userId) {
-    try {
-      const result = await supabaseClient.executeQuery(
-        async (client) => {
-          return await client
-            .from('user_sessions')
-            .update({ 
-              revoked: true
-            })
-            .eq('user_id', userId)
-            .eq('revoked', false);
-        },
-        'revoke_all_user_sessions'
-      );
-
-      logger.info(`🚫 Todas las sesiones revocadas para usuario ${userId}`);
-      return result;
-      
-    } catch (error) {
-      logger.error(`❌ Error revocando todas las sesiones: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Limpiar sesiones expiradas
@@ -1343,9 +1317,36 @@ class DatabaseService {
 
   /**
    * Revocar todas las sesiones de un usuario (para administración)
+   * CRITICAL: Solo afecta user_sessions table, NUNCA admin sessions
    */
   async revokeAllUserSessions(userId) {
     try {
+      logger.info(`🔍 Admin: iniciando revocación de sesiones para usuario ${userId}`);
+      
+      // SAFETY CHECK: Verificar que userId no es null/undefined
+      if (!userId) {
+        throw new Error('userId is required for session revocation');
+      }
+      
+      // SAFETY CHECK: Log sesiones que van a ser afectadas ANTES de revocar
+      const sessionsBefore = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('session_token, user_id, created_at')
+            .eq('user_id', userId)
+            .eq('revoked', false);
+        },
+        'check_sessions_before_revocation'
+      );
+      
+      const sessionsToRevoke = sessionsBefore.data || [];
+      logger.info(`🔍 Sesiones a revocar: ${sessionsToRevoke.length}`);
+      sessionsToRevoke.forEach(session => {
+        logger.info(`🔍 - Token: ${session.session_token.substring(0, 8)}... UserId: ${session.user_id}`);
+      });
+      
+      // EJECUTAR REVOCACIÓN: Solo en user_sessions table, solo para el userId específico
       const result = await supabaseClient.executeQuery(
         async (client) => {
           return await client
@@ -1361,6 +1362,11 @@ class DatabaseService {
 
       const revokedCount = result.data?.length || 0;
       logger.info(`🚨 Admin revocó ${revokedCount} sesiones para usuario ${userId}`);
+      
+      // SAFETY CHECK: Verificar que ninguna admin session fue afectada
+      const adminService = require('./adminService');
+      const adminSessionsAfter = adminService.getAdminSessionsInfo();
+      logger.info(`🔍 Admin sessions después de revocación: ${adminSessionsAfter.length} activas`);
       
       return revokedCount;
       

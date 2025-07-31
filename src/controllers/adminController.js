@@ -491,22 +491,37 @@ class AdminController {
     try {
       const databaseService = require('../services/databaseService');
       const supabaseClient = require('../utils/supabaseClient');
+      const sessionManager = require('../utils/sessionManager');
+      const adminService = require('../services/adminService');
       
-      logger.info('🔍 Debug: consultando sesiones directamente...');
+      logger.info('🔍 Debug: iniciando análisis completo de sesiones...');
       
-      // 1. Consulta SIN filtros para ver todas las sesiones
+      // === PARTE 1: ANÁLISIS DE BASE DE DATOS ===
+      
+      // Total count
+      const totalCount = await supabaseClient.executeQuery(
+        async (client) => {
+          const { count } = await client
+            .from('user_sessions')
+            .select('*', { count: 'exact', head: true });
+          return count;
+        },
+        'debug_total_count'
+      );
+      
+      // Todas las sesiones (muestra)
       const allSessions = await supabaseClient.executeQuery(
         async (client) => {
           return await client
             .from('user_sessions')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(10);
+            .limit(5);
         },
         'debug_all_sessions'
       );
       
-      // 2. Consulta solo con revoked = false
+      // Solo no revocadas
       const nonRevokedSessions = await supabaseClient.executeQuery(
         async (client) => {
           return await client
@@ -514,31 +529,274 @@ class AdminController {
             .select('*')
             .eq('revoked', false)
             .order('created_at', { ascending: false })
-            .limit(10);
+            .limit(5);
         },
         'debug_non_revoked_sessions'
       );
       
-      // 3. Consulta original (con filtros de fecha)
-      const activeSessions = await databaseService.getAllActiveSessions();
+      // Solo revocadas
+      const revokedSessions = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('revoked', true)
+            .order('created_at', { ascending: false })
+            .limit(5);
+        },
+        'debug_revoked_sessions'
+      );
+      
+      // Sesiones según filtros actuales de admin
+      const adminFilteredSessions = await databaseService.getAllActiveSessions();
+      
+      // === PARTE 2: ANÁLISIS DE MEMORIA ===
+      
+      const sessionManagerData = {
+        activeSessions: sessionManager.activeSessions?.size || 0,
+        sessionKeys: sessionManager.activeSessions ? 
+          Array.from(sessionManager.activeSessions.keys()).slice(0, 3) : [],
+        hasCleanupTimer: !!sessionManager.cleanupInterval,
+        lastCleanup: sessionManager.lastCleanup || 'never'
+      };
+      
+      // === PARTE 3: ANÁLISIS DE ADMIN SESSIONS ===
+      
+      const adminSessionsInfo = adminService.getAdminSessionsInfo();
+      const currentAdminSession = req.cookies?.['admin-session'];
+      
+      // === PARTE 4: ANÁLISIS ESPECÍFICO DEL PROBLEMA ===
+      
+      // Verificar la sesión admin actual
+      let adminSessionValid = false;
+      let adminSessionDetails = null;
+      
+      if (currentAdminSession) {
+        adminSessionValid = adminService.validateAdminSession(currentAdminSession);
+        adminSessionDetails = adminService.getAdminSessionDetails(currentAdminSession);
+      }
+      
+      // Buscar sesiones que podrían estar causando conflictos
+      const potentialConflicts = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('revoked', false)
+            .gte('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false });
+        },
+        'debug_potential_conflicts'
+      );
       
       const now = new Date().toISOString();
       
       res.json({
         success: true,
-        debug: {
-          currentTime: now,
-          allSessions: allSessions.data || [],
-          allSessionsCount: (allSessions.data || []).length,
-          nonRevokedSessions: nonRevokedSessions.data || [],
-          nonRevokedCount: (nonRevokedSessions.data || []).length,
-          activeSessions: activeSessions,
-          activeSessionsCount: activeSessions.length,
-          sampleSession: (allSessions.data || [])[0] || null
+        timestamp: now,
+        analysis: {
+          // Datos de BD
+          database: {
+            totalSessionsInDB: totalCount,
+            sampleAllSessions: allSessions.data || [],
+            nonRevokedCount: (nonRevokedSessions.data || []).length,
+            nonRevokedSample: nonRevokedSessions.data || [],
+            revokedCount: (revokedSessions.data || []).length,
+            revokedSample: revokedSessions.data || [],
+            adminFilteredSessions: adminFilteredSessions,
+            adminFilteredCount: adminFilteredSessions.length,
+            potentialConflicts: potentialConflicts.data || [],
+            potentialConflictsCount: (potentialConflicts.data || []).length
+          },
+          
+          // Datos de memoria
+          memory: sessionManagerData,
+          
+          // Datos de admin
+          admin: {
+            currentSessionCookie: currentAdminSession ? 
+              currentAdminSession.substring(0, 8) + '...' : 'NONE',
+            isCurrentSessionValid: adminSessionValid,
+            currentSessionDetails: adminSessionDetails,
+            allAdminSessions: adminSessionsInfo,
+            adminSessionsCount: adminSessionsInfo.length
+          },
+          
+          // Detección de problemas
+          issues: {
+            memoryVsDatabaseMismatch: sessionManagerData.activeSessions !== (nonRevokedSessions.data || []).length,
+            adminSessionsConflicts: adminSessionsInfo.length > 1,
+            revokedSessionsStillActive: revokedSessions.data?.some(s => 
+              sessionManager.activeSessions?.has(s.session_token)
+            ) || false,
+            expiredSessionsNotCleaned: (nonRevokedSessions.data || []).filter(s => 
+              new Date(s.expires_at) < new Date()
+            ).length
+          }
         }
       });
+      
     } catch (error) {
-      logger.error(`❌ Error en debug de sesiones: ${error.message}`);
+      logger.error(`❌ Error en debug comprehensivo: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
+  /**
+   * Debug: investigar problemas de revocación de sesiones
+   */
+  async debugRevocation(req, res) {
+    try {
+      const databaseService = require('../services/databaseService');
+      const supabaseClient = require('../utils/supabaseClient');
+      const adminService = require('../services/adminService');
+      const sessionManager = require('../utils/sessionManager');
+      
+      logger.info('🔍 Debug: analizando proceso de revocación...');
+      
+      const currentAdminSession = req.cookies?.['admin-session'];
+      const { userId } = req.query; // userId a investigar para revocación
+      
+      // === PARTE 1: ESTADO ANTES DE LA OPERACIÓN ===
+      
+      // Verificar estado actual admin
+      const adminSessionDetails = currentAdminSession ? 
+        adminService.getAdminSessionDetails(currentAdminSession) : null;
+      
+      // Verificar sesiones del usuario target
+      let targetUserSessions = [];
+      if (userId) {
+        targetUserSessions = await supabaseClient.executeQuery(
+          async (client) => {
+            return await client
+              .from('user_sessions')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('revoked', false);
+          },
+          'debug_target_user_sessions'
+        );
+      }
+      
+      // Verificar todas las sesiones activas
+      const allActiveSessions = await supabaseClient.executeQuery(
+        async (client) => {
+          return await client
+            .from('user_sessions')
+            .select('*')
+            .eq('revoked', false)
+            .order('created_at', { ascending: false });
+        },
+        'debug_all_active_sessions'
+      );
+      
+      // === PARTE 2: ANÁLISIS DE MEMORIA ===
+      
+      const memoryState = {
+        sessionManagerKeys: sessionManager.activeSessions ? 
+          Array.from(sessionManager.activeSessions.keys()).slice(0, 5) : [],
+        sessionManagerSize: sessionManager.activeSessions?.size || 0,
+        adminSessionInMemory: adminService.adminSessions.has(currentAdminSession || ''),
+        adminSessionsCount: adminService.adminSessions.size
+      };
+      
+      // === PARTE 3: ANÁLISIS DE CONFLICTOS POTENCIALES ===
+      
+      // Verificar si hay confusión entre user_sessions y admin_sessions
+      const potentialConflicts = {
+        adminSessionIdInUserSessions: false,
+        userSessionIdsInAdminMemory: false,
+        sharedSessionTokens: []
+      };
+      
+      if (currentAdminSession) {
+        // Verificar si el admin session está en user_sessions (MAL)
+        const adminInUserSessions = await supabaseClient.executeQuery(
+          async (client) => {
+            return await client
+              .from('user_sessions')
+              .select('*')
+              .eq('session_token', currentAdminSession);
+          },
+          'debug_admin_in_user_sessions'
+        );
+        
+        potentialConflicts.adminSessionIdInUserSessions = (adminInUserSessions.data || []).length > 0;
+      }
+      
+      // Verificar si hay tokens compartidos entre sistemas
+      const allUserTokens = (allActiveSessions.data || []).map(s => s.session_token);
+      const allAdminTokens = Array.from(adminService.adminSessions.keys());
+      
+      potentialConflicts.sharedSessionTokens = allUserTokens.filter(token => 
+        allAdminTokens.some(adminToken => adminToken === token)
+      );
+      
+      // === PARTE 4: SIMULACIÓN DE REVOCACIÓN (SIN EJECUTAR) ===
+      
+      let revocationSimulation = {};
+      if (userId) {
+        const targetSessions = targetUserSessions.data || [];
+        revocationSimulation = {
+          targetUserId: userId,
+          sessionsToRevoke: targetSessions.length,
+          sessionTokensToRevoke: targetSessions.map(s => s.session_token.substring(0, 8) + '...'),
+          wouldAffectAdminSession: targetSessions.some(s => s.session_token === currentAdminSession),
+          potentialMemoryCleanup: targetSessions.filter(s => 
+            sessionManager.activeSessions?.has(s.session_token)
+          ).length
+        };
+      }
+      
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        analysis: {
+          adminSession: {
+            cookie: currentAdminSession ? currentAdminSession.substring(0, 8) + '...' : 'NONE',
+            details: adminSessionDetails,
+            isValid: adminSessionDetails?.isActive || false
+          },
+          
+          targetUser: {
+            userId: userId || 'NOT_SPECIFIED',
+            activeSessions: (targetUserSessions.data || []).length,
+            sessionTokens: (targetUserSessions.data || []).map(s => s.session_token.substring(0, 8) + '...')
+          },
+          
+          globalState: {
+            totalActiveUserSessions: (allActiveSessions.data || []).length,
+            memoryState,
+            conflicts: potentialConflicts
+          },
+          
+          revocationSimulation,
+          
+          recommendations: {
+            suspectedIssues: [
+              potentialConflicts.adminSessionIdInUserSessions ? 
+                'CRÍTICO: Admin session está en user_sessions tabla' : null,
+              potentialConflicts.sharedSessionTokens.length > 0 ? 
+                'CRÍTICO: Tokens compartidos entre sistemas' : null,
+              revocationSimulation.wouldAffectAdminSession ? 
+                'CRÍTICO: Revocación afectaría sesión admin' : null
+            ].filter(Boolean),
+            
+            nextSteps: [
+              'Verificar que admin sessions sean completamente independientes',
+              'Asegurar que revokeAllUserSessions solo afecte user_sessions',
+              'Implementar validación para prevenir cross-contamination'
+            ]
+          }
+        }
+      });
+      
+    } catch (error) {
+      logger.error(`❌ Error en debug de revocación: ${error.message}`);
       res.status(500).json({
         success: false,
         error: error.message,

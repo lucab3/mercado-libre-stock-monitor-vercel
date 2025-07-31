@@ -221,6 +221,30 @@ class AdminService {
 
     return sessions.sort((a, b) => b.lastUsed - a.lastUsed);
   }
+
+  /**
+   * Obtener detalles de una sesión admin específica
+   */
+  getAdminSessionDetails(sessionId) {
+    if (!sessionId || !this.adminSessions.has(sessionId)) {
+      return null;
+    }
+
+    const session = this.adminSessions.get(sessionId);
+    const now = Date.now();
+
+    return {
+      sessionId: sessionId.substring(0, 8) + '...',
+      fullSessionId: sessionId,
+      username: session.username,
+      createdAt: session.createdAt,
+      lastUsed: session.lastUsed,
+      expiresAt: session.expiresAt,
+      isExpired: now > session.expiresAt,
+      remainingTime: Math.max(0, session.expiresAt - now),
+      isActive: now <= session.expiresAt
+    };
+  }
 }
 
 module.exports = new AdminService();

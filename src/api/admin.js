@@ -48,6 +48,9 @@ async function handleAdminRoutes(req, res) {
               case '/api/debug-sessions':
                 return await adminController.debugSessions(req, res);
               
+              case '/api/debug-revocation':
+                return await adminController.debugRevocation(req, res);
+              
               default:
                 return res.status(404).json({
                   success: false,
