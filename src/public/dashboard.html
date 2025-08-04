@@ -582,6 +582,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('sessions')">
+                                <i class="bi bi-people"></i> Sesiones Activas
+                                <span id="active-sessions-count" class="badge bg-info ms-2">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" onclick="showSection('settings')">
                                 <i class="bi bi-gear"></i> Configuración
                             </a>
@@ -706,6 +712,7 @@
                                 <th>SKU</th>
                                 <th>Stock</th>
                                 <th>Estado</th>
+                                <th>Fulfillment</th>
                                 <th>Publicación</th>
                                 <th>Acciones</th>
                             </tr>
@@ -838,6 +845,119 @@
                     </div>
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Esta sección está en desarrollo.
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN SESIONES ACTIVAS -->
+                <div id="sessions-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">
+                            <i class="bi bi-people"></i> Sesiones Activas
+                        </h1>
+                        <div class="btn-toolbar mb-2 mb-md-0">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshSessions()">
+                                <i class="bi bi-arrow-clockwise"></i> Actualizar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Estadísticas resumidas -->
+                    <div class="row mb-4">
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-primary shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                                Total Sesiones
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-sessions-stat">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-people fs-2 text-gray-300"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-success shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                                Usuarios Únicos
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="unique-users-stat">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-person-check fs-2 text-gray-300"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-info shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                                IPs Únicas
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="unique-ips-stat">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-router fs-2 text-gray-300"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-warning shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                                Expirando Pronto
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="expiring-sessions-stat">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-clock fs-2 text-gray-300"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabla de sesiones -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Detalle de Sesiones por Usuario</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="sessions-loading" class="text-center p-4">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Cargando sesiones...</span>
+                                </div>
+                                <div class="mt-2">Cargando información de sesiones...</div>
+                            </div>
+                            
+                            <div id="sessions-content" style="display: none;">
+                                <div id="sessions-by-user"></div>
+                            </div>
+                            
+                            <div id="sessions-error" style="display: none;" class="alert alert-danger">
+                                <strong>Error:</strong> No se pudieron cargar las sesiones. 
+                                <button class="btn btn-sm btn-outline-danger ms-2" onclick="refreshSessions()">Reintentar</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -1522,7 +1642,7 @@
                 const tableBody = document.getElementById('low-stock-table');
                 
                 if (!lowStockProducts || lowStockProducts.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-success">¡Excelente! No hay productos con stock bajo.</td></tr>';
                     return;
                 }
                 
@@ -1595,6 +1715,12 @@
                                 <span class="badge ${statusClass}">
                                     ${statusText}
                                 </span>
+                            </td>
+                            <td>
+                                <span class="badge ${product.is_fulfillment ? 'bg-primary' : 'bg-light text-dark'}" style="font-size: 0.75rem;">
+                                    ${product.is_fulfillment ? '🚚 Full' : '📦 Normal'}
+                                </span>
+                                ${product.inventory_id ? `<div style="font-size: 0.6rem; color: #666;">ID: ${product.inventory_id}</div>` : ''}
                             </td>
                             <td>
                                 <span class="badge ${pubStatusClass}" style="font-size: 0.75rem;">
@@ -2530,6 +2656,166 @@
             // Cargar datos específicos de la sección
             if (sectionName === 'alerts') {
                 loadAlerts(null, true);
+            } else if (sectionName === 'sessions') {
+                refreshSessions();
+            }
+        }
+        
+        /**
+         * Cargar y mostrar sesiones activas
+         */
+        async function refreshSessions() {
+            const loadingDiv = document.getElementById('sessions-loading');
+            const contentDiv = document.getElementById('sessions-content');
+            const errorDiv = document.getElementById('sessions-error');
+            
+            // Mostrar loading, ocultar contenido y error
+            loadingDiv.style.display = 'block';
+            contentDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/admin/api/sessions-detailed');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateSessionsUI(data);
+                    loadingDiv.style.display = 'none';
+                    contentDiv.style.display = 'block';
+                } else {
+                    throw new Error(data.error || 'Error desconocido');
+                }
+            } catch (error) {
+                console.error('Error cargando sesiones:', error);
+                loadingDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        /**
+         * Actualizar interfaz con datos de sesiones
+         */
+        function updateSessionsUI(data) {
+            // Actualizar estadísticas
+            document.getElementById('total-sessions-stat').textContent = data.stats.totalSessions;
+            document.getElementById('unique-users-stat').textContent = data.stats.uniqueUsers;
+            document.getElementById('unique-ips-stat').textContent = data.stats.uniqueIPs;
+            document.getElementById('expiring-sessions-stat').textContent = data.stats.expiringSoon;
+            
+            // Actualizar badge en sidebar
+            document.getElementById('active-sessions-count').textContent = data.stats.totalSessions;
+            
+            // Generar HTML para sesiones por usuario
+            const container = document.getElementById('sessions-by-user');
+            let html = '';
+            
+            Object.keys(data.sessionsByUser).forEach(userId => {
+                const userSessions = data.sessionsByUser[userId];
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-person-circle"></i> Usuario: ${userId} 
+                                <span class="badge bg-primary ms-2">${userSessions.length} sesión(es)</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                `;
+                
+                userSessions.forEach(session => {
+                    const deviceInfo = parseUserAgent(session.userAgent);
+                    const timeLeftClass = session.timeLeft < 5 ? 'text-danger' : (session.timeLeft < 15 ? 'text-warning' : 'text-success');
+                    
+                    html += `
+                        <div class="row border-bottom pb-3 mb-3">
+                            <div class="col-md-6">
+                                <strong><i class="bi bi-laptop"></i> Dispositivo:</strong><br>
+                                <small class="text-muted">${deviceInfo}</small><br>
+                                <strong><i class="bi bi-geo-alt"></i> IP:</strong> 
+                                <code>${session.ipAddress}</code>
+                            </div>
+                            <div class="col-md-3">
+                                <strong><i class="bi bi-clock"></i> Último uso:</strong><br>
+                                <small>${session.lastUsedMinutes} min atrás</small><br>
+                                <strong><i class="bi bi-hourglass"></i> Expira en:</strong><br>
+                                <span class="${timeLeftClass}"><strong>${session.timeLeft} min</strong></span>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <small class="text-muted">ID: ${session.sessionIdShort}</small><br>
+                                <button class="btn btn-sm btn-outline-danger mt-2" 
+                                        onclick="revokeUserSession('${userId}')">
+                                    <i class="bi bi-x-circle"></i> Revocar Usuario
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            });
+            
+            if (html === '') {
+                html = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> No hay sesiones activas en este momento.</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        /**
+         * Parsear User-Agent para mostrar información amigable
+         */
+        function parseUserAgent(userAgent) {
+            if (!userAgent || userAgent === 'No disponible') {
+                return 'Información no disponible';
+            }
+            
+            let browser = 'Desconocido';
+            let os = 'Desconocido';
+            
+            // Detectar navegador
+            if (userAgent.includes('Chrome')) browser = 'Chrome';
+            else if (userAgent.includes('Firefox')) browser = 'Firefox';
+            else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
+            else if (userAgent.includes('Edge')) browser = 'Edge';
+            
+            // Detectar OS
+            if (userAgent.includes('Windows')) os = 'Windows';
+            else if (userAgent.includes('Macintosh')) os = 'Mac';
+            else if (userAgent.includes('Linux')) os = 'Linux';
+            else if (userAgent.includes('Android')) os = 'Android';
+            else if (userAgent.includes('iPhone')) os = 'iPhone';
+            
+            return `${browser} en ${os}`;
+        }
+        
+        /**
+         * Revocar todas las sesiones de un usuario
+         */
+        async function revokeUserSession(userId) {
+            if (!confirm(`¿Estás seguro de que quieres revocar todas las sesiones del usuario ${userId}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/api/revoke-user-sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Se revocaron ${data.revokedCount} sesiones del usuario ${userId}`);
+                    refreshSessions(); // Recargar la lista
+                } else {
+                    alert('Error revocando sesiones: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error revocando sesiones:', error);
+                alert('Error de conexión al revocar sesiones');
             }
         }
         
@@ -2542,6 +2828,8 @@
         window.saveAlertSettings = saveAlertSettings;
         window.showSection = showSection;
         window.viewAlertDetail = viewAlertDetail;
+        window.refreshSessions = refreshSessions;
+        window.revokeUserSession = revokeUserSession;
         
         /**
          * Limpiar webhooks antiguos

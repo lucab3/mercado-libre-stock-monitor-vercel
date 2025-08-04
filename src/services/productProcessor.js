@@ -5,6 +5,51 @@
  */
 
 /**
+ * Función auxiliar: Extraer información de fulfillment
+ */
+function extractFulfillmentInfo(productData) {
+  const fulfillmentInfo = {
+    inventory_id: null,
+    is_fulfillment: false,
+    shipping_mode: null,
+    logistic_type: null
+  };
+
+  // 1. Verificar inventory_id (indicador principal de Full)
+  if (productData.inventory_id) {
+    fulfillmentInfo.inventory_id = productData.inventory_id;
+    fulfillmentInfo.is_fulfillment = true;
+  }
+
+  // 2. Verificar información de shipping
+  if (productData.shipping) {
+    fulfillmentInfo.shipping_mode = productData.shipping.mode;
+    fulfillmentInfo.logistic_type = productData.shipping.logistic_type;
+    
+    // Algunos indicadores adicionales de Full
+    if (productData.shipping.mode === 'fulfillment' || 
+        productData.shipping.logistic_type === 'fulfillment') {
+      fulfillmentInfo.is_fulfillment = true;
+    }
+  }
+
+  // 3. Verificar en sale_terms si hay información de fulfillment
+  if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
+    const fulfillmentTerm = productData.sale_terms.find(term => 
+      term.id === 'FULFILLMENT' || 
+      term.id === 'LOGISTIC_TYPE' ||
+      (term.value_name && term.value_name.toLowerCase().includes('full'))
+    );
+    
+    if (fulfillmentTerm) {
+      fulfillmentInfo.is_fulfillment = true;
+    }
+  }
+
+  return fulfillmentInfo;
+}
+
+/**
  * Función auxiliar: Extraer manufacturing time de sale_terms
  */
 function extractManufacturingTime(productData) {
@@ -54,6 +99,8 @@ function compareProducts(mlProducts, dbProducts, userId) {
     } else if (hasStockChanges(mlProduct, dbProduct)) {
       // Solo campos que cambiaron + shipping info
       const manufacturingHours = extractManufacturingTime(mlProduct);
+      // ⭐ NUEVO: Extraer información de fulfillment para actualizaciones
+      const fulfillmentInfo = extractFulfillmentInfo(mlProduct);
       
       updatedProducts.push({
         id: mlProduct.id,
@@ -63,6 +110,11 @@ function compareProducts(mlProducts, dbProducts, userId) {
         title: mlProduct.title, // Título puede cambiar
         seller_sku: extractSKUFromProduct(mlProduct), // SKU puede cambiar
         estimated_handling_time: manufacturingHours, // ⭐ Manufacturing time desde sale_terms
+        // ⭐ NUEVO: Campos de fulfillment en actualizaciones
+        inventory_id: fulfillmentInfo.inventory_id,
+        is_fulfillment: fulfillmentInfo.is_fulfillment,
+        shipping_mode: fulfillmentInfo.shipping_mode,
+        logistic_type: fulfillmentInfo.logistic_type,
         last_api_sync: new Date().toISOString()
       });
     } else {
@@ -78,13 +130,20 @@ function compareProducts(mlProducts, dbProducts, userId) {
  */
 function hasStockChanges(mlProduct, dbProduct) {
   const manufacturingHours = extractManufacturingTime(mlProduct);
+  // ⭐ NUEVO: Extraer información de fulfillment para comparación
+  const fulfillmentInfo = extractFulfillmentInfo(mlProduct);
   
   return mlProduct.available_quantity !== dbProduct.available_quantity ||
          mlProduct.price !== dbProduct.price ||
          mlProduct.status !== dbProduct.status ||
          mlProduct.title !== dbProduct.title ||
          extractSKUFromProduct(mlProduct) !== dbProduct.seller_sku ||
-         manufacturingHours !== dbProduct.estimated_handling_time; // ⭐ Detectar cambios en manufacturing time
+         manufacturingHours !== dbProduct.estimated_handling_time || // ⭐ Detectar cambios en manufacturing time
+         // ⭐ NUEVO: Detectar cambios en campos de fulfillment
+         fulfillmentInfo.inventory_id !== dbProduct.inventory_id ||
+         fulfillmentInfo.is_fulfillment !== dbProduct.is_fulfillment ||
+         fulfillmentInfo.shipping_mode !== dbProduct.shipping_mode ||
+         fulfillmentInfo.logistic_type !== dbProduct.logistic_type;
 }
 
 /**
@@ -95,6 +154,9 @@ function mapProductForDB(productData, userId) {
   
   // Extraer manufacturing time usando función centralizada
   const manufacturingHours = extractManufacturingTime(productData);
+  
+  // ⭐ NUEVO: Extraer información de fulfillment
+  const fulfillmentInfo = extractFulfillmentInfo(productData);
   
   return {
     id: productData.id,
@@ -111,6 +173,11 @@ function mapProductForDB(productData, userId) {
     health: productData.health,
     // ⭐ DIRECTO: Manufacturing time desde productData
     estimated_handling_time: manufacturingHours,
+    // ⭐ NUEVO: Campos de fulfillment
+    inventory_id: fulfillmentInfo.inventory_id,
+    is_fulfillment: fulfillmentInfo.is_fulfillment,
+    shipping_mode: fulfillmentInfo.shipping_mode,
+    logistic_type: fulfillmentInfo.logistic_type,
     last_api_sync: new Date().toISOString()
   };
 }
