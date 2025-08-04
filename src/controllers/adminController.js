@@ -911,20 +911,50 @@ class AdminController {
       const sessions = await databaseService.getAllActiveSessions();
       
       // Formatear datos para el frontend
-      const formattedSessions = sessions.map(session => ({
-        sessionId: session.session_id,
-        userId: session.user_id,
-        ipAddress: session.ip_address || 'No disponible',
-        userAgent: session.user_agent || 'No disponible',
-        createdAt: session.created_at,
-        lastUsed: session.last_used,
-        expiresAt: session.expires_at
-      }));
+      const formattedSessions = sessions.map(session => {
+        const now = new Date();
+        const expiresAt = new Date(session.expires_at);
+        const lastUsed = new Date(session.last_used);
+        const timeSinceLastUse = Math.floor((now - lastUsed) / 1000 / 60); // minutos
+        
+        return {
+          sessionId: session.session_id,
+          sessionIdShort: session.session_id.substring(0, 8) + '...',
+          userId: session.user_id,
+          ipAddress: session.ip_address || 'No disponible',
+          userAgent: session.user_agent || 'No disponible',
+          userAgentShort: session.user_agent ? session.user_agent.substring(0, 50) + '...' : 'No disponible',
+          createdAt: session.created_at,
+          lastUsed: session.last_used,
+          lastUsedMinutes: timeSinceLastUse,
+          expiresAt: session.expires_at,
+          isExpiring: timeSinceLastUse > 25, // Aviso si no se ha usado en 25+ minutos (expira en 30)
+          timeLeft: Math.max(0, Math.floor((expiresAt - now) / 1000 / 60)) // minutos restantes
+        };
+      });
+
+      // Estadísticas adicionales
+      const stats = {
+        totalSessions: formattedSessions.length,
+        uniqueUsers: [...new Set(formattedSessions.map(s => s.userId))].length,
+        uniqueIPs: [...new Set(formattedSessions.map(s => s.ipAddress).filter(ip => ip !== 'No disponible'))].length,
+        expiringSoon: formattedSessions.filter(s => s.isExpiring).length
+      };
+
+      // Agrupar por usuario para vista empresarial
+      const sessionsByUser = {};
+      formattedSessions.forEach(session => {
+        if (!sessionsByUser[session.userId]) {
+          sessionsByUser[session.userId] = [];
+        }
+        sessionsByUser[session.userId].push(session);
+      });
 
       res.json({
         success: true,
         sessions: formattedSessions,
-        count: formattedSessions.length
+        sessionsByUser,
+        stats
       });
 
     } catch (error) {

@@ -1249,6 +1249,7 @@ class DatabaseService {
             .from('user_sessions')
             .select('*')
             .eq('revoked', false)
+            .gt('expires_at', new Date().toISOString())
             .order('last_used', { ascending: false });
         },
         'get_all_active_sessions'
