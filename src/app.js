@@ -19,6 +19,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const logger = require('./utils/logger');
 const { corsMiddleware } = require('./middleware/cors');
+const { ipWhitelistMiddleware } = require('./middleware/ipWhitelist');
 
 // Importar rutas
 const authRoutes = require('./routes/auth');
@@ -40,6 +41,9 @@ function createApp() {
   
   // CORS
   app.use(corsMiddleware);
+  
+  // IP Whitelist (aplicar a todas las rutas)
+  app.use(ipWhitelistMiddleware);
   
   // Body parsing
   app.use(express.json({ limit: '10mb' }));

@@ -8,6 +8,7 @@ const databaseService = require('../services/databaseService');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
 const path = require('path');
+const { getRealClientIP } = require('../utils/ipHelper');
 
 class AuthController {
   
@@ -46,7 +47,7 @@ class AuthController {
         
         // Guardar tokens y sesión en BD
         await databaseService.saveTokens(mockUserId, mockTokens);
-        await databaseService.createUserSession(cookieId, mockUserId, req.ip, req.get('User-Agent'));
+        await databaseService.createUserSession(cookieId, mockUserId, getRealClientIP(req), req.get('User-Agent'));
         
         // Establecer cookie con configuración segura
         res.cookie('ml-session', cookieId, {
@@ -88,20 +89,20 @@ class AuthController {
       // Validar error OAuth
       if (rawError) {
         const sanitizedError = typeof rawError === 'string' ? rawError.slice(0, 100).replace(/[<>\"']/g, '') : 'unknown';
-        logger.error(`❌ Error en callback OAuth: ${sanitizedError} desde IP: ${req.ip}`);
+        logger.error(`❌ Error en callback OAuth: ${sanitizedError} desde IP: ${getRealClientIP(req)}`);
         return res.redirect('/acceso-denegado');
       }
       
       // Validar código de autorización
       if (!rawCode || typeof rawCode !== 'string') {
-        logger.error(`❌ No se recibió código de autorización válido desde IP: ${req.ip}`);
+        logger.error(`❌ No se recibió código de autorización válido desde IP: ${getRealClientIP(req)}`);
         return res.redirect('/acceso-denegado');
       }
       
       // Validar formato del código (OAuth codes suelen ser alfanuméricos)
       const code = rawCode.slice(0, 500); // Limitar longitud
       if (!/^[a-zA-Z0-9_-]+$/.test(code)) {
-        logger.warn(`🚨 Código OAuth con formato sospechoso desde IP: ${req.ip}`);
+        logger.warn(`🚨 Código OAuth con formato sospechoso desde IP: ${getRealClientIP(req)}`);
         return res.redirect('/acceso-denegado');
       }
       
@@ -144,7 +145,7 @@ class AuthController {
       await databaseService.createUserSession(
         cookieId, 
         userId,
-        req.ip,
+        getRealClientIP(req),
         req.get('User-Agent')
       );
       

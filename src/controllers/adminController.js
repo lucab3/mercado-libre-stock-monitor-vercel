@@ -5,6 +5,7 @@
 
 const adminService = require('../services/adminService');
 const logger = require('../utils/logger');
+const { getRealClientIP } = require('../utils/ipHelper');
 
 class AdminController {
 
@@ -156,7 +157,7 @@ class AdminController {
       // Verificar credenciales
       const isValid = await adminService.verifyAdminCredentials(username, password);
       if (!isValid) {
-        logger.warn(`🚨 Intento de login admin fallido: ${username} desde ${req.ip}`);
+        logger.warn(`🚨 Intento de login admin fallido: ${username} desde ${getRealClientIP(req)}`);
         return res.redirect('/admin/login?error=' + encodeURIComponent('Credenciales incorrectas'));
       }
 
@@ -171,7 +172,7 @@ class AdminController {
         maxAge: adminService.sessionTimeout
       });
 
-      logger.info(`✅ Login admin exitoso: ${username} desde ${req.ip}`);
+      logger.info(`✅ Login admin exitoso: ${username} desde ${getRealClientIP(req)}`);
       res.redirect('/admin/dashboard');
 
     } catch (error) {
@@ -887,6 +888,48 @@ class AdminController {
         success: false,
         error: error.message,
         stack: error.stack
+      });
+    }
+  }
+
+  /**
+   * API: Obtener sesiones activas con información de IP
+   */
+  async getActiveSessionsWithIP(req, res) {
+    try {
+      if (!adminService.isValidAdminSession(req.cookies?.['admin-session'])) {
+        return res.status(401).json({
+          success: false,
+          error: 'Sesión de administrador inválida o expirada',
+          needsAuth: true
+        });
+      }
+
+      const databaseService = require('../services/databaseService');
+      const sessions = await databaseService.getAllActiveSessions();
+      
+      // Formatear datos para el frontend
+      const formattedSessions = sessions.map(session => ({
+        sessionId: session.session_id,
+        userId: session.user_id,
+        ipAddress: session.ip_address || 'No disponible',
+        userAgent: session.user_agent || 'No disponible',
+        createdAt: session.created_at,
+        lastUsed: session.last_used,
+        expiresAt: session.expires_at
+      }));
+
+      res.json({
+        success: true,
+        sessions: formattedSessions,
+        count: formattedSessions.length
+      });
+
+    } catch (error) {
+      logger.error(`❌ Error obteniendo sesiones con IP: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: error.message
       });
     }
   }

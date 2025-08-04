@@ -58,6 +58,9 @@ async function handleAdminRoutes(req, res) {
                 const debugIP = require('./debug-ip');
                 return debugIP(req, res);
               
+              case '/api/sessions-with-ip':
+                return await adminController.getActiveSessionsWithIP(req, res);
+              
               default:
                 return res.status(404).json({
                   success: false,
