@@ -897,8 +897,6 @@ class AdminController {
    */
   async getActiveSessionsWithIP(req, res) {
     try {
-      const adminService = require('../services/adminService');
-      
       if (!adminService.isValidAdminSession(req.cookies?.['admin-session'])) {
         return res.status(401).json({
           success: false,
