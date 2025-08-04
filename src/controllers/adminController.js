@@ -188,10 +188,36 @@ class AdminController {
     try {
       logger.info('🔍 Admin Dashboard: iniciando carga...');
       
-      const [systemStats, userSessions] = await Promise.all([
+      // Obtener datos del sistema y sesiones detalladas  
+      const [systemStats, userSessionsBasic] = await Promise.all([
         adminService.getSystemStats(),
         adminService.getAllUserSessions()
       ]);
+      
+      // Obtener sesiones detalladas con IP y User-Agent
+      const databaseService = require('../services/databaseService');
+      const detailedSessions = await databaseService.getAllActiveSessions();
+      
+      // Formatear sesiones para el dashboard
+      const userSessions = {
+        ...userSessionsBasic,
+        sessions: detailedSessions.map(session => {
+          const now = new Date();
+          const lastUsed = new Date(session.last_used);
+          const timeSinceLastUse = Math.floor((now - lastUsed) / 1000 / 60);
+          
+          return {
+            userId: session.user_id,
+            sessionActive: new Date(session.expires_at) > now,
+            lastActivity: session.last_used,
+            createdAt: session.created_at,
+            ipAddress: session.ip_address || 'No disponible',
+            userAgent: session.user_agent || 'No disponible',
+            timeSinceLastUse,
+            status: new Date(session.expires_at) > now ? 'Activa' : 'Expirada'
+          };
+        })
+      };
 
       logger.info('🔍 Admin Dashboard: systemStats =', JSON.stringify(systemStats, null, 2));
       logger.info('🔍 Admin Dashboard: userSessions =', JSON.stringify(userSessions, null, 2));
@@ -349,30 +375,69 @@ class AdminController {
                 <thead>
                   <tr>
                     <th>Usuario ID</th>
+                    <th>IP / Ubicación</th>
+                    <th>Dispositivo</th>
                     <th>Estado</th>
                     <th>Última Actividad</th>
-                    <th>Creada</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${(userSessions?.sessions || []).map(session => `
+                  ${(userSessions?.sessions || []).map(session => {
+                    // Parsear User-Agent para mostrar info amigable
+                    let deviceInfo = 'Desconocido';
+                    if (session.userAgent && session.userAgent !== 'No disponible') {
+                      let browser = 'Desconocido';
+                      let os = 'Desconocido';
+                      
+                      if (session.userAgent.includes('Chrome')) browser = 'Chrome';
+                      else if (session.userAgent.includes('Firefox')) browser = 'Firefox';
+                      else if (session.userAgent.includes('Safari') && !session.userAgent.includes('Chrome')) browser = 'Safari';
+                      else if (session.userAgent.includes('Edge')) browser = 'Edge';
+                      
+                      if (session.userAgent.includes('Windows')) os = 'Windows';
+                      else if (session.userAgent.includes('Macintosh')) os = 'Mac';
+                      else if (session.userAgent.includes('Linux')) os = 'Linux';
+                      else if (session.userAgent.includes('Android')) os = 'Android';
+                      else if (session.userAgent.includes('iPhone')) os = 'iPhone';
+                      
+                      deviceInfo = browser + ' / ' + os;
+                    }
+                    
+                    return `
                     <tr>
                       <td><code>${session.userId}</code></td>
                       <td>
+                        <strong style="color: #0066cc;">${session.ipAddress}</strong><br>
+                        <small style="color: #666;">
+                          ${session.timeSinceLastUse < 5 ? '🟢 Muy activo' : 
+                            session.timeSinceLastUse < 15 ? '🟡 Activo' : '🔴 Inactivo'}
+                          (${session.timeSinceLastUse} min)
+                        </small>
+                      </td>
+                      <td>
+                        <strong>${deviceInfo}</strong><br>
+                        <small style="color: #666;" title="${session.userAgent}">
+                          ${session.userAgent.length > 50 ? session.userAgent.substring(0, 50) + '...' : session.userAgent}
+                        </small>
+                      </td>
+                      <td>
                         <span class="badge ${session.sessionActive ? 'bg-success' : 'bg-secondary'}">
-                          ${session.status || (session.sessionActive ? 'Activa' : 'Expirada')}
+                          ${session.status}
                         </span>
                       </td>
-                      <td>${new Date(session.lastActivity).toLocaleString()}</td>
-                      <td>${new Date(session.createdAt).toLocaleString()}</td>
+                      <td>
+                        ${new Date(session.lastActivity).toLocaleString()}<br>
+                        <small style="color: #666;">Creada: ${new Date(session.createdAt).toLocaleString()}</small>
+                      </td>
                       <td>
                         <button class="btn btn-danger" onclick="revokeUserSessions('${session.userId}')">
                           Revocar Sesiones
                         </button>
                       </td>
                     </tr>
-                  `).join('')}
+                    `;
+                  }).join('')}
                 </tbody>
               </table>
               
