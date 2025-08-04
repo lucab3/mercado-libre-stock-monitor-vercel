@@ -82,6 +82,62 @@ async function handleAdminRoutes(req, res) {
                   return res.json({ success: false, error: error.message });
                 }
               
+              case '/api/sessions-detailed':
+                // Endpoint temporal con información detallada SIN validación admin
+                try {
+                  const databaseService = require('../services/databaseService');
+                  const sessions = await databaseService.getAllActiveSessions();
+                  
+                  // Formatear datos igual que en adminController pero sin validación
+                  const formattedSessions = sessions.map(session => {
+                    const now = new Date();
+                    const expiresAt = new Date(session.expires_at);
+                    const lastUsed = new Date(session.last_used);
+                    const timeSinceLastUse = Math.floor((now - lastUsed) / 1000 / 60);
+                    
+                    return {
+                      sessionId: session.session_id,
+                      sessionIdShort: session.session_id.substring(0, 8) + '...',
+                      userId: session.user_id,
+                      ipAddress: session.ip_address || 'No disponible',
+                      userAgent: session.user_agent || 'No disponible',
+                      userAgentShort: session.user_agent ? session.user_agent.substring(0, 50) + '...' : 'No disponible',
+                      createdAt: session.created_at,
+                      lastUsed: session.last_used,
+                      lastUsedMinutes: timeSinceLastUse,
+                      expiresAt: session.expires_at,
+                      isExpiring: timeSinceLastUse > 25,
+                      timeLeft: Math.max(0, Math.floor((expiresAt - now) / 1000 / 60))
+                    };
+                  });
+
+                  // Estadísticas
+                  const stats = {
+                    totalSessions: formattedSessions.length,
+                    uniqueUsers: [...new Set(formattedSessions.map(s => s.userId))].length,
+                    uniqueIPs: [...new Set(formattedSessions.map(s => s.ipAddress).filter(ip => ip !== 'No disponible'))].length,
+                    expiringSoon: formattedSessions.filter(s => s.isExpiring).length
+                  };
+
+                  // Agrupar por usuario
+                  const sessionsByUser = {};
+                  formattedSessions.forEach(session => {
+                    if (!sessionsByUser[session.userId]) {
+                      sessionsByUser[session.userId] = [];
+                    }
+                    sessionsByUser[session.userId].push(session);
+                  });
+
+                  return res.json({  
+                    success: true,
+                    sessions: formattedSessions,
+                    sessionsByUser,
+                    stats
+                  });
+                } catch (error) {
+                  return res.json({ success: false, error: error.message });
+                }
+              
               default:
                 return res.status(404).json({
                   success: false,
