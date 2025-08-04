@@ -61,6 +61,27 @@ async function handleAdminRoutes(req, res) {
               case '/api/sessions-with-ip':
                 return await adminController.getActiveSessionsWithIP(req, res);
               
+              case '/api/get-ips':
+                // Endpoint temporal simplificado para obtener IPs
+                try {
+                  const databaseService = require('../services/databaseService');
+                  const sessions = await databaseService.getAllActiveSessions();
+                  
+                  const ips = sessions.map(session => ({
+                    ip: session.ip_address || 'No disponible',
+                    userId: session.user_id,
+                    createdAt: session.created_at
+                  }));
+                  
+                  return res.json({
+                    success: true,
+                    ips: ips,
+                    uniqueIPs: [...new Set(ips.map(s => s.ip))].filter(ip => ip !== 'No disponible')
+                  });
+                } catch (error) {
+                  return res.json({ success: false, error: error.message });
+                }
+              
               default:
                 return res.status(404).json({
                   success: false,
