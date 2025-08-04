@@ -54,6 +54,15 @@ function ProductsTable({ products, loading }) {
     return getStatusBadge(product.status)
   }
 
+  // Obtener badge de fulfillment
+  const getFulfillmentBadge = (product) => {
+    return product.is_fulfillment ? 'bg-primary' : 'bg-light text-dark'
+  }
+
+  const getFulfillmentText = (product) => {
+    return product.is_fulfillment ? '🚚 Full' : '📦 Normal'
+  }
+
   if (loading) {
     return (
       <div className="text-center py-4">
@@ -87,6 +96,7 @@ function ProductsTable({ products, loading }) {
                 <th className="border-top-0">Stock</th>
                 <th className="border-top-0">Estado Stock</th>
                 <th className="border-top-0">Estado Publicación</th>
+                <th className="border-top-0">Fulfillment</th>
                 <th className="border-top-0">Última actualización</th>
                 <th className="border-top-0">Precio</th>
               </tr>
@@ -105,6 +115,7 @@ function ProductsTable({ products, loading }) {
               <th>Stock</th>
               <th>Estado Stock</th>
               <th>Estado Publicación</th>
+              <th>Fulfillment</th>
               <th>Última actualización</th>
               <th>Precio</th>
             </tr>
@@ -154,6 +165,16 @@ function ProductsTable({ products, loading }) {
                 <span className={`badge ${getStatusBadgeWithDelay(product)}`} style={{ whiteSpace: 'pre-line' }}>
                   {product.status_display || getStatusText(product.status)}
                 </span>
+              </td>
+              <td>
+                <span className={`badge ${getFulfillmentBadge(product)}`} style={{ fontSize: '0.75rem' }}>
+                  {getFulfillmentText(product)}
+                </span>
+                {product.inventory_id && (
+                  <div style={{ fontSize: '0.6rem', color: '#666', marginTop: '2px' }}>
+                    ID: {product.inventory_id}
+                  </div>
+                )}
               </td>
               <td>
                 <small className="text-muted">
