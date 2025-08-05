@@ -37,6 +37,11 @@ function ProductsSection() {
       }
     }
     
+    // Filtro por Fulfillment
+    if (productFilters.fulfillmentFilter) {
+      filtered = filtered.filter(p => p.is_fulfillment === true)
+    }
+    
     // Filtro por texto de búsqueda
     if (productFilters.searchText) {
       const searchLower = productFilters.searchText.toLowerCase()
@@ -127,6 +132,12 @@ function ProductsSection() {
                 {productFilters.categories.length} categoría{productFilters.categories.length !== 1 ? 's' : ''}
               </span>
             )}
+            {productFilters.fulfillmentFilter && (
+              <span className="badge bg-info">
+                <i className="bi bi-truck me-1"></i>
+                Solo Full
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -173,6 +184,22 @@ function ProductsSection() {
                 <option value="low">Stock bajo</option>
                 <option value="out">Sin stock</option>
               </select>
+            </div>
+            
+            <div className="col-md-2">
+              <label className="form-label">Fulfillment:</label>
+              <div className="form-check mt-2">
+                <input 
+                  className="form-check-input" 
+                  type="checkbox" 
+                  id="fulfillmentFilter"
+                  checked={productFilters.fulfillmentFilter}
+                  onChange={(e) => handleFilterChange('fulfillmentFilter', e.target.checked)}
+                />
+                <label className="form-check-label" htmlFor="fulfillmentFilter">
+                  🚚 Solo productos Full
+                </label>
+              </div>
             </div>
             
             <div className="col-md-2">
@@ -229,7 +256,7 @@ function ProductsSection() {
                   value={productFilters.searchText}
                   onChange={(e) => handleFilterChange('searchText', e.target.value)}
                 />
-                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value) && (
+                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value || productFilters.fulfillmentFilter) && (
                   <button
                     className="btn btn-outline-secondary"
                     type="button"
@@ -239,6 +266,7 @@ function ProductsSection() {
                       stockFilter: 'all',
                       statusFilter: 'all',
                       searchText: '',
+                      fulfillmentFilter: false,
                       priceFilter: {
                         operator: 'greater',
                         value: ''

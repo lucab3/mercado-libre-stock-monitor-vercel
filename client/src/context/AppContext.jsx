@@ -38,6 +38,7 @@ const initialState = {
     stockFilter: 'all', // all, low, out
     statusFilter: 'all', // all, active, paused, closed, under_review
     searchText: '',
+    fulfillmentFilter: false, // true = solo productos Full, false = todos
     priceFilter: {
       operator: 'greater', // 'greater' o 'less'
       value: '' // valor numérico
