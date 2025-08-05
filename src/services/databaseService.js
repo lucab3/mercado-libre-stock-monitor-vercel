@@ -1570,7 +1570,12 @@ class DatabaseService {
                   status: update.status,
                   title: update.title,
                   seller_sku: update.seller_sku,
-                  estimated_handling_time: update.estimated_handling_time, // ⭐ FALTABA: Manufacturing time
+                  estimated_handling_time: update.estimated_handling_time,
+                  // ⭐ AGREGADO: Campos de fulfillment
+                  inventory_id: update.inventory_id,
+                  is_fulfillment: update.is_fulfillment,
+                  shipping_mode: update.shipping_mode,
+                  logistic_type: update.logistic_type,
                   last_api_sync: update.last_api_sync,
                   updated_at: new Date().toISOString()
                 })
