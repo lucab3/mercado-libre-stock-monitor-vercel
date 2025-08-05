@@ -62,6 +62,11 @@ async function getProducts(req, res) {
         productUrl: productUrl, // URL preferida para links
         category_id: product.category_id, // Agregar category_id para filtros
         price: product.price, // Agregar precio
+        // ⭐ NUEVO: Campos de fulfillment para React
+        is_fulfillment: product.is_fulfillment || false,
+        inventory_id: product.inventory_id,
+        shipping_mode: product.shipping_mode,
+        logistic_type: product.logistic_type,
         thumbnail: null, // No tenemos thumbnails en BD
         updated_at: product.updated_at || product.last_webhook_sync
       };
