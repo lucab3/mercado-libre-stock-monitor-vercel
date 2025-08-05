@@ -16,10 +16,11 @@ function extractFulfillmentInfo(productData) {
     logistic_type: null
   };
 
-  // DEBUG: Log datos de shipping para análisis
-  if (productData.shipping) {
-    console.log(`🔍 FULFILLMENT DEBUG - Producto ${productData.id}:`, {
-      shipping: productData.shipping,
+  // DEBUG: Solo log productos con fulfillment potencial
+  if (productData.shipping?.logistic_type === 'fulfillment' || productData.inventory_id) {
+    console.log(`🔍 FULFILLMENT CANDIDATO - Producto ${productData.id}:`, {
+      logistic_type: productData.shipping?.logistic_type,
+      mode: productData.shipping?.mode,
       inventory_id: productData.inventory_id,
       seller_product_id: productData.seller_product_id
     });
@@ -36,12 +37,11 @@ function extractFulfillmentInfo(productData) {
     fulfillmentInfo.shipping_mode = productData.shipping.mode;
     fulfillmentInfo.logistic_type = productData.shipping.logistic_type;
     
-    // ✅ CORRECTO: Según documentación ML
-    // - shipping.mode debe ser "me2" (Mercado Envíos 2)
-    // - shipping.logistic_type debe ser "fulfillment"
-    if (productData.shipping.mode === 'me2' && 
-        productData.shipping.logistic_type === 'fulfillment') {
+    // ✅ SIMPLIFICADO: Solo verificar logistic_type = 'fulfillment'
+    // Muchos productos Full tienen me2 + fulfillment, pero inventory_id puede faltar
+    if (productData.shipping.logistic_type === 'fulfillment') {
       fulfillmentInfo.is_fulfillment = true;
+      console.log(`✅ FULFILLMENT DETECTADO - Producto ${productData.id}: logistic_type = fulfillment`);
     }
   }
 
