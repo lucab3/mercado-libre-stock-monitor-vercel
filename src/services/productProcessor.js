@@ -6,6 +6,7 @@
 
 /**
  * Función auxiliar: Extraer información de fulfillment
+ * Basada en documentación oficial de MercadoLibre
  */
 function extractFulfillmentInfo(productData) {
   const fulfillmentInfo = {
@@ -15,25 +16,41 @@ function extractFulfillmentInfo(productData) {
     logistic_type: null
   };
 
+  // DEBUG: Log datos de shipping para análisis
+  if (productData.shipping) {
+    console.log(`🔍 FULFILLMENT DEBUG - Producto ${productData.id}:`, {
+      shipping: productData.shipping,
+      inventory_id: productData.inventory_id,
+      seller_product_id: productData.seller_product_id
+    });
+  }
+
   // 1. Verificar inventory_id (indicador principal de Full)
   if (productData.inventory_id) {
     fulfillmentInfo.inventory_id = productData.inventory_id;
     fulfillmentInfo.is_fulfillment = true;
   }
 
-  // 2. Verificar información de shipping
+  // 2. Verificar información de shipping según documentación oficial
   if (productData.shipping) {
     fulfillmentInfo.shipping_mode = productData.shipping.mode;
     fulfillmentInfo.logistic_type = productData.shipping.logistic_type;
     
-    // Algunos indicadores adicionales de Full
-    if (productData.shipping.mode === 'fulfillment' || 
+    // ✅ CORRECTO: Según documentación ML
+    // - shipping.mode debe ser "me2" (Mercado Envíos 2)
+    // - shipping.logistic_type debe ser "fulfillment"
+    if (productData.shipping.mode === 'me2' && 
         productData.shipping.logistic_type === 'fulfillment') {
       fulfillmentInfo.is_fulfillment = true;
     }
   }
 
-  // 3. Verificar en sale_terms si hay información de fulfillment
+  // 3. Verificar seller_product_id (otro indicador de Fulfillment)
+  if (productData.seller_product_id) {
+    fulfillmentInfo.is_fulfillment = true;
+  }
+
+  // 4. Verificar en sale_terms si hay información de fulfillment
   if (productData.sale_terms && Array.isArray(productData.sale_terms)) {
     const fulfillmentTerm = productData.sale_terms.find(term => 
       term.id === 'FULFILLMENT' || 
@@ -42,6 +59,19 @@ function extractFulfillmentInfo(productData) {
     );
     
     if (fulfillmentTerm) {
+      fulfillmentInfo.is_fulfillment = true;
+    }
+  }
+
+  // 5. Verificar otros indicadores en attributes
+  if (productData.attributes && Array.isArray(productData.attributes)) {
+    const fulfillmentAttribute = productData.attributes.find(attr => 
+      attr.id === 'FULFILLMENT' || 
+      attr.id === 'LOGISTIC_TYPE' ||
+      (attr.value_name && attr.value_name.toLowerCase().includes('fulfillment'))
+    );
+    
+    if (fulfillmentAttribute) {
       fulfillmentInfo.is_fulfillment = true;
     }
   }
