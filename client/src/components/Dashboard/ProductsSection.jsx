@@ -85,6 +85,27 @@ function ProductsSection() {
     actions.setProductFilters({ [filterType]: value })
   }
 
+  const handleExport = async () => {
+    try {
+      const filtersInfo = {
+        departmentName,
+        categories: productFilters.categories,
+        statusFilter: productFilters.statusFilter,
+        stockFilter: productFilters.stockFilter,
+        fulfillmentFilter: productFilters.fulfillmentFilter,
+        searchText: productFilters.searchText,
+        priceFilter: productFilters.priceFilter
+      }
+      
+      const result = await actions.exportToExcel(filteredProducts, filtersInfo)
+      
+      // Mostrar notificación de éxito
+      alert(`✅ Exportado exitosamente: ${result.count} productos en ${result.fileName}`)
+    } catch (error) {
+      alert(`❌ Error exportando: ${error.message}`)
+    }
+  }
+
   // Obtener categorías únicas para el dropdown
   const availableCategories = useMemo(() => {
     const categories = new Set()
@@ -277,6 +298,30 @@ function ProductsSection() {
                     <i className="bi bi-x-circle"></i>
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Barra de acciones */}
+          <div className="row mt-3">
+            <div className="col-12 d-flex justify-content-between align-items-center">
+              <div>
+                <span className="text-muted">
+                  Mostrando {filteredProducts.length} de {products.length} productos
+                  {isFiltered && ` (filtrado por: ${departmentName})`}
+                </span>
+              </div>
+              <div>
+                <button
+                  className="btn btn-success"
+                  type="button"
+                  onClick={handleExport}
+                  title="Exportar productos filtrados a Excel"
+                  disabled={filteredProducts.length === 0 || loading.products}
+                >
+                  <i className="bi bi-file-earmark-excel me-2"></i>
+                  Exportar a Excel ({filteredProducts.length})
+                </button>
               </div>
             </div>
           </div>

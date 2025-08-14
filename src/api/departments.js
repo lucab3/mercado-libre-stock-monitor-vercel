@@ -5,9 +5,7 @@
 
 const { withAuth } = require('../middleware/serverlessAuth');
 const logger = require('../utils/logger');
-
-// Almacenamiento temporal en memoria (en producción sería en base de datos)
-const departmentStorage = new Map();
+const databaseService = require('../services/databaseService');
 
 /**
  * Obtener configuración de departamentos del usuario
@@ -18,8 +16,9 @@ async function getDepartments(req, res) {
     
     logger.info(`📁 Obteniendo configuración de departamentos para usuario: ${userId}`);
     
-    // Obtener configuración del usuario (por ahora desde memoria, después desde BD)
-    const userDepartments = departmentStorage.get(userId) || [];
+    // Obtener configuración del usuario desde Supabase
+    const configKey = `departments_${userId}`;
+    const userDepartments = await databaseService.getConfig(configKey) || [];
     
     logger.info(`📁 Encontrados ${userDepartments.length} departamentos configurados`);
     
@@ -141,8 +140,9 @@ async function saveDepartments(req, res) {
     
     logger.info(`💾 Guardando ${departments.length} departamentos para usuario: ${userId}`);
     
-    // Guardar en memoria (por ahora)
-    departmentStorage.set(userId, departments);
+    // Guardar en Supabase
+    const configKey = `departments_${userId}`;
+    await databaseService.updateConfig(configKey, departments);
     
     // Log de los departamentos guardados
     departments.forEach(dept => {
@@ -167,11 +167,90 @@ async function saveDepartments(req, res) {
 }
 
 /**
+ * Obtener departamento seleccionado del usuario
+ */
+async function getSelectedDepartment(req, res) {
+  try {
+    const userId = req.auth.userId;
+    
+    logger.info(`🔍 Obteniendo departamento seleccionado para usuario: ${userId}`);
+    
+    const configKey = `selected_department_${userId}`;
+    const selectedDepartment = await databaseService.getConfig(configKey) || 'all';
+    
+    logger.info(`🔍 Departamento seleccionado: ${selectedDepartment}`);
+    
+    res.json({
+      success: true,
+      selectedDepartment,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error obteniendo departamento seleccionado: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Error obteniendo departamento seleccionado',
+      message: error.message
+    });
+  }
+}
+
+/**
+ * Guardar departamento seleccionado del usuario
+ */
+async function saveSelectedDepartment(req, res) {
+  try {
+    const userId = req.auth.userId;
+    const { selectedDepartment } = req.body;
+    
+    if (typeof selectedDepartment !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'selectedDepartment debe ser un string'
+      });
+    }
+    
+    logger.info(`💾 Guardando departamento seleccionado para usuario ${userId}: ${selectedDepartment}`);
+    
+    const configKey = `selected_department_${userId}`;
+    await databaseService.updateConfig(configKey, selectedDepartment);
+    
+    res.json({
+      success: true,
+      message: 'Departamento seleccionado guardado',
+      selectedDepartment,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error guardando departamento seleccionado: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Error guardando departamento seleccionado',
+      message: error.message
+    });
+  }
+}
+
+/**
  * Manejador principal de rutas
  */
 async function handleDepartments(req, res) {
-  const { method } = req;
+  const { method, url } = req;
+  const path = url.split('?')[0];
   
+  // GET /api/departments/selected - obtener departamento seleccionado
+  if (method === 'GET' && path.endsWith('/selected')) {
+    return await getSelectedDepartment(req, res);
+  }
+  
+  // POST /api/departments/selected - guardar departamento seleccionado
+  if (method === 'POST' && path.endsWith('/selected')) {
+    return await saveSelectedDepartment(req, res);
+  }
+  
+  // Rutas principales
   switch (method) {
     case 'GET':
       return await getDepartments(req, res);

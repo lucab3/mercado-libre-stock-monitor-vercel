@@ -56,6 +56,26 @@ class ApiService {
     })
   }
 
+  async getSelectedDepartment() {
+    try {
+      const response = await this.request('/api/departments/selected')
+      return response
+    } catch (error) {
+      console.error('Error obteniendo departamento seleccionado:', error)
+      return {
+        success: true,
+        selectedDepartment: 'all'
+      }
+    }
+  }
+
+  async saveSelectedDepartment(selectedDepartment) {
+    return await this.request('/api/departments/selected', {
+      method: 'POST',
+      body: JSON.stringify({ selectedDepartment })
+    })
+  }
+
   // Alerts
   async getAlerts(filters = {}) {
     const params = new URLSearchParams()

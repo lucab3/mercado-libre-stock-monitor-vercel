@@ -144,6 +144,26 @@ function appReducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
 
+  const loadInitialConfig = async () => {
+    try {
+      const { apiService } = await import('../services/api')
+      
+      // Cargar departamento seleccionado desde Supabase
+      const selectedResponse = await apiService.getSelectedDepartment()
+      if (selectedResponse.success) {
+        dispatch({ type: 'SET_SELECTED_DEPARTMENT', payload: selectedResponse.selectedDepartment })
+        console.log(`✅ Departamento cargado desde Supabase: ${selectedResponse.selectedDepartment}`)
+      }
+    } catch (error) {
+      console.error('Error cargando configuración inicial:', error)
+    }
+  }
+
+  // Cargar configuración inicial una sola vez
+  useEffect(() => {
+    loadInitialConfig()
+  }, [])
+
   // Auto-refresh setup - DESHABILITADO temporalmente para evitar problemas de sesión
   // useEffect(() => {
   //   if (state.settings.autoRefresh) {
@@ -215,8 +235,17 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_DEPARTMENTS_CONFIG', payload: config })
   }
 
-  const setSelectedDepartment = (department) => {
+  const setSelectedDepartment = async (department) => {
     dispatch({ type: 'SET_SELECTED_DEPARTMENT', payload: department })
+    
+    // Persistir automáticamente en Supabase
+    try {
+      const { apiService } = await import('../services/api')
+      await apiService.saveSelectedDepartment(department)
+      console.log(`✅ Departamento ${department} guardado en Supabase`)
+    } catch (error) {
+      console.error('Error guardando departamento seleccionado:', error)
+    }
   }
 
   const setError = (key, error) => {
@@ -243,6 +272,61 @@ export function AppProvider({ children }) {
     }
   }
 
+  const exportToExcel = async (filteredProducts, filters) => {
+    try {
+      // Importar dinámicamente la librería de Excel
+      const XLSX = await import('xlsx')
+      
+      // Preparar datos para exportación
+      const exportData = filteredProducts.map(product => ({
+        'ID': product.id,
+        'Título': product.title,
+        'SKU': product.seller_sku || '',
+        'Stock': product.available_quantity || 0,
+        'Precio': product.price || 0,
+        'Estado': product.status,
+        'Fulfillment': product.is_fulfillment ? 'Sí' : 'No',
+        'Categoría': product.category_id || '',
+        'Última Sync': product.last_api_sync ? new Date(product.last_api_sync).toLocaleString() : '',
+        'Actualizado': product.updated_at ? new Date(product.updated_at).toLocaleString() : ''
+      }))
+
+      // Crear libro de trabajo
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Productos')
+
+      // Agregar hoja de filtros aplicados
+      const filtersData = [
+        { 'Filtro': 'Departamento', 'Valor': filters.departmentName || 'Todos' },
+        { 'Filtro': 'Categorías', 'Valor': filters.categories.length > 0 ? `${filters.categories.length} seleccionadas` : 'Todas' },
+        { 'Filtro': 'Estado', 'Valor': filters.statusFilter !== 'all' ? filters.statusFilter : 'Todos' },
+        { 'Filtro': 'Stock', 'Valor': filters.stockFilter !== 'all' ? filters.stockFilter : 'Todos' },
+        { 'Filtro': 'Fulfillment', 'Valor': filters.fulfillmentFilter ? 'Solo Full' : 'Todos' },
+        { 'Filtro': 'Búsqueda', 'Valor': filters.searchText || 'Sin filtro' },
+        { 'Filtro': 'Precio', 'Valor': filters.priceFilter.value ? `${filters.priceFilter.operator} ${filters.priceFilter.value}` : 'Sin filtro' },
+        { 'Filtro': 'Total productos', 'Valor': filteredProducts.length }
+      ]
+      
+      const wsFilters = XLSX.utils.json_to_sheet(filtersData)
+      XLSX.utils.book_append_sheet(wb, wsFilters, 'Filtros')
+
+      // Generar nombre de archivo con timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      const fileName = `productos-mercadolibre-${timestamp}.xlsx`
+
+      // Descargar archivo
+      XLSX.writeFile(wb, fileName)
+      
+      console.log(`✅ Archivo Excel exportado: ${fileName}`)
+      return { success: true, fileName, count: filteredProducts.length }
+      
+    } catch (error) {
+      console.error('Error exportando a Excel:', error)
+      throw error
+    }
+  }
+
   const value = {
     ...state,
     actions: {
@@ -260,7 +344,8 @@ export function AppProvider({ children }) {
       setSelectedDepartment,
       setError,
       clearError,
-      refreshData
+      refreshData,
+      exportToExcel
     }
   }
 
