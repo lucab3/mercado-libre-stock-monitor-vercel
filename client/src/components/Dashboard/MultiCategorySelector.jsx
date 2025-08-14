@@ -16,6 +16,8 @@ function MultiCategorySelector({
   const uniqueCategoryNames = useMemo(() => {
     const categoryGroups = new Map()
     
+    console.log('🔍 MultiCategorySelector - Procesando categorías:', availableCategories.length)
+    
     // Agrupar categorías por nombre
     availableCategories.forEach(categoryId => {
       const categoryInfo = getCategoryInfo(categoryId)
@@ -27,6 +29,15 @@ function MultiCategorySelector({
       categoryGroups.get(name).push({ id: categoryId, info: categoryInfo })
     })
     
+    console.log('🔍 MultiCategorySelector - Grupos encontrados:', categoryGroups.size)
+    
+    // Identificar duplicados
+    const duplicateNames = Array.from(categoryGroups.entries())
+      .filter(([name, categories]) => categories.length > 1)
+      .map(([name, categories]) => ({ name, count: categories.length }))
+    
+    console.log('🔍 MultiCategorySelector - Nombres duplicados:', duplicateNames)
+    
     // Generar nombres únicos
     const uniqueNames = new Map()
     
@@ -36,25 +47,42 @@ function MultiCategorySelector({
         uniqueNames.set(categories[0].id, name)
       } else {
         // Múltiples categorías con el mismo nombre, agregar contexto del path
+        console.log(`🔍 Procesando duplicados para "${name}":`, categories.length, 'instancias')
+        
         categories.forEach(({ id, info }) => {
           const path = info.path_from_root || []
+          console.log(`  - ${id}: path length = ${path.length}`, path.map(p => p.name))
+          
           if (path.length > 1) {
             // Usar el nombre del padre para diferenciar
             const parentName = path[path.length - 2]?.name
-            uniqueNames.set(id, parentName ? `${name} (${parentName})` : `${name} (${id})`)
+            const uniqueName = parentName ? `${name} (${parentName})` : `${name} (${id})`
+            uniqueNames.set(id, uniqueName)
+            console.log(`    → ${uniqueName}`)
           } else {
             // Fallback: usar ID para diferenciar
-            uniqueNames.set(id, `${name} (${id})`)
+            const uniqueName = `${name} (${id})`
+            uniqueNames.set(id, uniqueName)
+            console.log(`    → ${uniqueName} (fallback)`)
           }
         })
       }
     })
     
+    console.log('🔍 MultiCategorySelector - Nombres únicos generados:', uniqueNames.size)
     return uniqueNames
   }, [availableCategories, getCategoryInfo])
 
   const getUniqueCategoryName = (categoryId) => {
-    return uniqueCategoryNames.get(categoryId) || getCategoryName(categoryId)
+    const uniqueName = uniqueCategoryNames.get(categoryId)
+    const fallbackName = getCategoryName(categoryId)
+    const result = uniqueName || fallbackName
+    
+    if (!uniqueName && uniqueCategoryNames.size > 0) {
+      console.log(`⚠️ No se encontró nombre único para ${categoryId}, usando fallback: ${fallbackName}`)
+    }
+    
+    return result
   }
 
   const handleCategoryToggle = (categoryId) => {
@@ -165,8 +193,12 @@ function MultiCategorySelector({
             ) : (
               <div className="row g-1">
                 {availableCategories
-                  .sort((a, b) => getUniqueCategoryName(a).localeCompare(getUniqueCategoryName(b)))
-                  .map(categoryId => {
+                  .map(categoryId => ({
+                    id: categoryId,
+                    name: getUniqueCategoryName(categoryId)
+                  }))
+                  .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+                  .map(({ id: categoryId, name }) => {
                   const isSelected = selectedCategories.includes(categoryId)
                   return (
                     <div key={categoryId} className="col-12">
@@ -192,9 +224,9 @@ function MultiCategorySelector({
                           className={`form-check-label flex-fill ${isSelected ? 'fw-medium text-primary' : ''}`} 
                           htmlFor={`category-${categoryId}`}
                           style={{ cursor: 'pointer' }}
-                          title={categoryId}
+                          title={`${name} (ID: ${categoryId})`}
                         >
-                          {getUniqueCategoryName(categoryId)}
+                          {name}
                         </label>
                         {isSelected && (
                           <i className="bi bi-check-circle-fill text-primary ms-2" style={{ fontSize: '16px' }}></i>
