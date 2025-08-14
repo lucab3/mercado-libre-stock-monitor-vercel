@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useCategories } from '../../hooks/useCategories'
 
 function MultiCategorySelector({ 
@@ -10,7 +10,52 @@ function MultiCategorySelector({
   maxHeight = "300px"
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const { getCategoryName } = useCategories(availableCategories)
+  const { getCategoryName, getCategoryInfo } = useCategories(availableCategories)
+
+  // Generar nombres únicos para categorías duplicadas
+  const uniqueCategoryNames = useMemo(() => {
+    const categoryGroups = new Map()
+    
+    // Agrupar categorías por nombre
+    availableCategories.forEach(categoryId => {
+      const categoryInfo = getCategoryInfo(categoryId)
+      const name = categoryInfo.name
+      
+      if (!categoryGroups.has(name)) {
+        categoryGroups.set(name, [])
+      }
+      categoryGroups.get(name).push({ id: categoryId, info: categoryInfo })
+    })
+    
+    // Generar nombres únicos
+    const uniqueNames = new Map()
+    
+    categoryGroups.forEach((categories, name) => {
+      if (categories.length === 1) {
+        // Solo una categoría con este nombre, usar nombre original
+        uniqueNames.set(categories[0].id, name)
+      } else {
+        // Múltiples categorías con el mismo nombre, agregar contexto del path
+        categories.forEach(({ id, info }) => {
+          const path = info.path_from_root || []
+          if (path.length > 1) {
+            // Usar el nombre del padre para diferenciar
+            const parentName = path[path.length - 2]?.name
+            uniqueNames.set(id, parentName ? `${name} (${parentName})` : `${name} (${id})`)
+          } else {
+            // Fallback: usar ID para diferenciar
+            uniqueNames.set(id, `${name} (${id})`)
+          }
+        })
+      }
+    })
+    
+    return uniqueNames
+  }, [availableCategories, getCategoryInfo])
+
+  const getUniqueCategoryName = (categoryId) => {
+    return uniqueCategoryNames.get(categoryId) || getCategoryName(categoryId)
+  }
 
   const handleCategoryToggle = (categoryId) => {
     const newSelection = selectedCategories.includes(categoryId)
@@ -34,11 +79,11 @@ function MultiCategorySelector({
     }
     
     if (selectedCategories.length === 1) {
-      return getCategoryName(selectedCategories[0])
+      return getUniqueCategoryName(selectedCategories[0])
     }
 
     if (selectedCategories.length <= 3) {
-      return selectedCategories.map(id => getCategoryName(id)).join(', ')
+      return selectedCategories.map(id => getUniqueCategoryName(id)).join(', ')
     }
 
     return `${selectedCategories.length} categorías seleccionadas`
@@ -69,13 +114,13 @@ function MultiCategorySelector({
           <div className="d-flex flex-wrap gap-1">
             {selectedCategories.map(categoryId => (
               <span key={categoryId} className="badge bg-primary d-flex align-items-center">
-                {getCategoryName(categoryId)}
+                {getUniqueCategoryName(categoryId)}
                 <button
                   type="button"
                   className="btn-close btn-close-white ms-2"
                   style={{ fontSize: '0.6em' }}
                   onClick={() => handleCategoryToggle(categoryId)}
-                  aria-label={`Remover ${getCategoryName(categoryId)}`}
+                  aria-label={`Remover ${getUniqueCategoryName(categoryId)}`}
                 ></button>
               </span>
             ))}
@@ -120,7 +165,7 @@ function MultiCategorySelector({
             ) : (
               <div className="row g-1">
                 {availableCategories
-                  .sort((a, b) => getCategoryName(a).localeCompare(getCategoryName(b)))
+                  .sort((a, b) => getUniqueCategoryName(a).localeCompare(getUniqueCategoryName(b)))
                   .map(categoryId => {
                   const isSelected = selectedCategories.includes(categoryId)
                   return (
@@ -149,7 +194,7 @@ function MultiCategorySelector({
                           style={{ cursor: 'pointer' }}
                           title={categoryId}
                         >
-                          {getCategoryName(categoryId)}
+                          {getUniqueCategoryName(categoryId)}
                         </label>
                         {isSelected && (
                           <i className="bi bi-check-circle-fill text-primary ms-2" style={{ fontSize: '16px' }}></i>

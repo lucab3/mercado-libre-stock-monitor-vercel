@@ -281,6 +281,7 @@ export function AppProvider({ children }) {
       const exportData = filteredProducts.map(product => ({
         'ID': product.id,
         'Título': product.title,
+        'Link Publicación': product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`,
         'SKU': product.seller_sku || '',
         'Stock': product.available_quantity || 0,
         'Precio': product.price || 0,
