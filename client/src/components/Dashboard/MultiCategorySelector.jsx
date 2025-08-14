@@ -10,10 +10,19 @@ function MultiCategorySelector({
   maxHeight = "300px"
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const { getCategoryName, getCategoryInfo } = useCategories(availableCategories)
+  const { getCategoryName, getCategoryInfo, loading, categories } = useCategories(availableCategories)
+  
+  // Debug: mostrar estado de carga
+  console.log('🔍 MultiCategorySelector - loading:', loading, 'categories loaded:', categories.size)
 
   // Generar nombres únicos para categorías duplicadas
   const uniqueCategoryNames = useMemo(() => {
+    // No procesar si aún se están cargando las categorías
+    if (loading || categories.size === 0) {
+      console.log('⏳ MultiCategorySelector - Esperando carga de categorías...', { loading, categoriesSize: categories.size })
+      return new Map()
+    }
+    
     const categoryGroups = new Map()
     
     console.log('🔍 MultiCategorySelector - Procesando categorías:', availableCategories.length)
@@ -71,7 +80,7 @@ function MultiCategorySelector({
     
     console.log('🔍 MultiCategorySelector - Nombres únicos generados:', uniqueNames.size)
     return uniqueNames
-  }, [availableCategories, getCategoryInfo])
+  }, [availableCategories, getCategoryInfo, loading, categories.size])
 
   const getUniqueCategoryName = (categoryId) => {
     const uniqueName = uniqueCategoryNames.get(categoryId)
@@ -185,7 +194,12 @@ function MultiCategorySelector({
 
           {/* Lista de categorías */}
           <div className="p-2">
-            {availableCategories.length === 0 ? (
+            {loading || categories.size === 0 ? (
+              <div className="text-center text-muted py-3">
+                <div className="spinner-border spinner-border-sm me-2"></div>
+                Cargando categorías...
+              </div>
+            ) : availableCategories.length === 0 ? (
               <div className="text-center text-muted py-3">
                 <i className="bi bi-info-circle me-2"></i>
                 No hay categorías disponibles
