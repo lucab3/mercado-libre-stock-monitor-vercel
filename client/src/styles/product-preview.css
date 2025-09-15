@@ -1,0 +1,127 @@
+/* Estilos para el preview de productos */
+
+.product-preview-tooltip {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  padding: 1rem;
+  max-width: 350px;
+  z-index: 9999;
+  animation: fadeInPreview 0.2s ease-out;
+}
+
+@keyframes fadeInPreview {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.product-preview-tooltip::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 8px 8px 0;
+  border-color: transparent #dee2e6 transparent transparent;
+}
+
+.product-preview-tooltip::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 8px 8px 0;
+  border-color: transparent white transparent transparent;
+}
+
+.product-preview-tooltip.preview-left::before {
+  left: auto;
+  right: -8px;
+  border-width: 8px 0 8px 8px;
+  border-color: transparent transparent transparent #dee2e6;
+}
+
+.product-preview-tooltip.preview-left::after {
+  left: auto;
+  right: -7px;
+  border-width: 8px 0 8px 8px;
+  border-color: transparent transparent transparent white;
+}
+
+.product-preview-image {
+  transition: opacity 0.3s ease;
+}
+
+.product-preview-image:hover {
+  opacity: 0.9;
+}
+
+.product-link-with-preview {
+  position: relative;
+  display: inline-block;
+}
+
+.product-link-with-preview:hover {
+  text-decoration: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .product-preview-tooltip {
+    max-width: 280px;
+    padding: 0.75rem;
+  }
+
+  .product-preview-tooltip .product-preview-image {
+    width: 150px !important;
+    height: 150px !important;
+  }
+}
+
+/* Loading spinner para imágenes */
+.product-preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 0 auto;
+}
+
+.product-preview-loading .spinner-border {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* Error state para imágenes */
+.product-preview-no-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 0 auto;
+  color: #6c757d;
+}
+
+.product-preview-no-image i {
+  font-size: 3rem;
+}
