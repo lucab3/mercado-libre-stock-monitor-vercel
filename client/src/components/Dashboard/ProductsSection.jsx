@@ -190,10 +190,10 @@ function ProductsSection() {
                 maxHeight="250px"
               />
             </div>
-            
+
             <div className="col-md-2">
               <label className="form-label">Estado publicación:</label>
-              <select 
+              <select
                 className="form-select"
                 value={productFilters.statusFilter || 'all'}
                 onChange={(e) => handleFilterChange('statusFilter', e.target.value)}
@@ -205,10 +205,10 @@ function ProductsSection() {
                 <option value="under_review">En revisión</option>
               </select>
             </div>
-            
+
             <div className="col-md-2">
               <label className="form-label">Nivel de stock:</label>
-              <select 
+              <select
                 className="form-select"
                 value={productFilters.stockFilter || 'all'}
                 onChange={(e) => handleFilterChange('stockFilter', e.target.value)}
@@ -218,7 +218,7 @@ function ProductsSection() {
                 <option value="out">Sin stock</option>
               </select>
             </div>
-            
+
             <div className="col-md-2">
               <label className="form-label">Fulfillment:</label>
               <div className="form-check mt-2">
@@ -250,10 +250,12 @@ function ProductsSection() {
                 </label>
               </div>
             </div>
-            
+          </div>
+
+          <div className="row g-3 mt-0">
             <div className="col-md-2">
               <label className="form-label">Ordenar por:</label>
-              <select 
+              <select
                 className="form-select"
                 value={productFilters.stockSort}
                 onChange={(e) => handleFilterChange('stockSort', e.target.value)}
@@ -263,7 +265,7 @@ function ProductsSection() {
                 <option value="stock-desc">Stock: mayor a menor</option>
               </select>
             </div>
-            
+
             <div className="col-md-3">
               <label className="form-label">Filtrar por precio:</label>
               <div className="input-group">
