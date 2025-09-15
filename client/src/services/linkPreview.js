@@ -72,41 +72,98 @@ class LinkPreviewService {
   }
 
   /**
-   * Extrae metadatos usando un servicio de proxy CORS
+   * Extrae metadatos usando múltiples estrategias
    * @param {string} url
    * @returns {Promise<Object>}
    */
   async fetchMetadata(url) {
     try {
-      // Usar un servicio de proxy CORS para obtener el HTML
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-
-      const response = await fetch(proxyUrl)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      const html = data.contents
-
-      // Extraer metadatos Open Graph
-      const metadata = this.extractMetadata(html)
-
-      return {
-        url,
-        title: metadata.title,
-        description: metadata.description,
-        image: metadata.image,
-        price: metadata.price,
-        site_name: metadata.site_name || 'MercadoLibre',
-        success: true
-      }
-
+      // Timeout general de 3 segundos
+      return await Promise.race([
+        this.fetchMetadataInternal(url),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 3000)
+        )
+      ])
     } catch (error) {
       console.warn('Error obteniendo preview de ML:', error)
-
-      // Fallback: generar datos básicos desde la URL
       return this.generateFallbackData(url)
+    }
+  }
+
+  async fetchMetadataInternal(url) {
+    // Primero intentar generar imagen directamente desde el ID del producto
+    const directImage = this.generateDirectImageFromUrl(url)
+
+    if (directImage) {
+      return {
+        url,
+        title: this.extractTitleFromUrl(url),
+        description: 'Producto de MercadoLibre',
+        image: directImage,
+        site_name: 'MercadoLibre',
+        success: true,
+        method: 'direct'
+      }
+    }
+
+    // Si no hay imagen directa, intentar con proxy CORS
+    return await this.fetchWithProxy(url)
+  }
+
+  /**
+   * Intenta obtener metadatos con proxy CORS
+   * @param {string} url
+   * @returns {Promise<Object>}
+   */
+  async fetchWithProxy(url) {
+    try {
+      // Intentar múltiples proxies
+      const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://cors-anywhere.herokuapp.com/${url}`
+      ]
+
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl, {
+            timeout: 5000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; LinkPreview/1.0)'
+            }
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            const html = data.contents || data.data
+
+            if (html) {
+              const metadata = this.extractMetadata(html)
+
+              if (metadata.image) {
+                return {
+                  url,
+                  title: metadata.title,
+                  description: metadata.description,
+                  image: metadata.image,
+                  price: metadata.price,
+                  site_name: metadata.site_name || 'MercadoLibre',
+                  success: true,
+                  method: 'proxy'
+                }
+              }
+            }
+          }
+        } catch (proxyError) {
+          console.warn(`Proxy ${proxyUrl} falló:`, proxyError)
+          continue
+        }
+      }
+
+      throw new Error('Todos los proxies fallaron')
+    } catch (error) {
+      throw error
     }
   }
 
@@ -172,15 +229,93 @@ class LinkPreviewService {
   }
 
   /**
-   * Genera imagen de producto desde el ID si es posible
-   * @param {string} productId
+   * Genera imagen directamente desde la URL del producto
+   * @param {string} url
    * @returns {string|null}
    */
-  generateImageUrl(productId) {
-    if (!productId) return null
+  generateDirectImageFromUrl(url) {
+    try {
+      // Extraer ID del producto de diferentes formatos de URL
+      const patterns = [
+        /\/MLA-?(\d+)-/,           // MLA-123456-nombre-producto
+        /\/MLA(\d+)/,              // MLA123456
+        /articulo\.mercadolibre\.com\.ar\/([A-Z]{3}\d+)/  // Formato completo
+      ]
 
-    // Formato típico de imágenes de ML (puede no funcionar siempre)
-    return `https://http2.mlstatic.com/D_NQ_NP_${productId}-MLA${productId}_${productId}-I.jpg`
+      let productId = null
+
+      for (const pattern of patterns) {
+        const match = url.match(pattern)
+        if (match) {
+          productId = match[1]
+          break
+        }
+      }
+
+      if (!productId) return null
+
+      // Generar múltiples formatos posibles de imagen
+      const imageFormats = [
+        `https://http2.mlstatic.com/D_NQ_NP_${productId}-MLA${productId}-O.webp`,
+        `https://http2.mlstatic.com/D_NQ_NP_${productId}-MLA${productId}-V.webp`,
+        `https://http2.mlstatic.com/D_${productId}-MLA${productId}_${productId}-O.jpg`,
+        `https://http2.mlstatic.com/D_${productId}-MLA${productId}_${productId}-I.jpg`
+      ]
+
+      // Retornar el primer formato (más probable)
+      return imageFormats[0]
+
+    } catch (error) {
+      console.warn('Error generando imagen directa:', error)
+      return null
+    }
+  }
+
+  /**
+   * Verifica si una imagen existe haciendo un HEAD request
+   * @param {string} imageUrl
+   * @returns {Promise<boolean>}
+   */
+  async verifyImageExists(imageUrl) {
+    try {
+      const response = await fetch(imageUrl, {
+        method: 'HEAD',
+        mode: 'no-cors' // Evitar problemas CORS
+      })
+
+      // En modo no-cors, response.ok no es confiable
+      // Pero si llega aquí sin error, probablemente existe
+      return true
+
+    } catch (error) {
+      // Si hay error, la imagen probablemente no existe
+      return false
+    }
+  }
+
+  /**
+   * Extrae el título desde la URL
+   * @param {string} url
+   * @returns {string}
+   */
+  extractTitleFromUrl(url) {
+    try {
+      // Extraer nombre del producto de la URL
+      const match = url.match(/MLA-?\d+-([^/?]+)/)
+      if (match) {
+        return match[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      }
+
+      // Fallback: usar ID del producto
+      const idMatch = url.match(/MLA-?(\d+)/)
+      if (idMatch) {
+        return `Producto ${idMatch[1]}`
+      }
+
+      return 'Producto de MercadoLibre'
+    } catch (error) {
+      return 'Producto de MercadoLibre'
+    }
   }
 }
 

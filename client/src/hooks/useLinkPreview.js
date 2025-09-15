@@ -44,8 +44,8 @@ export function useLinkPreview(url, enabled = false) {
       }
     }
 
-    // Delay pequeño para evitar requests innecesarios
-    const timeoutId = setTimeout(fetchPreview, 300)
+    // Delay muy pequeño para evitar requests innecesarios pero ser responsivo
+    const timeoutId = setTimeout(fetchPreview, 100)
 
     return () => {
       cancelled = true
