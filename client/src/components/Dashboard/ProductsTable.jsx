@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
+import { useLinkPreview } from '../../hooks/useLinkPreview'
 
 // Componente para el link con preview simple
 function ProductLinkWithPreview({ product }) {
   const [showPreview, setShowPreview] = useState(false)
+
+  const productUrl = product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`
+  const { preview, loading, hasPreview } = useLinkPreview(productUrl, showPreview)
 
   return (
     <div
@@ -11,7 +15,7 @@ function ProductLinkWithPreview({ product }) {
       onMouseLeave={() => setShowPreview(false)}
     >
       <a
-        href={product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`}
+        href={productUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="text-decoration-none text-primary"
@@ -33,10 +37,30 @@ function ProductLinkWithPreview({ product }) {
           }}
         >
           <div className="mb-2">
-            <h6 className="mb-1 small">{product.title}</h6>
+            <h6 className="mb-1 small">
+              {preview?.title || product.title}
+            </h6>
+            {loading && <small className="text-muted">Cargando preview...</small>}
           </div>
 
-          {product.thumbnail && (
+          {/* Imagen del preview de ML */}
+          {hasPreview && preview.image ? (
+            <div className="mb-2 text-center">
+              <img
+                src={preview.image}
+                alt={preview.title}
+                style={{
+                  width: '150px',
+                  height: '150px',
+                  objectFit: 'cover'
+                }}
+                className="rounded"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                }}
+              />
+            </div>
+          ) : product.thumbnail ? (
             <div className="mb-2 text-center">
               <img
                 src={product.thumbnail}
@@ -49,13 +73,27 @@ function ProductLinkWithPreview({ product }) {
                 className="rounded"
               />
             </div>
+          ) : (
+            <div className="mb-2 text-center">
+              <div
+                className="d-flex align-items-center justify-content-center bg-light rounded text-muted"
+                style={{ width: '150px', height: '150px' }}
+              >
+                <i className="bi bi-image fs-4"></i>
+              </div>
+            </div>
           )}
 
           <div className="small">
-            <div><strong>Precio:</strong> ${product.price || 'N/A'}</div>
+            <div><strong>Precio:</strong> {preview?.price || `$${product.price}` || 'N/A'}</div>
             <div><strong>Stock:</strong> {product.available_quantity || 0}</div>
             <div><strong>Estado:</strong> {product.status || 'N/A'}</div>
             {product.seller_sku && <div><strong>SKU:</strong> {product.seller_sku}</div>}
+            {preview?.description && (
+              <div className="mt-1">
+                <small className="text-muted">{preview.description.substring(0, 100)}...</small>
+              </div>
+            )}
           </div>
         </div>
       )}
