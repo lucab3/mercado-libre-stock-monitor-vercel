@@ -39,6 +39,7 @@ const initialState = {
     statusFilter: 'all', // all, active, paused, closed, under_review
     searchText: '',
     fulfillmentFilter: false, // true = solo productos Full, false = todos
+    delayFilter: false, // true = solo productos con demora, false = todos
     priceFilter: {
       operator: 'greater', // 'greater' o 'less'
       value: '' // valor numérico

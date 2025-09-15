@@ -41,6 +41,11 @@ function ProductsSection() {
     if (productFilters.fulfillmentFilter) {
       filtered = filtered.filter(p => p.is_fulfillment === true)
     }
+
+    // Filtro por productos con demora
+    if (productFilters.delayFilter) {
+      filtered = filtered.filter(p => p.estimated_handling_time && p.estimated_handling_time > 24)
+    }
     
     // Filtro por texto de búsqueda
     if (productFilters.searchText) {
@@ -93,6 +98,7 @@ function ProductsSection() {
         statusFilter: productFilters.statusFilter,
         stockFilter: productFilters.stockFilter,
         fulfillmentFilter: productFilters.fulfillmentFilter,
+        delayFilter: productFilters.delayFilter,
         searchText: productFilters.searchText,
         priceFilter: productFilters.priceFilter
       }
@@ -159,6 +165,12 @@ function ProductsSection() {
                 Solo Full
               </span>
             )}
+            {productFilters.delayFilter && (
+              <span className="badge bg-warning">
+                <i className="bi bi-clock me-1"></i>
+                Solo con demora
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -210,15 +222,31 @@ function ProductsSection() {
             <div className="col-md-2">
               <label className="form-label">Fulfillment:</label>
               <div className="form-check mt-2">
-                <input 
-                  className="form-check-input" 
-                  type="checkbox" 
+                <input
+                  className="form-check-input"
+                  type="checkbox"
                   id="fulfillmentFilter"
                   checked={productFilters.fulfillmentFilter}
                   onChange={(e) => handleFilterChange('fulfillmentFilter', e.target.checked)}
                 />
                 <label className="form-check-label" htmlFor="fulfillmentFilter">
                   🚚 Solo productos Full
+                </label>
+              </div>
+            </div>
+
+            <div className="col-md-2">
+              <label className="form-label">Demora:</label>
+              <div className="form-check mt-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="delayFilter"
+                  checked={productFilters.delayFilter}
+                  onChange={(e) => handleFilterChange('delayFilter', e.target.checked)}
+                />
+                <label className="form-check-label" htmlFor="delayFilter">
+                  ⏱️ Solo con demora
                 </label>
               </div>
             </div>
@@ -277,7 +305,7 @@ function ProductsSection() {
                   value={productFilters.searchText}
                   onChange={(e) => handleFilterChange('searchText', e.target.value)}
                 />
-                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value || productFilters.fulfillmentFilter) && (
+                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value || productFilters.fulfillmentFilter || productFilters.delayFilter) && (
                   <button
                     className="btn btn-outline-secondary"
                     type="button"
@@ -288,6 +316,7 @@ function ProductsSection() {
                       statusFilter: 'all',
                       searchText: '',
                       fulfillmentFilter: false,
+                      delayFilter: false,
                       priceFilter: {
                         operator: 'greater',
                         value: ''
