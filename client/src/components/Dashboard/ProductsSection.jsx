@@ -43,8 +43,24 @@ function ProductsSection() {
     }
 
     // Filtro por productos con demora
-    if (productFilters.delayFilter) {
-      filtered = filtered.filter(p => p.estimated_handling_time && p.estimated_handling_time > 24)
+    if (productFilters.delayFilter && productFilters.delayFilter !== 'all') {
+      filtered = filtered.filter(p => {
+        const handlingTime = p.estimated_handling_time;
+        if (!handlingTime) return false;
+
+        switch (productFilters.delayFilter) {
+          case 'any':
+            return handlingTime > 24;
+          case '30days':
+            // 30 días = 720 horas (30 * 24)
+            return handlingTime >= 720 && handlingTime < 1080; // Hasta 45 días
+          case '45days':
+            // 45 días = 1080 horas (45 * 24)
+            return handlingTime >= 1080;
+          default:
+            return true;
+        }
+      })
     }
     
     // Filtro por texto de búsqueda
@@ -165,10 +181,12 @@ function ProductsSection() {
                 Solo Full
               </span>
             )}
-            {productFilters.delayFilter && (
+            {productFilters.delayFilter && productFilters.delayFilter !== 'all' && (
               <span className="badge bg-warning">
                 <i className="bi bi-clock me-1"></i>
-                Solo con demora
+                {productFilters.delayFilter === 'any' ? 'Con demora' :
+                 productFilters.delayFilter === '30days' ? 'Demora 30 días' :
+                 productFilters.delayFilter === '45days' ? 'Demora 45+ días' : 'Con demora'}
               </span>
             )}
           </div>
@@ -237,18 +255,16 @@ function ProductsSection() {
 
             <div className="col-md-2">
               <label className="form-label">Demora:</label>
-              <div className="form-check mt-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="delayFilter"
-                  checked={productFilters.delayFilter}
-                  onChange={(e) => handleFilterChange('delayFilter', e.target.checked)}
-                />
-                <label className="form-check-label" htmlFor="delayFilter">
-                  ⏱️ Solo con demora
-                </label>
-              </div>
+              <select
+                className="form-select"
+                value={productFilters.delayFilter}
+                onChange={(e) => handleFilterChange('delayFilter', e.target.value)}
+              >
+                <option value="all">Todos</option>
+                <option value="any">Con demora (+24h)</option>
+                <option value="30days">30 días (720h+)</option>
+                <option value="45days">45+ días (1080h+)</option>
+              </select>
             </div>
           </div>
 
@@ -307,7 +323,7 @@ function ProductsSection() {
                   value={productFilters.searchText}
                   onChange={(e) => handleFilterChange('searchText', e.target.value)}
                 />
-                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value || productFilters.fulfillmentFilter || productFilters.delayFilter) && (
+                {(productFilters.categories.length > 0 || productFilters.searchText || (productFilters.stockFilter && productFilters.stockFilter !== 'all') || (productFilters.statusFilter && productFilters.statusFilter !== 'all') || productFilters.stockSort !== 'default' || productFilters.priceFilter.value || productFilters.fulfillmentFilter || (productFilters.delayFilter && productFilters.delayFilter !== 'all')) && (
                   <button
                     className="btn btn-outline-secondary"
                     type="button"
@@ -318,7 +334,7 @@ function ProductsSection() {
                       statusFilter: 'all',
                       searchText: '',
                       fulfillmentFilter: false,
-                      delayFilter: false,
+                      delayFilter: 'all',
                       priceFilter: {
                         operator: 'greater',
                         value: ''
