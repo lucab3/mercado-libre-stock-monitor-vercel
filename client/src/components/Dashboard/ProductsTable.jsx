@@ -1,151 +1,61 @@
-import React from 'react'
-import { useProductPreview } from '../../hooks/useProductPreview'
+import React, { useState } from 'react'
 
-// Componente para el link con preview
+// Componente para el link con preview simple
 function ProductLinkWithPreview({ product }) {
-  const { showPreview, previewPosition, handleMouseEnter, handleMouseLeave } = useProductPreview()
+  const [showPreview, setShowPreview] = useState(false)
 
   return (
-    <div className="product-link-with-preview">
+    <div
+      className="position-relative d-inline-block"
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
+    >
       <a
         href={product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`}
         target="_blank"
         rel="noopener noreferrer"
         className="text-decoration-none text-primary"
-        title="Ver producto en MercadoLibre"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         {product.title}
         <i className="bi bi-box-arrow-up-right ms-1 small"></i>
       </a>
 
-      {/* Preview tooltip */}
+      {/* Preview tooltip simple */}
       {showPreview && (
         <div
-          className="product-preview-tooltip position-fixed"
+          className="position-absolute bg-white border rounded shadow-lg p-3"
           style={{
-            top: `${previewPosition.top}px`,
-            left: `${previewPosition.left}px`,
+            top: '-10px',
+            left: '100%',
+            width: '300px',
+            zIndex: 9999,
+            marginLeft: '10px'
           }}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
         >
-          {/* Header con título */}
           <div className="mb-2">
-            <h6 className="mb-1 text-truncate" title={product.title}>
-              {product.title}
-            </h6>
-            <small className="text-muted">ID: {product.id}</small>
+            <h6 className="mb-1 small">{product.title}</h6>
           </div>
 
-          {/* Imagen del producto */}
-          <div className="mb-3 text-center">
-            {product.thumbnail ? (
+          {product.thumbnail && (
+            <div className="mb-2 text-center">
               <img
-                src={product.thumbnail.replace('-I.jpg', '-O.jpg').replace('-I.webp', '-O.webp')}
+                src={product.thumbnail}
                 alt={product.title}
-                className="product-preview-image rounded"
                 style={{
-                  width: '200px',
-                  height: '200px',
-                  objectFit: 'cover',
-                  margin: '0 auto'
+                  width: '150px',
+                  height: '150px',
+                  objectFit: 'cover'
                 }}
-                onError={(e) => {
-                  e.target.style.display = 'none'
-                  e.target.nextSibling.style.display = 'flex'
-                }}
+                className="rounded"
               />
-            ) : null}
-            <div className="product-preview-no-image d-none">
-              <i className="bi bi-image"></i>
             </div>
-          </div>
+          )}
 
-          {/* Información del producto */}
-          <div className="row g-2 small">
-            <div className="col-6">
-              <strong>Precio:</strong>
-            </div>
-            <div className="col-6 text-end">
-              <span className="text-success fw-bold">
-                {product.price ? new Intl.NumberFormat('es-AR', {
-                  style: 'currency',
-                  currency: 'ARS'
-                }).format(product.price) : 'No disponible'}
-              </span>
-            </div>
-
-            <div className="col-6">
-              <strong>Stock:</strong>
-            </div>
-            <div className="col-6 text-end">
-              <span className={`badge ${
-                product.available_quantity <= 0 ? 'bg-danger' :
-                product.available_quantity <= 5 ? 'bg-warning' : 'bg-success'
-              }`}>
-                {product.available_quantity || 0}
-              </span>
-            </div>
-
-            <div className="col-6">
-              <strong>Estado:</strong>
-            </div>
-            <div className="col-6 text-end">
-              <span className={`badge ${
-                product.status === 'active' ? 'bg-success' :
-                product.status === 'paused' ? 'bg-warning' :
-                product.status === 'closed' ? 'bg-danger' : 'bg-secondary'
-              }`}>
-                {product.status === 'active' ? 'Activo' :
-                 product.status === 'paused' ? 'Pausado' :
-                 product.status === 'closed' ? 'Finalizada' : 'Desconocido'}
-              </span>
-            </div>
-
-            {product.is_fulfillment && (
-              <>
-                <div className="col-6">
-                  <strong>Fulfillment:</strong>
-                </div>
-                <div className="col-6 text-end">
-                  <span className="badge bg-primary">🚚 Full</span>
-                </div>
-              </>
-            )}
-
-            {product.estimated_handling_time && product.estimated_handling_time > 24 && (
-              <>
-                <div className="col-6">
-                  <strong>Demora:</strong>
-                </div>
-                <div className="col-6 text-end">
-                  <span className="badge bg-warning">
-                    ⏱️ {Math.round(product.estimated_handling_time / 24)} día{Math.round(product.estimated_handling_time / 24) === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </>
-            )}
-
-            {product.seller_sku && (
-              <div className="col-12 mt-2">
-                <strong>SKU:</strong> <code className="small">{product.seller_sku}</code>
-              </div>
-            )}
-          </div>
-
-          {/* Footer con botón */}
-          <div className="mt-3 text-center">
-            <a
-              href={product.productUrl || product.permalink || `https://articulo.mercadolibre.com.ar/${product.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary btn-sm"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Ver en MercadoLibre <i className="bi bi-box-arrow-up-right ms-1"></i>
-            </a>
+          <div className="small">
+            <div><strong>Precio:</strong> ${product.price || 'N/A'}</div>
+            <div><strong>Stock:</strong> {product.available_quantity || 0}</div>
+            <div><strong>Estado:</strong> {product.status || 'N/A'}</div>
+            {product.seller_sku && <div><strong>SKU:</strong> {product.seller_sku}</div>}
           </div>
         </div>
       )}
